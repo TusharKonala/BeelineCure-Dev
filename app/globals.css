@@ -126,13 +126,11 @@
 }
 
 @utility font-montserrat {
-  font-family:
-    "Montserrat",
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    sans-serif;
+  font-family: var(--font-montserrat), "Montserrat", system-ui, sans-serif;
+}
+
+@utility font-montaga {
+  font-family: var(--font-montaga), "Montaga", Georgia, serif;
 }
 
 @utility text-shadow-soft {
