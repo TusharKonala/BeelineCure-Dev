@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Navbar() {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   return (
     <header className="w-full bg-white border-b">
-      <nav className="flex h-16 w-full items-center justify-between px-10">
+      <nav className="relative flex h-16 w-full items-center justify-between px-6 md:px-10">
         {/* Left: main logo */}
         <Link href="/" className="flex items-center">
           <Image
@@ -15,13 +19,13 @@ export function Navbar() {
             alt="Clinivo logo"
             width={160}
             height={40}
-            className="h-8 w-auto"
+            className="h-5 w-auto md:h-6"
             priority
           />
         </Link>
 
         {/* Right: links + Join Us button */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 md:gap-6">
           <div className="hidden md:flex items-center gap-6 text-sm font-medium">
             <Link href="/" className="nav-link">
               Home
@@ -43,19 +47,79 @@ export function Navbar() {
             </Link>
           </div>
 
-          <Button className="flex cursor-pointer items-center gap-2 rounded-full border border-black bg-[#2555F3] px-5 py-2 text-base text-white hover:bg-[#1e44c7]">
+          {/* Mobile hamburger */}
+          <button
+            type="button"
+            aria-label="Toggle navigation menu"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-[#333333] md:hidden"
+            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+          >
+            <Menu className="size-4 md:size-5" />
+          </button>
+
+          <Button className="flex cursor-pointer items-center gap-1.5 rounded-full border border-black bg-[#2555F3] px-3 py-1.5 text-sm text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base">
             <Image
               src="/fi-sr-megaphone.svg"
               alt="Join Clinivo"
               width={32}
               height={32}
-              className="size-4 shrink-0 object-contain"
+              className="size-3 shrink-0 object-contain md:size-4"
               quality={100}
               unoptimized
             />
             <span>Join Us</span>
           </Button>
         </div>
+
+        {/* Mobile menu */}
+        {isMobileMenuOpen && (
+          <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 md:hidden">
+            <div className="flex flex-col gap-3 font-medium">
+              <Link
+                href="/"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
+                href="/about"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                About
+              </Link>
+              <Link
+                href="/employers"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Employers/Plan Administrators
+              </Link>
+              <Link
+                href="/support-partners"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Support Partners
+              </Link>
+              <Link
+                href="/physicians-providers"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Physicians and Providers
+              </Link>
+              <Link
+                href="/advisors"
+                className="nav-link"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                Advisors
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
     </header>
   );
