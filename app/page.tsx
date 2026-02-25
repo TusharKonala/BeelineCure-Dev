@@ -3,6 +3,7 @@ import { HeroCarousel } from "@/components/HeroCarousel";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { CollaborationSection } from "@/components/CollaborationSection";
 import { InnovationSection } from "@/components/InnovationSection";
+import { BenefitsSection } from "@/components/BenefitsSection";
 
 export default function Home() {
   return (
@@ -12,6 +13,7 @@ export default function Home() {
       <FeaturesSection />
       <CollaborationSection />
       <InnovationSection />
+      <BenefitsSection />
     </div>
   );
 }
