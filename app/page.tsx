@@ -2,6 +2,7 @@ import { Navbar } from "@/components/Navbar";
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { CollaborationSection } from "@/components/CollaborationSection";
+import { InnovationSection } from "@/components/InnovationSection";
 
 export default function Home() {
   return (
@@ -10,6 +11,7 @@ export default function Home() {
       <HeroCarousel />
       <FeaturesSection />
       <CollaborationSection />
+      <InnovationSection />
     </div>
   );
 }
