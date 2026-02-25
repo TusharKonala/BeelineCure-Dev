@@ -19,8 +19,8 @@ function JoinUsCta() {
 
 export function CollaborationSection() {
   return (
-    <section className="w-full bg-[#ACACAC]/10 py-4 md:py-6 lg:py-8">
-      <div className="grid grid-cols-1 gap-8 sm:grid-cols-2 sm:gap-0">
+    <section className="w-full bg-[#ACACAC]/10 py-2 md:py-4 lg:py-6">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0">
         {/* Row 1 – Column 1: Text */}
         <div className="flex flex-col justify-center gap-3 px-6 md:px-12 lg:px-20">
           <h2 className="font-montaga text-2xl leading-snug text-[#333333] md:text-3xl lg:text-4xl">
@@ -33,9 +33,9 @@ export function CollaborationSection() {
             Making health care decisions without transparency is like trying to
             navigate a ship in dense fog. Without clear visibility, it&apos;s
             challenging to make informed choices, and there&apos;s a higher risk
-            of making a wrong turn or running aground. For employers, the lack of
-            control over data and the inability to know the underlying cost of
-            services is like assembling a puzzle with missing pieces.
+            of making a wrong turn or running aground. For employers, the lack
+            of control over data and the inability to know the underlying cost
+            of services is like assembling a puzzle with missing pieces.
           </p>
 
           <JoinUsCta />
@@ -48,7 +48,7 @@ export function CollaborationSection() {
             alt="Discussion illustration"
             width={400}
             height={320}
-            className="h-auto w-full object-contain"
+            className="h-auto w-full"
           />
         </div>
 
@@ -59,7 +59,7 @@ export function CollaborationSection() {
             alt="Office conversation illustration"
             width={400}
             height={320}
-            className="h-auto w-full object-contain"
+            className="h-auto w-full"
           />
         </div>
 
