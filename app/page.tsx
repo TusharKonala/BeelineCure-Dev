@@ -5,6 +5,7 @@ import { CollaborationSection } from "@/components/CollaborationSection";
 import { InnovationSection } from "@/components/InnovationSection";
 import { BenefitsSection } from "@/components/BenefitsSection";
 import { StatsSection } from "@/components/StatsSection";
+import { VideoSection } from "@/components/VideoSection";
 
 export default function Home() {
   return (
@@ -15,6 +16,8 @@ export default function Home() {
       <CollaborationSection />
       <InnovationSection />
       <BenefitsSection />
+      <StatsSection />
+      <VideoSection />
       <StatsSection />
     </div>
   );
