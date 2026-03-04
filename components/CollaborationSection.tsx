@@ -19,10 +19,10 @@ function JoinUsCta() {
 
 export function CollaborationSection() {
   return (
-    <section className="w-full bg-[#ACACAC]/10 py-2 md:py-4 lg:py-6">
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0">
+    <section className="w-full bg-[#ACACAC]/10 py-4 md:py-6 lg:py-8">
+      <div className="mx-auto max-w-7xl grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-0">
         {/* Row 1 – Column 1: Text */}
-        <div className="flex flex-col justify-center gap-3 px-6 md:px-12 lg:px-20">
+        <div className="flex flex-col justify-center gap-3 px-6 md:px-12 lg:px-20 sm:pb-6 xl:pb-0">
           <h2 className="font-montaga text-2xl leading-snug text-[#333333] md:text-3xl lg:text-4xl">
             Leveraging
             <br />
@@ -64,7 +64,7 @@ export function CollaborationSection() {
         </div>
 
         {/* Row 2 – Column 2: Text */}
-        <div className="flex flex-col justify-center gap-3 px-6 md:px-12 lg:px-20">
+        <div className="flex flex-col justify-center gap-3 px-6 md:px-12 lg:px-20 sm:pt-6 xl:pt-0">
           <h2 className="font-montaga text-2xl leading-snug text-[#333333] md:text-3xl lg:text-4xl">
             Fostering Collaboration
           </h2>
