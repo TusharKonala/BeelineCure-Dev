@@ -12,7 +12,7 @@ export function VideoSection() {
         }}
       />
 
-      <div className="relative mx-auto h-full w-full max-w-[18.125rem] px-4 sm:max-w-sm sm:px-6 md:max-w-md lg:max-w-6xl">
+      <div className="relative mx-auto h-full w-full max-w-[18.125rem] px-4 sm:max-w-sm sm:px-6 md:max-w-6xl md:px-8 lg:px-8">
         <div className="absolute inset-x-0 -bottom-8 md:-bottom-18 lg:-bottom-16 flex w-full flex-col items-center text-center">
           <h2 className="font-montaga text-xl text-white sm:text-2xl md:text-3xl lg:text-4xl">
             Embracing Changing World

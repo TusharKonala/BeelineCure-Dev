@@ -9,7 +9,7 @@ import { VideoSection } from "@/components/VideoSection";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black">
+    <div className="min-h-screen w-full min-w-0 bg-zinc-50 dark:bg-black">
       <Navbar />
       <HeroCarousel />
       <FeaturesSection />

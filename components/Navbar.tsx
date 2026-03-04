@@ -11,7 +11,7 @@ export function Navbar() {
 
   return (
     <header className="w-full bg-white border-b">
-      <nav className="relative flex h-16 w-full items-center justify-between px-6 md:px-10">
+      <nav className="relative flex h-16 w-full min-w-0 items-center justify-between px-6 md:px-10">
         {/* Left: main logo */}
         <Link href="/" className="flex items-center">
           <Image
@@ -25,8 +25,8 @@ export function Navbar() {
         </Link>
 
         {/* Right: links + Join Us button */}
-        <div className="flex items-center gap-3 md:gap-6">
-          <div className="hidden md:flex items-center gap-6 text-sm font-medium">
+        <div className="flex min-w-0 shrink items-center gap-3 md:gap-6">
+          <div className="hidden xl:flex items-center gap-6 text-sm font-medium">
             <Link href="/" className="nav-link">
               Home
             </Link>
@@ -51,7 +51,7 @@ export function Navbar() {
           <button
             type="button"
             aria-label="Toggle navigation menu"
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white text-[#333333] md:hidden"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-black/10 bg-white text-[#333333] xl:hidden"
             onClick={() => setIsMobileMenuOpen((prev) => !prev)}
           >
             <Menu className="size-4 md:size-5" />
@@ -73,7 +73,7 @@ export function Navbar() {
 
         {/* Mobile menu */}
         {isMobileMenuOpen && (
-          <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 md:hidden">
+          <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 xl:hidden">
             <div className="flex flex-col gap-3 font-medium">
               <Link
                 href="/"
