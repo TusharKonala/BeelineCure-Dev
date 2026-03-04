@@ -15,7 +15,7 @@ export function HeroCarousel() {
     <Carousel opts={{ loop: false }} className="w-full">
       <CarouselContent className="ml-0">
         {/* Slide 1 */}
-        <CarouselItem className="relative h-[50vh] min-h-[360px] pl-0 md:h-[60vh] lg:h-[75vh]">
+        <CarouselItem className="relative h-[50vh] min-h-[360px] pl-0 md:h-[70vh] lg:h-[80vh]">
           <video
             autoPlay
             loop
@@ -28,7 +28,7 @@ export function HeroCarousel() {
 
           <div className="absolute inset-0 bg-black/40" />
 
-          <div className="relative z-10 flex h-full flex-col justify-center gap-4 px-6 md:gap-6 md:px-16 lg:px-24">
+          <div className="relative z-10 flex h-full mx-auto max-w-7xl flex-col justify-center gap-3 px-6 md:gap-6 md:px-16 lg:px-24">
             <h1 className="text-2xl font-semibold leading-tight text-white md:text-4xl lg:text-5xl">
               Where
               <br />
@@ -58,7 +58,7 @@ export function HeroCarousel() {
         </CarouselItem>
 
         {/* Slide 2 – video only */}
-        <CarouselItem className="relative h-[50vh] min-h-[360px] pl-0 md:h-[60vh] lg:h-[75vh]">
+        <CarouselItem className="relative h-[50vh] min-h-[360px] pl-0 md:h-[70vh] lg:h-[80vh]">
           <video
             autoPlay
             loop
@@ -69,7 +69,7 @@ export function HeroCarousel() {
             <source src="/slide2.mp4" type="video/mp4" />
           </video>
 
-          <div className="relative z-10 flex h-full items-end px-6 pb-6 md:px-16 md:pb-10 lg:px-24">
+          <div className="relative z-10 flex h-full mx-auto max-w-7xl items-center px-6 md:px-16 lg:px-24">
             <div className="flex items-center gap-3">
               <CarouselPrevious className="static translate-y-0 border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white/25 hover:text-white" />
               <CarouselNext className="static translate-y-0 border-white/30 bg-white/10 text-white backdrop-blur-sm hover:bg-white/25 hover:text-white" />
