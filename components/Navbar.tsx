@@ -11,7 +11,7 @@ export function Navbar() {
 
   return (
     <header className="w-full bg-white border-b">
-      <nav className="relative flex h-16 w-full min-w-0 items-center justify-between px-6 md:px-10">
+      <nav className="relative flex h-16 w-full min-w-0 mx-auto max-w-7xl items-center justify-between px-6 md:px-10">
         {/* Left: main logo */}
         <Link href="/" className="flex items-center">
           <Image
