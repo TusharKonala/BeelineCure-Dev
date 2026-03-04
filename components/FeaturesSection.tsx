@@ -24,7 +24,7 @@ export function FeaturesSection() {
   return (
     <section className="flex w-full flex-col items-center bg-[#fafafa] px-4 py-6 md:px-8 md:py-8 lg:py-10">
       {/* Item 1 – Feature Panel */}
-      <div className="flex w-full max-w-6xl flex-col gap-3 rounded-xl bg-white px-5 py-4 sm:flex-row sm:gap-6 sm:px-10 sm:py-8 lg:px-14">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 rounded-xl bg-white px-5 py-4 sm:flex-row sm:gap-6 sm:px-10 sm:py-8 lg:px-14">
         {features.map((feature) => (
           <div
             key={feature.heading}
@@ -59,8 +59,8 @@ export function FeaturesSection() {
         </h2>
 
         <p className="font-montserrat max-w-2xl text-xs leading-relaxed text-[#5E5E5E] text-shadow-soft md:text-sm">
-          This cooperative is intended to foster collaboration, efficiency, and a
-          patient-centered approach to healthcare services, and distinguishes
+          This cooperative is intended to foster collaboration, efficiency, and
+          a patient-centered approach to healthcare services, and distinguishes
           itself as a novel and pioneering initiative in the American healthcare
           landscape.
         </p>
