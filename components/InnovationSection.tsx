@@ -20,7 +20,7 @@ function JoinUsCtaFull() {
 export function InnovationSection() {
   return (
     <section className="flex w-full items-center justify-center bg-white px-4 py-8 md:px-8 md:py-12">
-      <div className="flex w-full max-w-5xl flex-col gap-6 sm:flex-row sm:gap-8">
+      <div className="flex w-full max-w-7xl flex-col gap-6 sm:flex-row sm:gap-8">
         {/* Card 1 */}
         <div className="flex flex-1 flex-col gap-4 rounded-2xl bg-[#171717] p-6 md:p-8 lg:p-10">
           <h2 className="font-montaga text-2xl leading-snug text-white md:text-3xl lg:text-4xl">
