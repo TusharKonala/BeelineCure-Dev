@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 
 export function VideoSection() {
   return (
-    <section className="relative w-full overflow-visible bg-black h-[520px] sm:h-[550px] md:h-[38rem] lg:h-[805px]">
+    <section className="relative w-full overflow-visible bg-black  h-[510px] min-[503px]:h-[560px] sm:h-[630px] md:h-[44rem] lg:h-[805px]">
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -12,8 +12,8 @@ export function VideoSection() {
         }}
       />
 
-      <div className="relative mx-auto h-full w-full max-w-[18.125rem] px-4 sm:max-w-sm sm:px-6 md:max-w-6xl md:px-8 lg:px-8">
-        <div className="absolute inset-x-0 -bottom-8 md:-bottom-18 lg:-bottom-16 flex w-full flex-col items-center text-center">
+      <div className="relative mx-auto h-full w-full max-w-7xl">
+        <div className="absolute inset-x-0 -bottom-8 md:-bottom-18 lg:-bottom-16 flex w-full flex-col items-center px-4 sm:px-6 md:px-8 text-center">
           <h2 className="font-montaga text-xl text-white sm:text-2xl md:text-3xl lg:text-4xl">
             Embracing Changing World
           </h2>
