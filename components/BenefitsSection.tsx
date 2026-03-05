@@ -78,8 +78,7 @@ export function BenefitsSection() {
         `,
       }}
     >
-
-      <div className="relative mx-auto max-w-6xl px-4 py-10 md:px-8 md:py-16">
+      <div className="relative mx-auto max-w-7xl px-5 py-10 md:px-8 md:py-16">
         {/* Header */}
         <div className="mb-8 flex flex-col items-center gap-2 text-center md:mb-12">
           <h2 className="font-montaga text-2xl leading-snug text-white md:text-3xl lg:text-4xl">
