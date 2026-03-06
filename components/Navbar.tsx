@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { CalendarCheck, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function Navbar() {
@@ -11,7 +11,7 @@ export function Navbar() {
 
   return (
     <header className="w-full bg-white border-b">
-      <nav className="relative flex h-16 w-full min-w-0 mx-auto max-w-7xl items-center justify-between px-6 md:px-10">
+      <nav className="relative flex h-16 w-full min-w-0 mx-auto max-w-7xl items-center justify-between px-3 sm:px-4 md:px-10">
         {/* Left: main logo */}
         <Link href="/" className="flex items-center">
           <Image
@@ -57,17 +57,9 @@ export function Navbar() {
             <Menu className="size-4 md:size-5" />
           </button>
 
-          <Button className="flex cursor-pointer items-center gap-1.5 rounded-full border border-black bg-[#2555F3] px-3 py-1.5 text-sm text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base">
-            <Image
-              src="/fi-sr-megaphone.svg"
-              alt="Join Clinivo"
-              width={32}
-              height={32}
-              className="size-3 shrink-0 object-contain md:size-4"
-              quality={100}
-              unoptimized
-            />
-            <span>Join Us</span>
+          <Button className="flex cursor-pointer items-center gap-1 rounded-full border border-black bg-[#2555F3] px-2 py-1 text-xs text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base">
+            <CalendarCheck className="size-3 shrink-0 md:size-4" />
+            <span>Book Appointment</span>
           </Button>
         </div>
 
