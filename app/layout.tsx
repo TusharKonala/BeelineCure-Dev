@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Montaga, Montserrat } from "next/font/google";
 import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import { QueryProvider } from "@/components/QueryProvider";
 import "@/app/globals.css";
 
 const geistSans = Geist({
@@ -40,8 +40,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${montaga.variable} ${montserrat.variable} antialiased`}
       >
-        <Navbar />
-        {children}
+        <QueryProvider>
+          <Navbar />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );
