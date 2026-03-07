@@ -13,10 +13,48 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ConsultationType {
+  CLINIC
+  ONLINE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
 model Doctor {
   id             String   @id @default(cuid())
   name           String
   specialization String
   image          String
   createdAt      DateTime @default(now())
+  availabilities DoctorAvailability[]
+  appointments   Appointment[]
+}
+
+model DoctorAvailability {
+  id       String   @id @default(cuid())
+  doctorId String
+  doctor   Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date     DateTime @db.Date
+  startTime String
+  endTime   String
+}
+
+model Appointment {
+  id               String            @id @default(cuid())
+  doctorId         String
+  doctor           Doctor            @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patientName      String
+  email            String
+  phone            String
+  date             DateTime          @db.Date
+  time             String
+  notes            String?
+  consultationType ConsultationType
+  status           AppointmentStatus  @default(PENDING)
+  createdAt        DateTime          @default(now())
+  @@unique([doctorId, date, time])
 }
