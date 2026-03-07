@@ -57,9 +57,14 @@ export function Navbar() {
             <Menu className="size-4 md:size-5" />
           </button>
 
-          <Button className="flex cursor-pointer items-center gap-1 rounded-full border border-black bg-[#2555F3] px-2 py-1 text-xs text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base">
-            <CalendarCheck className="size-3 shrink-0 md:size-4" />
-            <span>Book Appointment</span>
+          <Button
+            asChild
+            className="flex cursor-pointer items-center gap-1 rounded-full border border-black bg-[#2555F3] px-2 py-1 text-xs text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base"
+          >
+            <Link href="/book-appointment">
+              <CalendarCheck className="size-3 shrink-0 md:size-4" />
+              <span>Book Appointment</span>
+            </Link>
           </Button>
         </div>
 

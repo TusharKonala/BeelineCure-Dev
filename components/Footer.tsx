@@ -1,9 +1,17 @@
 import Image from "next/image";
 import Link from "next/link";
 
-export function Footer() {
+type FooterProps = {
+  extraTopPadding?: boolean;
+};
+
+export function Footer({ extraTopPadding = false }: FooterProps) {
   return (
-    <footer className="bg-white pt-16 sm:pt-20 md:pt-28 lg:pt-32">
+    <footer
+      className={`bg-white ${
+        extraTopPadding ? "pt-16 sm:pt-20 md:pt-28 lg:pt-32" : "pt-0"
+      }`}
+    >
       <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-6 pt-6 pb-4 text-center md:pt-8 md:pb-6">
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center">
