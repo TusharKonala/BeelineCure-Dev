@@ -1,12 +1,26 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useCallback, useState, useRef } from "react";
-
+import { useCallback, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+
+const patientFormSchema = z.object({
+  patientName: z.string().min(1, "Full name is required"),
+  email: z
+    .string()
+    .min(1, "Email is required")
+    .email("Please enter a valid email"),
+  phone: z.string().min(1, "Phone number is required"),
+  notes: z.string().optional(),
+});
+
+type PatientFormValues = z.infer<typeof patientFormSchema>;
 
 async function getDoctor(doctorId: string) {
   const res = await fetch(`/api/doctors/${doctorId}`);
@@ -35,6 +49,24 @@ export default function BookAppointmentDoctorPage() {
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   const minDate = todayISO();
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isValid },
+  } = useForm<PatientFormValues>({
+    resolver: zodResolver(patientFormSchema),
+    mode: "onBlur",
+    defaultValues: { patientName: "", email: "", phone: "", notes: "" },
+  });
+
+  const onPatientFormSubmit = useCallback(
+    (data: PatientFormValues) => {
+      // TODO: submit appointment (doctorId, selectedDate, selectedSlot, data)
+      console.log({ doctorId, selectedDate, selectedSlot, data });
+    },
+    [doctorId, selectedDate, selectedSlot],
+  );
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
     queryKey: ["doctor", doctorId],
@@ -156,6 +188,109 @@ export default function BookAppointmentDoctorPage() {
             </div>
           )}
         </section>
+
+        {/* 4. Patient information form (after slot selected) */}
+        {selectedSlot && (
+          <section className="mt-10 md:mt-12">
+            <div className="flex flex-col gap-2 text-left">
+              <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                Patient information
+              </h2>
+            </div>
+            <form
+              onSubmit={handleSubmit(onPatientFormSubmit)}
+              className="mt-6 flex max-w-xl flex-col gap-5"
+            >
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="patientName"
+                  className="font-montserrat text-sm font-medium text-[#111111]"
+                >
+                  Full Name
+                </label>
+                <input
+                  id="patientName"
+                  type="text"
+                  {...register("patientName")}
+                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                  placeholder="Enter your full name"
+                />
+                {errors.patientName && (
+                  <p className="font-montserrat text-sm text-red-600">
+                    {errors.patientName.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="email"
+                  className="font-montserrat text-sm font-medium text-[#111111]"
+                >
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  {...register("email")}
+                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                  placeholder="you@example.com"
+                />
+                {errors.email && (
+                  <p className="font-montserrat text-sm text-red-600">
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="phone"
+                  className="font-montserrat text-sm font-medium text-[#111111]"
+                >
+                  Phone Number
+                </label>
+                <input
+                  id="phone"
+                  type="tel"
+                  {...register("phone")}
+                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                  placeholder="+1 555-0000"
+                />
+                {errors.phone && (
+                  <p className="font-montserrat text-sm text-red-600">
+                    {errors.phone.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor="notes"
+                  className="font-montserrat text-sm font-medium text-[#111111]"
+                >
+                  Notes <span className="text-[#5E5E5E]">(optional)</span>
+                </label>
+                <textarea
+                  id="notes"
+                  rows={3}
+                  {...register("notes")}
+                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                  placeholder="Any additional notes for the doctor"
+                />
+                {errors.notes && (
+                  <p className="font-montserrat text-sm text-red-600">
+                    {errors.notes.message}
+                  </p>
+                )}
+              </div>
+              <Button
+                disabled={!isValid}
+                type="submit"
+                className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
+              >
+                Confirm appointment
+              </Button>
+            </form>
+          </section>
+        )}
       </Container>
     </div>
   );
