@@ -28,9 +28,9 @@ function generateSlots(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { doctorId: string } },
+  { params }: { params: Promise<{ doctorId: string }> },
 ) {
-  const { doctorId } = params;
+  const { doctorId } = await params;
   const dateParam = request.nextUrl.searchParams.get("date");
 
   if (!dateParam) {
