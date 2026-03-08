@@ -1,6 +1,10 @@
+import { EmailTemplate } from "@/components/email-template";
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { z } from "zod";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const appointmentSchema = z.object({
   doctorId: z.string().min(1),
@@ -81,6 +85,25 @@ export async function POST(request: NextRequest) {
       consultationType: "CLINIC",
     },
   });
+
+  try {
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: email,
+      subject: "Appointment Confirmation",
+      react: EmailTemplate({
+        doctorName: doctor.name,
+        appointmentDate: dateParam,
+        appointmentTime: time,
+        patientName,
+      }),
+    });
+    if (error) {
+      console.error("[appointments] Confirmation email failed:", error);
+    }
+  } catch (err) {
+    console.error("[appointments] Confirmation email failed:", err);
+  }
 
   return NextResponse.json(appointment);
 }

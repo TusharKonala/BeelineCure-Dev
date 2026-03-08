@@ -64,6 +64,18 @@ export default function BookAppointmentDoctorPage() {
 
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bookedConfirmation, setBookedConfirmation] = useState<{
+    doctorName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    patientName: string;
+  } | null>(null);
+
+  const { data: doctor, isLoading: doctorLoading } = useQuery({
+    queryKey: ["doctor", doctorId],
+    queryFn: () => getDoctor(doctorId),
+    enabled: !!doctorId,
+  });
 
   const onPatientFormSubmit = useCallback(
     async (data: PatientFormValues) => {
@@ -96,6 +108,15 @@ export default function BookAppointmentDoctorPage() {
         }
 
         setSubmitError(null);
+        setBookedConfirmation({
+          doctorName: doctor?.name ?? "Your doctor",
+          appointmentDate: selectedDate,
+          appointmentTime: selectedSlot ?? "",
+          patientName: data.patientName,
+        });
+
+        window.scrollTo({ top: 0, behavior: "smooth" });
+
         queryClient.invalidateQueries({
           queryKey: ["slots", doctorId, selectedDate],
         });
@@ -106,14 +127,8 @@ export default function BookAppointmentDoctorPage() {
         setIsSubmitting(false);
       }
     },
-    [doctorId, selectedDate, selectedSlot],
+    [doctorId, selectedDate, selectedSlot, doctor?.name, queryClient],
   );
-
-  const { data: doctor, isLoading: doctorLoading } = useQuery({
-    queryKey: ["doctor", doctorId],
-    queryFn: () => getDoctor(doctorId),
-    enabled: !!doctorId,
-  });
 
   const dateForSlots = selectedDate;
   const {
@@ -136,206 +151,253 @@ export default function BookAppointmentDoctorPage() {
 
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
 
+  const confirmationMessage =
+    "Your appointment has been confirmed. A confirmation email has been sent to your inbox. Please arrive a few minutes early.";
+
   return (
     <div className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
       <Container>
-        {/* 1. Doctor Summary */}
-        <section className="mb-10 md:mb-12">
-          <div className="flex flex-col gap-2 text-left">
-            <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-              Doctor
-            </h2>
-          </div>
-          {doctorLoading && (
-            <div className="mt-4 flex flex-col gap-2">
-              <Skeleton className="h-7 w-48 md:h-8" />
-              <Skeleton className="h-5 w-36" />
-            </div>
-          )}
-          {!doctorLoading && doctor && (
-            <div className="mt-4 flex flex-col gap-1">
-              <span className="font-montaga text-lg text-[#111111] md:text-xl">
-                {doctor.name}
-              </span>
-              <span className="font-montserrat text-sm text-[#5E5E5E]">
-                {doctor.specialization}
-              </span>
-            </div>
-          )}
-          {!doctorLoading && !doctor && doctorId && (
-            <p className="mt-4 font-montserrat text-sm text-red-600">
-              Doctor not found.
-            </p>
-          )}
-        </section>
-
-        {/* 2. Date Picker */}
-        <section className="mb-10 md:mb-12">
-          <div className="flex flex-col gap-2 text-left">
-            <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-              Select date
-            </h2>
-          </div>
-          <div
-            className="mt-4 inline-block"
-            onClick={() => dateInputRef.current?.showPicker()}
-          >
-            <input
-              ref={dateInputRef}
-              type="date"
-              value={selectedDate}
-              min={minDate}
-              onChange={onDateChange}
-              className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-              aria-label="Select appointment date"
-            />
-          </div>
-        </section>
-
-        {/* 3. Time Slot Grid */}
-        <section>
-          <div className="flex flex-col gap-2 text-left">
-            <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-              Available times
-            </h2>
-          </div>
-
-          {slotsLoadingOrFetching && (
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <Skeleton key={i} className="h-11 w-full rounded-xl sm:h-12" />
-              ))}
-            </div>
-          )}
-
-          {!slotsLoadingOrFetching && slots.length === 0 && (
-            <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
-              No slots available for this date.
-            </p>
-          )}
-
-          {!slotsLoadingOrFetching && slots.length > 0 && (
-            <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-              {slots.map((time) => (
-                <Button
-                  key={time}
-                  variant={selectedSlot === time ? "default" : "outline"}
-                  className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                  onClick={() => setSelectedSlot(time)}
-                >
-                  {time}
-                </Button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* 4. Patient information form (after slot selected) */}
-        {selectedSlot && (
-          <section className="mt-10 md:mt-12">
-            <div className="flex flex-col gap-2 text-left">
+        {bookedConfirmation ? (
+          <section className="mx-auto max-w-xl">
+            <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
               <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-                Patient information
+                Appointment confirmed
               </h2>
+              <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
+                {confirmationMessage}
+              </p>
+              <div className="mt-6 flex flex-col gap-2 rounded-lg bg-[#fafafa] p-4 font-montserrat text-sm">
+                <p>
+                  <span className="font-medium text-[#111111]">Doctor:</span>{" "}
+                  <span className="text-[#333333]">
+                    {bookedConfirmation.doctorName}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-medium text-[#111111]">Date:</span>{" "}
+                  <span className="text-[#333333]">
+                    {bookedConfirmation.appointmentDate}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-medium text-[#111111]">Time:</span>{" "}
+                  <span className="text-[#333333]">
+                    {bookedConfirmation.appointmentTime}
+                  </span>
+                </p>
+                <p>
+                  <span className="font-medium text-[#111111]">Patient:</span>{" "}
+                  <span className="text-[#333333]">
+                    {bookedConfirmation.patientName}
+                  </span>
+                </p>
+              </div>
             </div>
-            <form
-              onSubmit={handleSubmit(onPatientFormSubmit)}
-              className="mt-6 flex max-w-xl flex-col gap-5"
-            >
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="patientName"
-                  className="font-montserrat text-sm font-medium text-[#111111]"
-                >
-                  Full Name
-                </label>
-                <input
-                  id="patientName"
-                  type="text"
-                  {...register("patientName")}
-                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                  placeholder="Enter your full name"
-                />
-                {errors.patientName && (
-                  <p className="font-montserrat text-sm text-red-600">
-                    {errors.patientName.message}
-                  </p>
-                )}
+          </section>
+        ) : (
+          <>
+            {/* 1. Doctor Summary */}
+            <section className="mb-10 md:mb-12">
+              <div className="flex flex-col gap-2 text-left">
+                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Doctor
+                </h2>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="email"
-                  className="font-montserrat text-sm font-medium text-[#111111]"
-                >
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  {...register("email")}
-                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                  placeholder="you@example.com"
-                />
-                {errors.email && (
-                  <p className="font-montserrat text-sm text-red-600">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="phone"
-                  className="font-montserrat text-sm font-medium text-[#111111]"
-                >
-                  Phone Number
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  {...register("phone")}
-                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                  placeholder="+1 555-0000"
-                />
-                {errors.phone && (
-                  <p className="font-montserrat text-sm text-red-600">
-                    {errors.phone.message}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label
-                  htmlFor="notes"
-                  className="font-montserrat text-sm font-medium text-[#111111]"
-                >
-                  Notes <span className="text-[#5E5E5E]">(optional)</span>
-                </label>
-                <textarea
-                  id="notes"
-                  rows={3}
-                  {...register("notes")}
-                  className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                  placeholder="Any additional notes for the doctor"
-                />
-                {errors.notes && (
-                  <p className="font-montserrat text-sm text-red-600">
-                    {errors.notes.message}
-                  </p>
-                )}
-              </div>
-              {submitError && (
-                <p className="font-montserrat text-sm text-red-600">
-                  {submitError}
+              {doctorLoading && (
+                <div className="mt-4 flex flex-col gap-2">
+                  <Skeleton className="h-7 w-48 md:h-8" />
+                  <Skeleton className="h-5 w-36" />
+                </div>
+              )}
+              {!doctorLoading && doctor && (
+                <div className="mt-4 flex flex-col gap-1">
+                  <span className="font-montaga text-lg text-[#111111] md:text-xl">
+                    {doctor.name}
+                  </span>
+                  <span className="font-montserrat text-sm text-[#5E5E5E]">
+                    {doctor.specialization}
+                  </span>
+                </div>
+              )}
+              {!doctorLoading && !doctor && doctorId && (
+                <p className="mt-4 font-montserrat text-sm text-red-600">
+                  Doctor not found.
                 </p>
               )}
-              <Button
-                disabled={!isValid || isSubmitting}
-                type="submit"
-                className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
+            </section>
+
+            {/* 2. Date Picker */}
+            <section className="mb-10 md:mb-12">
+              <div className="flex flex-col gap-2 text-left">
+                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Select date
+                </h2>
+              </div>
+              <div
+                className="mt-4 inline-block"
+                onClick={() => dateInputRef.current?.showPicker()}
               >
-                {isSubmitting ? "Booking…" : "Confirm appointment"}
-              </Button>
-            </form>
-          </section>
+                <input
+                  ref={dateInputRef}
+                  type="date"
+                  value={selectedDate}
+                  min={minDate}
+                  onChange={onDateChange}
+                  className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                  aria-label="Select appointment date"
+                />
+              </div>
+            </section>
+
+            {/* 3. Time Slot Grid */}
+            <section>
+              <div className="flex flex-col gap-2 text-left">
+                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Available times
+                </h2>
+              </div>
+
+              {slotsLoadingOrFetching && (
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <Skeleton
+                      key={i}
+                      className="h-11 w-full rounded-xl sm:h-12"
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!slotsLoadingOrFetching && slots.length === 0 && (
+                <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
+                  No slots available for this date.
+                </p>
+              )}
+
+              {!slotsLoadingOrFetching && slots.length > 0 && (
+                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
+                  {slots.map((time) => (
+                    <Button
+                      key={time}
+                      variant={selectedSlot === time ? "default" : "outline"}
+                      className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                      onClick={() => setSelectedSlot(time)}
+                    >
+                      {time}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* 4. Patient information form (after slot selected) */}
+            {selectedSlot && (
+              <section className="mt-10 md:mt-12">
+                <div className="flex flex-col gap-2 text-left">
+                  <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                    Patient information
+                  </h2>
+                </div>
+                <form
+                  onSubmit={handleSubmit(onPatientFormSubmit)}
+                  className="mt-6 flex max-w-xl flex-col gap-5"
+                >
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="patientName"
+                      className="font-montserrat text-sm font-medium text-[#111111]"
+                    >
+                      Full Name
+                    </label>
+                    <input
+                      id="patientName"
+                      type="text"
+                      {...register("patientName")}
+                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                      placeholder="Enter your full name"
+                    />
+                    {errors.patientName && (
+                      <p className="font-montserrat text-sm text-red-600">
+                        {errors.patientName.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="email"
+                      className="font-montserrat text-sm font-medium text-[#111111]"
+                    >
+                      Email
+                    </label>
+                    <input
+                      id="email"
+                      type="email"
+                      {...register("email")}
+                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                      placeholder="you@example.com"
+                    />
+                    {errors.email && (
+                      <p className="font-montserrat text-sm text-red-600">
+                        {errors.email.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="phone"
+                      className="font-montserrat text-sm font-medium text-[#111111]"
+                    >
+                      Phone Number
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      {...register("phone")}
+                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                      placeholder="+1 555-0000"
+                    />
+                    {errors.phone && (
+                      <p className="font-montserrat text-sm text-red-600">
+                        {errors.phone.message}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label
+                      htmlFor="notes"
+                      className="font-montserrat text-sm font-medium text-[#111111]"
+                    >
+                      Notes <span className="text-[#5E5E5E]">(optional)</span>
+                    </label>
+                    <textarea
+                      id="notes"
+                      rows={3}
+                      {...register("notes")}
+                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                      placeholder="Any additional notes for the doctor"
+                    />
+                    {errors.notes && (
+                      <p className="font-montserrat text-sm text-red-600">
+                        {errors.notes.message}
+                      </p>
+                    )}
+                  </div>
+                  {submitError && (
+                    <p className="font-montserrat text-sm text-red-600">
+                      {submitError}
+                    </p>
+                  )}
+                  <Button
+                    disabled={!isValid || isSubmitting}
+                    type="submit"
+                    className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
+                  >
+                    {isSubmitting ? "Booking…" : "Confirm appointment"}
+                  </Button>
+                </form>
+              </section>
+            )}
+          </>
         )}
       </Container>
     </div>
