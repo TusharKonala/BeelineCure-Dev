@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Container } from "@/components/layout/Container";
@@ -46,6 +47,7 @@ export default function BookAppointmentDoctorPage() {
   const doctorId = String(params?.doctorId ?? "");
   const [selectedDate, setSelectedDate] = useState<string>(() => todayISO());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const dateInputRef = useRef<HTMLInputElement>(null);
 
   const minDate = todayISO();
@@ -60,10 +62,49 @@ export default function BookAppointmentDoctorPage() {
     defaultValues: { patientName: "", email: "", phone: "", notes: "" },
   });
 
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const onPatientFormSubmit = useCallback(
-    (data: PatientFormValues) => {
-      // TODO: submit appointment (doctorId, selectedDate, selectedSlot, data)
-      console.log({ doctorId, selectedDate, selectedSlot, data });
+    async (data: PatientFormValues) => {
+      setSubmitError(null);
+      setIsSubmitting(true);
+      try {
+        const res = await fetch("/api/appointments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            doctorId,
+            date: selectedDate,
+            time: selectedSlot,
+            patientName: data.patientName,
+            email: data.email,
+            phone: data.phone,
+            notes: data.notes ?? undefined,
+          }),
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          setSubmitError(
+            typeof json?.error === "string"
+              ? json.error
+              : "Failed to book appointment",
+          );
+          return;
+        }
+
+        setSubmitError(null);
+        queryClient.invalidateQueries({
+          queryKey: ["slots", doctorId, selectedDate],
+        });
+        setSelectedSlot(null);
+      } catch {
+        setSubmitError("Network error. Please try again.");
+      } finally {
+        setIsSubmitting(false);
+      }
     },
     [doctorId, selectedDate, selectedSlot],
   );
@@ -281,12 +322,17 @@ export default function BookAppointmentDoctorPage() {
                   </p>
                 )}
               </div>
+              {submitError && (
+                <p className="font-montserrat text-sm text-red-600">
+                  {submitError}
+                </p>
+              )}
               <Button
-                disabled={!isValid}
+                disabled={!isValid || isSubmitting}
                 type="submit"
                 className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
               >
-                Confirm appointment
+                {isSubmitting ? "Booking…" : "Confirm appointment"}
               </Button>
             </form>
           </section>
