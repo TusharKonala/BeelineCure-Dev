@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useRef } from "react";
 
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ export default function BookAppointmentDoctorPage() {
   const doctorId = String(params?.doctorId ?? "");
   const [selectedDate, setSelectedDate] = useState<string>(() => todayISO());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const minDate = todayISO();
 
@@ -102,13 +103,17 @@ export default function BookAppointmentDoctorPage() {
               Select date
             </h2>
           </div>
-          <div className="mt-4">
+          <div
+            className="mt-4 inline-block"
+            onClick={() => dateInputRef.current?.showPicker()}
+          >
             <input
+              ref={dateInputRef}
               type="date"
               value={selectedDate}
               min={minDate}
               onChange={onDateChange}
-              className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+              className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
               aria-label="Select appointment date"
             />
           </div>
@@ -142,7 +147,7 @@ export default function BookAppointmentDoctorPage() {
                 <Button
                   key={time}
                   variant={selectedSlot === time ? "default" : "outline"}
-                  className="h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                  className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                   onClick={() => setSelectedSlot(time)}
                 >
                   {time}
