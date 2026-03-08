@@ -38,11 +38,22 @@ export async function GET(
   }
 
   const date = new Date(dateParam);
+
   if (Number.isNaN(date.getTime())) {
     return NextResponse.json({ error: "Invalid date" }, { status: 400 });
   }
 
   date.setUTCHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  if (date < today) {
+    return NextResponse.json(
+      { error: "Cannot fetch slots for past dates" },
+      { status: 400 },
+    );
+  }
 
   const [availabilities, appointments] = await Promise.all([
     prisma.doctorAvailability.findMany({
