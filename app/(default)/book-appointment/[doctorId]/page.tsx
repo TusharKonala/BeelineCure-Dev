@@ -209,8 +209,8 @@ export default function BookAppointmentDoctorPage() {
               </div>
               {doctorLoading && (
                 <div className="mt-4 flex flex-col gap-2">
-                  <Skeleton className="h-7 w-48 md:h-8" />
-                  <Skeleton className="h-5 w-36" />
+                  <Skeleton className="h-7 w-48 md:h-8 bg-[#e5e5e5]" />
+                  <Skeleton className="h-5 w-36 bg-[#e5e5e5]" />
                 </div>
               )}
               {!doctorLoading && doctor && (
@@ -266,7 +266,7 @@ export default function BookAppointmentDoctorPage() {
                   {Array.from({ length: 8 }).map((_, i) => (
                     <Skeleton
                       key={i}
-                      className="h-11 w-full rounded-xl sm:h-12"
+                      className="h-11 w-full rounded-xl bg-[#e5e5e5] sm:h-12"
                     />
                   ))}
                 </div>
