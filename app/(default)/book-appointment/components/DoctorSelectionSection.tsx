@@ -39,10 +39,10 @@ export function DoctorSelectionSection() {
                 key={i}
                 className="flex h-full flex-col overflow-hidden rounded-2xl border border-[#e5e5e5] bg-white shadow-sm"
               >
-                <Skeleton className="w-full rounded-t-2xl aspect-4/3 min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64 bg-muted" />
+                <Skeleton className="w-full rounded-t-2xl aspect-4/3 min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64 bg-[#e5e5e5]" />
                 <div className="flex flex-1 flex-col gap-3 px-5 py-4">
-                  <Skeleton className="h-6 w-32 md:h-7" />
-                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-32 md:h-7 bg-[#e5e5e5]" />
+                  <Skeleton className="h-4 w-24 bg-[#e5e5e5]" />
                 </div>
               </div>
             ))}

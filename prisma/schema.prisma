@@ -24,21 +24,27 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
 model Doctor {
-  id             String   @id @default(cuid())
+  id             String               @id @default(cuid())
   name           String
   specialization String
   image          String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime             @default(now())
   availabilities DoctorAvailability[]
   appointments   Appointment[]
 }
 
 model DoctorAvailability {
-  id       String   @id @default(cuid())
-  doctorId String
-  doctor   Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  date     DateTime @db.Date
+  id        String   @id @default(cuid())
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
   startTime String
   endTime   String
 }
@@ -54,7 +60,10 @@ model Appointment {
   time             String
   notes            String?
   consultationType ConsultationType
-  status           AppointmentStatus  @default(PENDING)
+  status           AppointmentStatus @default(PENDING)
+  paymentStatus    PaymentStatus     @default(PENDING)
+  stripePaymentId  String?
   createdAt        DateTime          @default(now())
+
   @@unique([doctorId, date, time])
 }
