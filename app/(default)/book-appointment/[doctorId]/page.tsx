@@ -17,7 +17,11 @@ const patientFormSchema = z.object({
     .string()
     .min(1, "Email is required")
     .email("Please enter a valid email"),
-  phone: z.string().min(1, "Phone number is required"),
+  phone: z
+    .string()
+    .min(7, "Phone number is too short")
+    .max(15, "Phone number is too long")
+    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
 });
 

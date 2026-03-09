@@ -8,11 +8,15 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const appointmentSchema = z.object({
   doctorId: z.string().min(1),
-  date: z.string(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().min(1),
   patientName: z.string().min(1),
   email: z.string().email(),
-  phone: z.string().min(1),
+  phone: z
+    .string()
+    .min(7, "Phone number is too short")
+    .max(15, "Phone number is too long")
+    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
 });
 
