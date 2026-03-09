@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { Container } from "@/components/layout/Container";
-import { Button } from "@/components/ui/button";
+import { ConfirmAndPayButton } from "@/components/booking/ConfirmAndPayButton";
 import { notFound } from "next/navigation";
 
 type PageProps = {
@@ -81,18 +81,7 @@ export default async function BookingReviewPage({ params }: PageProps) {
               ))}
             </div>
 
-            <form
-              action="/api/checkout_sessions"
-              method="POST"
-              className="mt-8"
-            >
-              <Button
-                type="submit"
-                className="h-11 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-              >
-                Confirm &amp; Pay
-              </Button>
-            </form>
+            <ConfirmAndPayButton bookingSessionId={bookingSessionId} />
           </div>
         </section>
       </Container>

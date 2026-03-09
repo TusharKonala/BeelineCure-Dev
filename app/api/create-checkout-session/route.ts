@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { BookingSessionStatus } from "@/generated/prisma/client";
 import { z } from "zod";
 
 const schema = z.object({
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (bookingSession.status !== "PENDING") {
+    if (bookingSession.status !== BookingSessionStatus.PENDING) {
       return NextResponse.json(
         { error: "Booking session is no longer valid" },
         { status: 400 },
