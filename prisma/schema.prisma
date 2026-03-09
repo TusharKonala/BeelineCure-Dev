@@ -30,14 +30,21 @@ enum PaymentStatus {
   FAILED
 }
 
+enum BookingSessionStatus {
+  PENDING
+  COMPLETED
+  EXPIRED
+}
+
 model Doctor {
-  id             String               @id @default(cuid())
-  name           String
-  specialization String
-  image          String
-  createdAt      DateTime             @default(now())
-  availabilities DoctorAvailability[]
-  appointments   Appointment[]
+  id              String               @id @default(cuid())
+  name            String
+  specialization  String
+  image           String
+  createdAt       DateTime             @default(now())
+  availabilities  DoctorAvailability[]
+  appointments    Appointment[]
+  bookingSessions BookingSession[]
 }
 
 model DoctorAvailability {
@@ -66,4 +73,19 @@ model Appointment {
   createdAt        DateTime          @default(now())
 
   @@unique([doctorId, date, time])
+}
+
+model BookingSession {
+  id               String               @id @default(uuid())
+  doctorId         String
+  doctor           Doctor               @relation(fields: [doctorId], references: [id], onDelete: Restrict)
+  patientName      String
+  email            String
+  phone            String
+  date             String
+  time             String
+  consultationType String
+  status           BookingSessionStatus @default(PENDING)
+  createdAt        DateTime             @default(now())
+  expiresAt        DateTime
 }

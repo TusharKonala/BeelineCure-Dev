@@ -128,7 +128,36 @@ export default function BookAppointmentDoctorPage() {
 
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else {
-          router.push(`/book-appointment/${doctorId}/order-preview`);
+          const bookingSessionRes = await fetch("/api/booking-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              doctorId,
+              date: selectedDate,
+              time: selectedSlot,
+              consultationType,
+              patientName: data.patientName,
+              email: data.email,
+              phone: data.phone,
+            }),
+          });
+
+          const bookingSessionJson = await bookingSessionRes
+            .json()
+            .catch(() => null);
+
+          if (!bookingSessionRes.ok || !bookingSessionJson?.bookingSessionId) {
+            setSubmitError(
+              typeof bookingSessionJson?.error === "string"
+                ? bookingSessionJson.error
+                : "Failed to create booking session",
+            );
+            return;
+          }
+
+          const bookingSessionId = String(bookingSessionJson.bookingSessionId);
+
+          router.push(`/book-appointment/review/${bookingSessionId}`);
         }
 
         queryClient.invalidateQueries({
