@@ -18,6 +18,7 @@ const appointmentSchema = z.object({
     .max(15, "Phone number is too long")
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
+  consultationType: z.enum(["CLINIC", "ONLINE"]).default("CLINIC"),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
     email,
     phone,
     notes,
+    consultationType,
   } = parsed.data;
 
   const date = parseDateOnly(dateParam);
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
       email,
       phone,
       notes,
-      consultationType: "CLINIC",
+      consultationType,
     },
   });
 

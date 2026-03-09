@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -49,8 +49,12 @@ function todayISO(): string {
 export default function BookAppointmentDoctorPage() {
   const params = useParams();
   const doctorId = String(params?.doctorId ?? "");
+  const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(() => todayISO());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [consultationType, setConsultationType] = useState<"CLINIC" | "ONLINE">(
+    "CLINIC",
+  );
   const queryClient = useQueryClient();
   const dateInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +97,7 @@ export default function BookAppointmentDoctorPage() {
             doctorId,
             date: selectedDate,
             time: selectedSlot,
+            consultationType,
             patientName: data.patientName,
             email: data.email,
             phone: data.phone,
@@ -112,14 +117,19 @@ export default function BookAppointmentDoctorPage() {
         }
 
         setSubmitError(null);
-        setBookedConfirmation({
-          doctorName: doctor?.name ?? "Your doctor",
-          appointmentDate: selectedDate,
-          appointmentTime: selectedSlot ?? "",
-          patientName: data.patientName,
-        });
 
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (consultationType === "CLINIC") {
+          setBookedConfirmation({
+            doctorName: doctor?.name ?? "Your doctor",
+            appointmentDate: selectedDate,
+            appointmentTime: selectedSlot ?? "",
+            patientName: data.patientName,
+          });
+
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else {
+          router.push(`/book-appointment/${doctorId}/order-preview`);
+        }
 
         queryClient.invalidateQueries({
           queryKey: ["slots", doctorId, selectedDate],
@@ -131,7 +141,15 @@ export default function BookAppointmentDoctorPage() {
         setIsSubmitting(false);
       }
     },
-    [doctorId, selectedDate, selectedSlot, doctor?.name, queryClient],
+    [
+      doctorId,
+      selectedDate,
+      selectedSlot,
+      consultationType,
+      doctor?.name,
+      queryClient,
+      router,
+    ],
   );
 
   const dateForSlots = selectedDate;
@@ -253,7 +271,43 @@ export default function BookAppointmentDoctorPage() {
               </div>
             </section>
 
-            {/* 3. Time Slot Grid */}
+            {/* 3. Consultation Type */}
+            <section className="mb-10 md:mb-12">
+              <div className="flex flex-col gap-2 text-left">
+                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Consultation type
+                </h2>
+                <p className="font-montserrat text-sm text-[#5E5E5E]">
+                  Choose how you would like to meet your doctor.
+                </p>
+              </div>
+              <div className="mt-4  max-w-md grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={
+                    consultationType === "CLINIC" ? "default" : "outline"
+                  }
+                  className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                  aria-pressed={consultationType === "CLINIC"}
+                  onClick={() => setConsultationType("CLINIC")}
+                >
+                  Clinic Visit
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    consultationType === "ONLINE" ? "default" : "outline"
+                  }
+                  className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                  aria-pressed={consultationType === "ONLINE"}
+                  onClick={() => setConsultationType("ONLINE")}
+                >
+                  Online Consultation
+                </Button>
+              </div>
+            </section>
+
+            {/* 4. Time Slot Grid */}
             <section>
               <div className="flex flex-col gap-2 text-left">
                 <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
