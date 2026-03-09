@@ -13,7 +13,7 @@ const bookingSessionSchema = z.object({
     .string()
     .min(7, "Phone number is too short")
     .max(15, "Phone number is too long")
-    .regex(/^[+0-9()\-\\s]+$/, "Invalid phone number"),
+    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
 });
 
 export async function POST(request: NextRequest) {

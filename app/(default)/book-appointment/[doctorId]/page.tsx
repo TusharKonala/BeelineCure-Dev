@@ -90,35 +90,33 @@ export default function BookAppointmentDoctorPage() {
       setSubmitError(null);
       setIsSubmitting(true);
       try {
-        const res = await fetch("/api/appointments", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            doctorId,
-            date: selectedDate,
-            time: selectedSlot,
-            consultationType,
-            patientName: data.patientName,
-            email: data.email,
-            phone: data.phone,
-            notes: data.notes ?? undefined,
-          }),
-        });
-
-        const json = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          setSubmitError(
-            typeof json?.error === "string"
-              ? json.error
-              : "Failed to book appointment",
-          );
-          return;
-        }
-
-        setSubmitError(null);
-
         if (consultationType === "CLINIC") {
+          const res = await fetch("/api/appointments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              doctorId,
+              date: selectedDate,
+              time: selectedSlot,
+              consultationType,
+              patientName: data.patientName,
+              email: data.email,
+              phone: data.phone,
+              notes: data.notes ?? undefined,
+            }),
+          });
+
+          const json = await res.json().catch(() => ({}));
+
+          if (!res.ok) {
+            setSubmitError(
+              typeof json?.error === "string"
+                ? json.error
+                : "Failed to book appointment",
+            );
+            return;
+          }
+
           setBookedConfirmation({
             doctorName: doctor?.name ?? "Your doctor",
             appointmentDate: selectedDate,
@@ -163,6 +161,7 @@ export default function BookAppointmentDoctorPage() {
         queryClient.invalidateQueries({
           queryKey: ["slots", doctorId, selectedDate],
         });
+
         setSelectedSlot(null);
       } catch {
         setSubmitError("Network error. Please try again.");
