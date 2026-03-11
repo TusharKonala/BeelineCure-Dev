@@ -116,7 +116,9 @@ export async function POST(request: NextRequest) {
           appointmentDate: bookingSession.date,
           appointmentTime: bookingSession.time,
           patientName: bookingSession.patientName,
-          consultationType: bookingSession.consultationType,
+          consultationType: bookingSession.consultationType as
+            | "CLINIC"
+            | "ONLINE",
         }),
       });
 
