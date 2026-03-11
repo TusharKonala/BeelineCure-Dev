@@ -123,7 +123,6 @@ export default function BookAppointmentDoctorPage() {
             appointmentDate: selectedDate,
             appointmentTime: selectedSlot ?? "",
             patientName: data.patientName,
-            patientName: data.patientName,
             consultationType,
           });
 
@@ -245,7 +244,9 @@ export default function BookAppointmentDoctorPage() {
                   </span>
                 </p>
                 <p>
-                  <span className="font-medium text-[#111111]">Consultation:</span>{" "}
+                  <span className="font-medium text-[#111111]">
+                    Consultation:
+                  </span>{" "}
                   <span className="text-[#333333]">Clinic Visit</span>
                 </p>
               </div>
