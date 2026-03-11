@@ -26,57 +26,36 @@ function addDays(d: Date, days: number): Date {
 }
 
 async function main() {
+  // Reset doctors and seed base doctor data
   await prisma.doctor.deleteMany({});
   await prisma.doctor.createMany({ data: doctors });
 
-  const doctor = await prisma.doctor.findFirst();
-  if (!doctor) return;
+  const allDoctors = await prisma.doctor.findMany();
+  if (allDoctors.length === 0) return;
 
   const today = toDateOnly(new Date());
-  const availabilityDates = [today, addDays(today, 1), addDays(today, 2)];
+  const daysToSeed = 30;
 
-  for (const date of availabilityDates) {
-    const existing = await prisma.doctorAvailability.findFirst({
-      where: { doctorId: doctor.id, date },
-    });
-    if (!existing) {
-      await prisma.doctorAvailability.create({
-        data: {
-          doctorId: doctor.id,
-          date,
-          startTime: "09:00",
-          endTime: "13:00",
-        },
+  // Create availability slots for all doctors for the next 30 days
+  for (const doctor of allDoctors) {
+    for (let offset = 0; offset < daysToSeed; offset++) {
+      const date = addDays(today, offset);
+
+      const existing = await prisma.doctorAvailability.findFirst({
+        where: { doctorId: doctor.id, date },
       });
+
+      if (!existing) {
+        await prisma.doctorAvailability.create({
+          data: {
+            doctorId: doctor.id,
+            date,
+            startTime: "09:00",
+            endTime: "13:00",
+          },
+        });
+      }
     }
-  }
-
-  const appointmentSlots = [
-    { time: "10:00", patientName: "Jane Doe", email: "jane.doe@example.com", phone: "+1 555-0100" },
-    { time: "11:30", patientName: "John Smith", email: "john.smith@example.com", phone: "+1 555-0101" },
-  ];
-
-  for (const slot of appointmentSlots) {
-    await prisma.appointment.upsert({
-      where: {
-        doctorId_date_time: {
-          doctorId: doctor.id,
-          date: today,
-          time: slot.time,
-        },
-      },
-      create: {
-        doctorId: doctor.id,
-        date: today,
-        time: slot.time,
-        patientName: slot.patientName,
-        email: slot.email,
-        phone: slot.phone,
-        consultationType: "CLINIC",
-        status: "CONFIRMED",
-      },
-      update: {},
-    });
   }
 }
 
