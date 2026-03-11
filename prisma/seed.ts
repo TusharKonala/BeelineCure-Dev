@@ -26,6 +26,11 @@ function addDays(d: Date, days: number): Date {
 }
 
 async function main() {
+  // Clear dependent data that can block doctor resets
+  await prisma.bookingSession.deleteMany({});
+  await prisma.appointment.deleteMany({});
+  await prisma.doctorAvailability.deleteMany({});
+
   // Reset doctors and seed base doctor data
   await prisma.doctor.deleteMany({});
   await prisma.doctor.createMany({ data: doctors });
