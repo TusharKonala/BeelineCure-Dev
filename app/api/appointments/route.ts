@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
         appointmentDate: dateParam,
         appointmentTime: time,
         patientName,
+        consultationType,
       }),
     });
     if (error) {
