@@ -77,6 +77,7 @@ export default function BookAppointmentDoctorPage() {
     appointmentDate: string;
     appointmentTime: string;
     patientName: string;
+    consultationType: "CLINIC" | "ONLINE";
   } | null>(null);
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
@@ -122,6 +123,8 @@ export default function BookAppointmentDoctorPage() {
             appointmentDate: selectedDate,
             appointmentTime: selectedSlot ?? "",
             patientName: data.patientName,
+            patientName: data.patientName,
+            consultationType,
           });
 
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -240,6 +243,10 @@ export default function BookAppointmentDoctorPage() {
                   <span className="text-[#333333]">
                     {bookedConfirmation.patientName}
                   </span>
+                </p>
+                <p>
+                  <span className="font-medium text-[#111111]">Consultation:</span>{" "}
+                  <span className="text-[#333333]">Clinic Visit</span>
                 </p>
               </div>
             </div>
