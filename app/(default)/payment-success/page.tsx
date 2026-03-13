@@ -5,11 +5,12 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 
 type PageProps = {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 export default async function PaymentSuccessPage({ searchParams }: PageProps) {
-  const rawSessionId = searchParams.session_id;
+  const params = await searchParams;
+  const rawSessionId = params.session_id;
   const sessionId = Array.isArray(rawSessionId)
     ? rawSessionId[0]
     : rawSessionId;
