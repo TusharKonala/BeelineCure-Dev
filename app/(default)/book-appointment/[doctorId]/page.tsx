@@ -139,6 +139,7 @@ export default function BookAppointmentDoctorPage() {
               patientName: data.patientName,
               email: data.email,
               phone: data.phone,
+              notes: data.notes,
             }),
           });
 

@@ -87,11 +87,6 @@ export async function POST(request: NextRequest) {
       return new NextResponse("OK", { status: 200 });
     }
 
-    console.log({
-      paymentStatus: PaymentStatus.PAID,
-      consultationType: bookingSession.consultationType,
-    });
-
     // Create the confirmed appointment from the booking session data
     const appointment = await prisma.appointment.create({
       data: {
@@ -101,6 +96,7 @@ export async function POST(request: NextRequest) {
         patientName: bookingSession.patientName,
         email: bookingSession.email,
         phone: bookingSession.phone,
+        notes: bookingSession.notes,
         consultationType:
           bookingSession.consultationType === "ONLINE"
             ? ConsultationType.ONLINE

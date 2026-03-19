@@ -84,6 +84,7 @@ model BookingSession {
   phone            String
   date             String
   time             String
+  notes            String?
   consultationType String
   status           BookingSessionStatus @default(PENDING)
   createdAt        DateTime             @default(now())

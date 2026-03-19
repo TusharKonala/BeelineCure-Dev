@@ -14,6 +14,7 @@ const bookingSessionSchema = z.object({
     .min(7, "Phone number is too short")
     .max(15, "Phone number is too long")
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+  notes: z.string().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -30,8 +31,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
   }
 
-  const { doctorId, date, time, consultationType, patientName, email, phone } =
-    parsed.data;
+  const {
+    doctorId,
+    date,
+    time,
+    consultationType,
+    patientName,
+    email,
+    phone,
+    notes,
+  } = parsed.data;
 
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
@@ -51,6 +60,7 @@ export async function POST(request: NextRequest) {
       phone,
       date,
       time,
+      notes: notes,
       consultationType,
       status: "PENDING",
       expiresAt,
