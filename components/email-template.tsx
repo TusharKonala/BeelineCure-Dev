@@ -8,8 +8,13 @@ export interface EmailTemplateProps {
   consultationType: "CLINIC" | "ONLINE";
 }
 
-const confirmationMessage =
-  "Your appointment has been confirmed. Please arrive a few minutes early. If you need to reschedule or cancel, please contact the clinic.";
+const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
+  if (consultationType === "ONLINE") {
+    return "Your online appointment has been confirmed. Please be available at the scheduled time. If you need to reschedule or cancel, please contact the clinic.";
+  }
+
+  return "Your appointment has been confirmed. Please arrive a few minutes early. If you need to reschedule or cancel, please contact the clinic.";
+};
 
 export function EmailTemplate({
   doctorName,
@@ -26,7 +31,10 @@ export function EmailTemplate({
         Appointment Confirmation
       </h1>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>Hello {patientName},</p>
-      <p style={{ color: "#333333", lineHeight: 1.6 }}>{confirmationMessage}</p>
+      <p style={{ color: "#333333", lineHeight: 1.6 }}>
+        {" "}
+        {getConfirmationMessage(consultationType)}
+      </p>
       <div
         style={{
           marginTop: "1.5rem",
@@ -57,7 +65,8 @@ export function EmailTemplate({
       </div>
       {consultationType === "ONLINE" && (
         <p style={{ marginTop: "1rem", color: "#333" }}>
-          This is an online consultation. The doctor will contact you at the scheduled time.
+          This is an online consultation. The doctor will contact you at the
+          scheduled time.
         </p>
       )}
       <p
