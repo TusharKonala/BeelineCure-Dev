@@ -4,6 +4,7 @@ import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import {
   BookingSessionStatus,
+  AppointmentStatus,
   PaymentStatus,
   ConsultationType,
 } from "@/generated/prisma/client";
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
         email: bookingSession.email,
         phone: bookingSession.phone,
         notes: bookingSession.notes,
+        status: AppointmentStatus.CONFIRMED,
         consultationType:
           bookingSession.consultationType === "ONLINE"
             ? ConsultationType.ONLINE

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
+import { AppointmentStatus } from "@/generated/prisma/client";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
       phone,
       notes,
       consultationType,
+      status: AppointmentStatus.CONFIRMED,
     },
   });
 
