@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { randomBytes } from "crypto";
+import { headers } from "next/headers";
 import {
   BookingSessionStatus,
   AppointmentStatus,
@@ -88,6 +90,8 @@ export async function POST(request: NextRequest) {
       return new NextResponse("OK", { status: 200 });
     }
 
+    const cancelToken = randomBytes(32).toString("hex");
+
     // Create the confirmed appointment from the booking session data
     const appointment = await prisma.appointment.create({
       data: {
@@ -105,8 +109,20 @@ export async function POST(request: NextRequest) {
             : ConsultationType.CLINIC,
         stripePaymentId: session.id,
         paymentStatus: PaymentStatus.PAID,
+        cancelToken,
       },
     });
+
+    const headersList = await headers();
+    const origin =
+      headersList.get("origin") ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+
+    const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
+      appointment.id,
+    )}&token=${encodeURIComponent(cancelToken)}`;
 
     // Mark the booking session as completed to avoid reprocessing
     await prisma.bookingSession.update({
@@ -128,6 +144,7 @@ export async function POST(request: NextRequest) {
           consultationType: bookingSession.consultationType as
             | "CLINIC"
             | "ONLINE",
+          cancelUrl,
         }),
       });
 

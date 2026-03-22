@@ -6,6 +6,7 @@ export interface EmailTemplateProps {
   appointmentTime: string;
   patientName: string;
   consultationType: "CLINIC" | "ONLINE";
+  cancelUrl: string;
 }
 
 const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
@@ -22,6 +23,7 @@ export function EmailTemplate({
   appointmentTime,
   patientName,
   consultationType,
+  cancelUrl,
 }: EmailTemplateProps) {
   return (
     <div
@@ -69,6 +71,18 @@ export function EmailTemplate({
           scheduled time.
         </p>
       )}
+      <div style={{ marginTop: "1rem" }}>
+        <a
+          href={cancelUrl}
+          style={{
+            color: "#2555F3",
+            textDecoration: "none",
+            fontWeight: 600,
+          }}
+        >
+          Cancel Appointment
+        </a>
+      </div>
       <p
         style={{ color: "#5E5E5E", fontSize: "0.875rem", marginTop: "1.5rem" }}
       >

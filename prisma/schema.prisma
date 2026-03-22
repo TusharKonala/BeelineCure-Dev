@@ -70,6 +70,7 @@ model Appointment {
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
   stripePaymentId  String?
+  cancelToken      String?
   createdAt        DateTime          @default(now())
 
   @@unique([doctorId, date, time])

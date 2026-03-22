@@ -1,6 +1,8 @@
 import { EmailTemplate } from "@/components/email-template";
 import { prisma } from "@/lib/db";
+import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
@@ -80,6 +82,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const cancelToken = randomBytes(32).toString("hex");
+
   const appointment = await prisma.appointment.create({
     data: {
       doctorId,
@@ -91,8 +95,20 @@ export async function POST(request: NextRequest) {
       notes,
       consultationType,
       status: AppointmentStatus.CONFIRMED,
+      cancelToken,
     },
   });
+
+  const headersList = await headers();
+  const origin =
+    headersList.get("origin") ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    "http://localhost:3000";
+
+  const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
+    appointment.id,
+  )}&token=${encodeURIComponent(cancelToken)}`;
 
   try {
     const { error } = await resend.emails.send({
@@ -105,6 +121,7 @@ export async function POST(request: NextRequest) {
         appointmentTime: time,
         patientName,
         consultationType,
+        cancelUrl,
       }),
     });
     if (error) {
