@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
+import { AppointmentStatus } from "@/generated/prisma/client";
 
 function timeToMinutes(time: string): number {
   const [h, m] = time.split(":").map(Number);
@@ -63,7 +64,7 @@ export async function GET(
       where: {
         doctorId,
         date,
-        status: { not: "CANCELLED" },
+        status: { not: AppointmentStatus.CANCELLED },
       },
     }),
   ]);

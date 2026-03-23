@@ -1,5 +1,6 @@
 import { EmailTemplate } from "@/components/email-template";
 import { prisma } from "@/lib/db";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
@@ -69,9 +70,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
   }
 
-  const existing = await prisma.appointment.findUnique({
+  const existing = await prisma.appointment.findFirst({
     where: {
-      doctorId_date_time: { doctorId, date, time },
+      doctorId,
+      date,
+      time,
+      status: {
+        not: AppointmentStatus.CANCELLED,
+      },
     },
   });
 
@@ -84,20 +90,34 @@ export async function POST(request: NextRequest) {
 
   const cancelToken = randomBytes(32).toString("hex");
 
-  const appointment = await prisma.appointment.create({
-    data: {
-      doctorId,
-      date,
-      time,
-      patientName,
-      email,
-      phone,
-      notes,
-      consultationType,
-      status: AppointmentStatus.CONFIRMED,
-      cancelToken,
-    },
-  });
+  let appointment;
+  try {
+    appointment = await prisma.appointment.create({
+      data: {
+        doctorId,
+        date,
+        time,
+        patientName,
+        email,
+        phone,
+        notes,
+        consultationType,
+        status: AppointmentStatus.CONFIRMED,
+        cancelToken,
+      },
+    });
+  } catch (err) {
+    if (
+      err instanceof PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      return NextResponse.json(
+        { error: "This time slot is no longer available" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   const headersList = await headers();
   const origin =

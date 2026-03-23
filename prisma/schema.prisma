@@ -72,8 +72,6 @@ model Appointment {
   stripePaymentId  String?
   cancelToken      String?
   createdAt        DateTime          @default(now())
-
-  @@unique([doctorId, date, time])
 }
 
 model BookingSession {
