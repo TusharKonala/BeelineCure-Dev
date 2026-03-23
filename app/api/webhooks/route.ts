@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/client";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { randomBytes } from "crypto";
@@ -93,25 +94,56 @@ export async function POST(request: NextRequest) {
     const cancelToken = randomBytes(32).toString("hex");
 
     // Create the confirmed appointment from the booking session data
-    const appointment = await prisma.appointment.create({
-      data: {
-        doctorId: bookingSession.doctorId,
-        date,
-        time: bookingSession.time,
-        patientName: bookingSession.patientName,
-        email: bookingSession.email,
-        phone: bookingSession.phone,
-        notes: bookingSession.notes,
-        status: AppointmentStatus.CONFIRMED,
-        consultationType:
-          bookingSession.consultationType === "ONLINE"
-            ? ConsultationType.ONLINE
-            : ConsultationType.CLINIC,
-        stripePaymentId: session.id,
-        paymentStatus: PaymentStatus.PAID,
-        cancelToken,
-      },
+    let appointment;
+    try {
+      appointment = await prisma.appointment.create({
+        data: {
+          doctorId: bookingSession.doctorId,
+          date,
+          time: bookingSession.time,
+          patientName: bookingSession.patientName,
+          email: bookingSession.email,
+          phone: bookingSession.phone,
+          notes: bookingSession.notes,
+          status: AppointmentStatus.CONFIRMED,
+          consultationType:
+            bookingSession.consultationType === "ONLINE"
+              ? ConsultationType.ONLINE
+              : ConsultationType.CLINIC,
+          stripePaymentId: session.id,
+          paymentStatus: PaymentStatus.PAID,
+          cancelToken,
+        },
+      });
+    } catch (err) {
+      if (
+        err instanceof PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        // Concurrent webhook or slot taken: prefer idempotent recovery by checkout id
+        const existing = await prisma.appointment.findFirst({
+          where: { stripePaymentId: session.id },
+        });
+        if (existing) {
+          appointment = existing;
+        } else {
+          console.error(
+            "[webhooks] P2002 creating appointment (slot conflict), bookingSession:",
+            bookingSession.id,
+          );
+          return new NextResponse("OK", { status: 200 });
+        }
+      } else {
+        throw err;
+      }
+    }
+
+    const sessionAfter = await prisma.bookingSession.findUnique({
+      where: { id: bookingSession.id },
     });
+    if (sessionAfter?.status === BookingSessionStatus.COMPLETED) {
+      return new NextResponse("OK", { status: 200 });
+    }
 
     const headersList = await headers();
     const origin =
