@@ -92,7 +92,6 @@ export async function POST(request: NextRequest) {
     }
 
     const cancelToken = randomBytes(32).toString("hex");
-
     // Create the confirmed appointment from the booking session data
     let appointment;
     try {
@@ -154,7 +153,7 @@ export async function POST(request: NextRequest) {
 
     const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
       appointment.id,
-    )}&token=${encodeURIComponent(cancelToken)}`;
+    )}&token=${encodeURIComponent(appointment.cancelToken!)}`;
 
     // Mark the booking session as completed to avoid reprocessing
     await prisma.bookingSession.update({
