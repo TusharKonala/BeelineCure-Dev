@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 
@@ -12,7 +12,7 @@ type CancelUiState =
   | "already_cancelled"
   | "error";
 
-export default function CancelPage() {
+function CancelContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<CancelUiState>("idle");
   const [isCancelling, setIsCancelling] = useState(false);
@@ -125,5 +125,30 @@ export default function CancelPage() {
         </section>
       </Container>
     </div>
+  );
+}
+
+export default function CancelPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
+          <Container>
+            <section className="mx-auto max-w-xl">
+              <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
+                <h1 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Loading cancellation…
+                </h1>
+                <p className="mt-4 font-montserrat text-sm text-[#5E5E5E] md:text-base">
+                  Please wait.
+                </p>
+              </div>
+            </section>
+          </Container>
+        </div>
+      }
+    >
+      <CancelContent />
+    </Suspense>
   );
 }
