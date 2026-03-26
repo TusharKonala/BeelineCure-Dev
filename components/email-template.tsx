@@ -37,9 +37,7 @@ export function EmailTemplate({
     <div
       style={{ fontFamily: "sans-serif", maxWidth: "600px", margin: "0 auto" }}
     >
-      <h1 style={{ color: "#111111", marginBottom: "1rem" }}>
-        {heading}
-      </h1>
+      <h1 style={{ color: "#111111", marginBottom: "1rem" }}>{heading}</h1>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>Hello {patientName},</p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         {" "}
@@ -73,7 +71,7 @@ export function EmailTemplate({
             : "Clinic Visit"}
         </p>
       </div>
-      {consultationType === "ONLINE" && (
+      {consultationType === "ONLINE" && showActionLinks && (
         <p style={{ marginTop: "1rem", color: "#333" }}>
           This is an online consultation. The doctor will contact you at the
           scheduled time.
