@@ -1,36 +1,40 @@
 import * as React from "react";
 
 export interface EmailTemplateProps {
+  heading?: string;
   doctorName: string;
   appointmentDate: string;
   appointmentTime: string;
   patientName: string;
   consultationType: "CLINIC" | "ONLINE";
   cancelUrl: string;
+  rescheduleUrl: string;
 }
 
 const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
   if (consultationType === "ONLINE") {
-    return "Your online appointment has been confirmed. Please be available at the scheduled time. If you need to reschedule or cancel, please contact the clinic.";
+    return "Your online appointment is confirmed. Please be available at the scheduled time. To cancel or reschedule, use the links below.";
   }
 
-  return "Your appointment has been confirmed. Please arrive a few minutes early. If you need to reschedule or cancel, please contact the clinic.";
+  return "Your appointment is confirmed. Please arrive a few minutes early. To cancel or reschedule, use the links below.";
 };
 
 export function EmailTemplate({
+  heading = "Appointment Confirmation",
   doctorName,
   appointmentDate,
   appointmentTime,
   patientName,
   consultationType,
   cancelUrl,
+  rescheduleUrl,
 }: EmailTemplateProps) {
   return (
     <div
       style={{ fontFamily: "sans-serif", maxWidth: "600px", margin: "0 auto" }}
     >
       <h1 style={{ color: "#111111", marginBottom: "1rem" }}>
-        Appointment Confirmation
+        {heading}
       </h1>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>Hello {patientName},</p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
@@ -81,6 +85,18 @@ export function EmailTemplate({
           }}
         >
           Cancel Appointment
+        </a>
+      </div>
+      <div style={{ marginTop: "0.75rem" }}>
+        <a
+          href={rescheduleUrl}
+          style={{
+            color: "#2555F3",
+            textDecoration: "none",
+            fontWeight: 600,
+          }}
+        >
+          Reschedule Appointment
         </a>
       </div>
       <p

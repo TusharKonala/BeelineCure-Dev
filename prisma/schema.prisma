@@ -71,6 +71,7 @@ model Appointment {
   paymentStatus    PaymentStatus     @default(PENDING)
   stripePaymentId  String?
   cancelToken      String?
+  rescheduleToken  String?
   createdAt        DateTime          @default(now())
 }
 

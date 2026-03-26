@@ -33,6 +33,9 @@ export async function GET(
 ) {
   const { doctorId } = await params;
   const dateParam = request.nextUrl.searchParams.get("date");
+  const excludeAppointmentId = request.nextUrl.searchParams.get(
+    "excludeAppointmentId",
+  );
 
   if (!dateParam) {
     return NextResponse.json({ error: "date is required" }, { status: 400 });
@@ -65,6 +68,9 @@ export async function GET(
         doctorId,
         date,
         status: { not: AppointmentStatus.CANCELLED },
+        ...(excludeAppointmentId
+          ? { id: { not: excludeAppointmentId } }
+          : {}),
       },
     }),
   ]);

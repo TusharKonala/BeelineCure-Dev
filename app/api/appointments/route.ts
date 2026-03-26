@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
   }
 
   const cancelToken = randomBytes(32).toString("hex");
+  const rescheduleToken = randomBytes(32).toString("hex");
 
   let appointment;
   try {
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
         consultationType,
         status: AppointmentStatus.CONFIRMED,
         cancelToken,
+        rescheduleToken,
       },
     });
   } catch (err) {
@@ -129,6 +131,9 @@ export async function POST(request: NextRequest) {
   const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
     appointment.id,
   )}&token=${encodeURIComponent(cancelToken)}`;
+  const rescheduleUrl = `${origin}/reschedule?appointmentId=${encodeURIComponent(
+    appointment.id,
+  )}&token=${encodeURIComponent(rescheduleToken)}`;
 
   try {
     const { error } = await resend.emails.send({
@@ -142,6 +147,7 @@ export async function POST(request: NextRequest) {
         patientName,
         consultationType,
         cancelUrl,
+        rescheduleUrl,
       }),
     });
     if (error) {

@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
     }
 
     const cancelToken = randomBytes(32).toString("hex");
+    const rescheduleToken = randomBytes(32).toString("hex");
     // Create the confirmed appointment from the booking session data
     let appointment;
     try {
@@ -112,6 +113,7 @@ export async function POST(request: NextRequest) {
           stripePaymentId: session.id,
           paymentStatus: PaymentStatus.PAID,
           cancelToken,
+          rescheduleToken,
         },
       });
     } catch (err) {
@@ -154,6 +156,9 @@ export async function POST(request: NextRequest) {
     const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
       appointment.id,
     )}&token=${encodeURIComponent(appointment.cancelToken!)}`;
+    const rescheduleUrl = `${origin}/reschedule?appointmentId=${encodeURIComponent(
+      appointment.id,
+    )}&token=${encodeURIComponent(appointment.rescheduleToken!)}`;
 
     // Mark the booking session as completed to avoid reprocessing
     await prisma.bookingSession.update({
@@ -176,6 +181,7 @@ export async function POST(request: NextRequest) {
             | "CLINIC"
             | "ONLINE",
           cancelUrl,
+          rescheduleUrl,
         }),
       });
 
