@@ -2,7 +2,7 @@ import * as React from "react";
 
 export interface EmailTemplateProps {
   heading?: string;
-  message?: string;
+  message?: React.ReactNode;
   showActionLinks?: boolean;
   doctorName: string;
   appointmentDate: string;

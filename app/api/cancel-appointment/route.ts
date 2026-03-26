@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { NextRequest, NextResponse } from "next/server";
+import React from "react";
 import { Resend } from "resend";
 import { z } from "zod";
 
@@ -73,6 +74,7 @@ export async function POST(request: NextRequest) {
   // Best-effort cancellation email; cancellation still succeeds if email fails.
   try {
     const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const websiteUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const doctor = await prisma.doctor.findUnique({
       where: { id: appointment.doctorId },
     });
@@ -83,8 +85,13 @@ export async function POST(request: NextRequest) {
       subject: "Appointment Cancelled",
       react: EmailTemplate({
         heading: "Appointment Cancelled",
-        message:
-          "Your appointment has been cancelled. If you would like to book again, please visit our website.",
+        message: React.createElement(
+          React.Fragment,
+          null,
+          "Your appointment has been cancelled. If you would like to book again, please visit ",
+          React.createElement("a", { href: websiteUrl }, "our website"),
+          ".",
+        ),
         showActionLinks: false,
         doctorName: doctor?.name ?? "Your Doctor",
         appointmentDate,
