@@ -188,6 +188,10 @@ export async function POST(request: NextRequest) {
         subject: "Appointment Rescheduled",
         react: EmailTemplate({
           heading: "Appointment Rescheduled",
+          message:
+            updatedAppointment.consultationType === "ONLINE"
+              ? "Your appointment has been rescheduled. Please be available at the scheduled time. To cancel or reschedule, use the links below."
+              : "Your appointment has been rescheduled. Please arrive a few minutes early. To cancel or reschedule, use the links below.",
           doctorName: doctor.name,
           appointmentDate: dateParam,
           appointmentTime: time,
