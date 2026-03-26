@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 
@@ -16,6 +16,7 @@ function CancelContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<CancelUiState>("idle");
   const [isCancelling, setIsCancelling] = useState(false);
+  const [hasCheckedStatus, setHasCheckedStatus] = useState(false);
 
   const appointmentId = useMemo(
     () => searchParams.get("appointmentId") ?? "",
@@ -27,6 +28,36 @@ function CancelContent() {
   );
 
   const canSubmit = appointmentId.length > 0 && token.length > 0;
+
+  useEffect(() => {
+    if (!canSubmit) {
+      setHasCheckedStatus(true);
+      return;
+    }
+
+    fetch(
+      `/api/cancel-appointment?appointmentId=${encodeURIComponent(
+        appointmentId,
+      )}&token=${encodeURIComponent(token)}`,
+    )
+      .then(async (res) => {
+        const json = (await res.json().catch(() => null)) as
+          | { status?: string }
+          | null;
+
+        const nextState = json?.status;
+        if (nextState === "already_cancelled" || nextState === "invalid_link") {
+          setState(nextState);
+          return;
+        }
+
+        if (nextState !== "valid") {
+          setState("error");
+        }
+      })
+      .catch(() => setState("error"))
+      .finally(() => setHasCheckedStatus(true));
+  }, [appointmentId, token, canSubmit]);
 
   const onConfirmCancel = async () => {
     if (!canSubmit || isCancelling) return;
@@ -86,6 +117,9 @@ function CancelContent() {
       case "error":
         return "We could not cancel your appointment. Please try again.";
       default:
+        if (canSubmit && !hasCheckedStatus) {
+          return "Checking your cancellation link...";
+        }
         return "Are you sure you want to cancel this appointment?";
     }
   })();
@@ -102,7 +136,7 @@ function CancelContent() {
               {message}
             </p>
 
-            {state === "idle" && canSubmit && (
+            {state === "idle" && canSubmit && hasCheckedStatus && (
               <div className="mt-8">
                 <Button
                   disabled={isCancelling}
