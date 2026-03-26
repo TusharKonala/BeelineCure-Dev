@@ -2,6 +2,8 @@ import * as React from "react";
 
 export interface EmailTemplateProps {
   heading?: string;
+  message?: string;
+  showActionLinks?: boolean;
   doctorName: string;
   appointmentDate: string;
   appointmentTime: string;
@@ -21,6 +23,8 @@ const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
 
 export function EmailTemplate({
   heading = "Appointment Confirmation",
+  message,
+  showActionLinks = true,
   doctorName,
   appointmentDate,
   appointmentTime,
@@ -39,7 +43,7 @@ export function EmailTemplate({
       <p style={{ color: "#333333", lineHeight: 1.6 }}>Hello {patientName},</p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         {" "}
-        {getConfirmationMessage(consultationType)}
+        {message ?? getConfirmationMessage(consultationType)}
       </p>
       <div
         style={{
@@ -75,30 +79,34 @@ export function EmailTemplate({
           scheduled time.
         </p>
       )}
-      <div style={{ marginTop: "1rem" }}>
-        <a
-          href={cancelUrl}
-          style={{
-            color: "#2555F3",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
-        >
-          Cancel Appointment
-        </a>
-      </div>
-      <div style={{ marginTop: "0.75rem" }}>
-        <a
-          href={rescheduleUrl}
-          style={{
-            color: "#2555F3",
-            textDecoration: "none",
-            fontWeight: 600,
-          }}
-        >
-          Reschedule Appointment
-        </a>
-      </div>
+      {showActionLinks && (
+        <>
+          <div style={{ marginTop: "1rem" }}>
+            <a
+              href={cancelUrl}
+              style={{
+                color: "#2555F3",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Cancel Appointment
+            </a>
+          </div>
+          <div style={{ marginTop: "0.75rem" }}>
+            <a
+              href={rescheduleUrl}
+              style={{
+                color: "#2555F3",
+                textDecoration: "none",
+                fontWeight: 600,
+              }}
+            >
+              Reschedule Appointment
+            </a>
+          </div>
+        </>
+      )}
       <p
         style={{ color: "#5E5E5E", fontSize: "0.875rem", marginTop: "1.5rem" }}
       >
