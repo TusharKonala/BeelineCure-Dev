@@ -80,8 +80,14 @@ export async function GET(
   );
 
   const booked = new Set(appointments.map((a) => a.time));
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const isToday = date.getTime() === today.getTime();
 
-  const available = [...new Set(slots)].filter((s) => !booked.has(s)).sort();
+  const available = [...new Set(slots)]
+    .filter((s) => !booked.has(s))
+    .filter((s) => !isToday || timeToMinutes(s) > currentMinutes)
+    .sort();
 
   return NextResponse.json({ slots: available });
 }
