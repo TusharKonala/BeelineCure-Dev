@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
+import { inngest } from "@/inngest/client";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -109,10 +110,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (err) {
-    if (
-      err instanceof PrismaClientKnownRequestError &&
-      err.code === "P2002"
-    ) {
+    if (err instanceof PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json(
         { error: "This time slot is no longer available" },
         { status: 409 },
@@ -155,6 +153,21 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[appointments] Confirmation email failed:", err);
+  }
+
+  try {
+    const appointmentDateTime = new Date(`${dateParam}T${time}:00`);
+    const reminderAtMs = appointmentDateTime.getTime() - 24 * 60 * 60 * 1000;
+
+    await inngest.send({
+      name: "appointment/reminder.scheduled",
+      data: {
+        appointmentId: appointment.id,
+      },
+      ts: reminderAtMs,
+    });
+  } catch (err) {
+    console.error("[appointments] Failed to schedule reminder:", err);
   }
 
   return NextResponse.json(appointment);

@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { headers } from "next/headers";
 import { Resend } from "resend";
+import { inngest } from "@/inngest/client";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -151,6 +152,28 @@ export async function POST(request: NextRequest) {
       time,
     },
   });
+
+  try {
+    await inngest.send({
+      name: "appointment/reminder.cancelled",
+      data: {
+        appointmentId: updatedAppointment.id,
+      },
+    });
+
+    const appointmentDateTime = new Date(`${dateParam}T${time}:00`);
+    const reminderAtMs = appointmentDateTime.getTime() - 24 * 60 * 60 * 1000;
+
+    await inngest.send({
+      name: "appointment/reminder.scheduled",
+      data: {
+        appointmentId: updatedAppointment.id,
+      },
+      ts: reminderAtMs,
+    });
+  } catch (err) {
+    console.error("[reschedule] Failed to re-schedule reminder:", err);
+  }
 
   // Best-effort notification email: don't fail rescheduling if email delivery fails.
   try {

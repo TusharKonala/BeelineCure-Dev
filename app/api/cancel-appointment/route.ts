@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
+import { inngest } from "@/inngest/client";
 import { NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { Resend } from "resend";
@@ -70,6 +71,17 @@ export async function POST(request: NextRequest) {
     where: { id: appointmentId },
     data: { status: AppointmentStatus.CANCELLED },
   });
+
+  try {
+    await inngest.send({
+      name: "appointment/reminder.cancelled",
+      data: {
+        appointmentId,
+      },
+    });
+  } catch (err) {
+    console.error("[cancel] Failed to cancel reminder:", err);
+  }
 
   // Best-effort cancellation email; cancellation still succeeds if email fails.
   try {

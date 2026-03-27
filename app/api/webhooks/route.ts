@@ -13,6 +13,7 @@ import {
 } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
+import { inngest } from "@/inngest/client";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -190,6 +191,23 @@ export async function POST(request: NextRequest) {
       }
     } catch (emailError) {
       console.error("[webhooks] Confirmation email failed:", emailError);
+    }
+
+    try {
+      const appointmentDateTime = new Date(
+        `${bookingSession.date}T${bookingSession.time}:00`,
+      );
+      const reminderAtMs = appointmentDateTime.getTime() - 24 * 60 * 60 * 1000;
+
+      await inngest.send({
+        name: "appointment/reminder.scheduled",
+        data: {
+          appointmentId: appointment.id,
+        },
+        ts: reminderAtMs,
+      });
+    } catch (err) {
+      console.error("[webhooks] Failed to schedule reminder:", err);
     }
   }
 
