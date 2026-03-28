@@ -8,7 +8,7 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
-import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+// import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -160,18 +160,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const reminderAtMs = reminderAtMsFromPatientLocal(
-      dateParam,
-      time,
-      timezone,
-    );
+    // const reminderAtMs = reminderAtMsFromPatientLocal(
+    //   dateParam,
+    //   time,
+    //   timezone,
+    // );
 
     await inngest.send({
       name: "appointment/reminder.scheduled",
       data: {
         appointmentId: appointment.id,
       },
-      ts: reminderAtMs,
+      ts: Date.now() + 2 * 60 * 1000,
     });
   } catch (err) {
     console.error("[appointments] Failed to schedule reminder:", err);
