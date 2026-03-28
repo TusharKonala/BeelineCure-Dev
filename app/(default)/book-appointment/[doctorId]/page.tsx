@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -58,6 +58,11 @@ export default function BookAppointmentDoctorPage() {
   const queryClient = useQueryClient();
   const dateInputRef = useRef<HTMLInputElement>(null);
 
+  const patientTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
+
   const minDate = todayISO();
 
   const {
@@ -104,6 +109,7 @@ export default function BookAppointmentDoctorPage() {
               email: data.email,
               phone: data.phone,
               notes: data.notes ?? undefined,
+              timezone: patientTimeZone,
             }),
           });
 
@@ -140,6 +146,7 @@ export default function BookAppointmentDoctorPage() {
               email: data.email,
               phone: data.phone,
               notes: data.notes,
+              timezone: patientTimeZone,
             }),
           });
 
@@ -178,6 +185,7 @@ export default function BookAppointmentDoctorPage() {
       selectedSlot,
       consultationType,
       doctor?.name,
+      patientTimeZone,
       queryClient,
       router,
     ],

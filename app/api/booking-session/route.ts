@@ -15,6 +15,7 @@ const bookingSessionSchema = z.object({
     .max(15, "Phone number is too long")
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
+  timezone: z.string().min(1).max(128).default("UTC"),
 });
 
 export async function POST(request: NextRequest) {
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
     email,
     phone,
     notes,
+    timezone,
   } = parsed.data;
 
   const doctor = await prisma.doctor.findUnique({
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
       phone,
       date,
       time,
+      timezone,
       notes: notes,
       consultationType,
       status: "PENDING",

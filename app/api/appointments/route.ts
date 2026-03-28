@@ -8,6 +8,7 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
+import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -24,6 +25,7 @@ const appointmentSchema = z.object({
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
   consultationType: z.enum(["CLINIC", "ONLINE"]).default("CLINIC"),
+  timezone: z.string().min(1).max(128).default("UTC"),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
     phone,
     notes,
     consultationType,
+    timezone,
   } = parsed.data;
 
   const date = parseDateOnly(dateParam);
@@ -104,6 +107,7 @@ export async function POST(request: NextRequest) {
         phone,
         notes,
         consultationType,
+        timezone,
         status: AppointmentStatus.CONFIRMED,
         cancelToken,
         rescheduleToken,
@@ -156,8 +160,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const appointmentDateTime = new Date(`${dateParam}T${time}:00`);
-    const reminderAtMs = appointmentDateTime.getTime() - 24 * 60 * 60 * 1000;
+    const reminderAtMs = reminderAtMsFromPatientLocal(
+      dateParam,
+      time,
+      timezone,
+    );
 
     await inngest.send({
       name: "appointment/reminder.scheduled",

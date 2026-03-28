@@ -6,6 +6,7 @@ import { z } from "zod";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
+import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -19,6 +20,7 @@ const rescheduleSchema = z.object({
   token: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
+  timezone: z.string().min(1).max(128).optional(),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -80,6 +82,7 @@ export async function GET(request: NextRequest) {
       doctorId: appointment.doctorId,
       date: formatDateOnly(appointment.date),
       time: appointment.time,
+      timezone: appointment.timezone,
       consultationType: appointment.consultationType,
       status: appointment.status,
     },
@@ -101,7 +104,8 @@ export async function POST(request: NextRequest) {
     } satisfies RescheduleResponse);
   }
 
-  const { appointmentId, token, date: dateParam, time } = parsed.data;
+  const { appointmentId, token, date: dateParam, time, timezone } =
+    parsed.data;
   const date = parseDateOnly(dateParam);
   if (!date) {
     return NextResponse.json({
@@ -150,6 +154,7 @@ export async function POST(request: NextRequest) {
     data: {
       date,
       time,
+      ...(timezone !== undefined ? { timezone } : {}),
     },
   });
 
@@ -161,8 +166,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const appointmentDateTime = new Date(`${dateParam}T${time}:00`);
-    const reminderAtMs = appointmentDateTime.getTime() - 24 * 60 * 60 * 1000;
+    const reminderTz = timezone ?? appointment.timezone;
+    const reminderAtMs = reminderAtMsFromPatientLocal(
+      dateParam,
+      time,
+      reminderTz,
+    );
 
     await inngest.send({
       name: "appointment/reminder.scheduled",

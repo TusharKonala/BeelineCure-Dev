@@ -21,6 +21,7 @@ type AppointmentDetails = {
   doctorId: string;
   date: string; // YYYY-MM-DD
   time: string; // HH:MM
+  timezone: string;
   consultationType: ConsultationType;
   status: AppointmentStatus;
 };
@@ -71,6 +72,11 @@ function RescheduleContent() {
   const token = useMemo(() => searchParams.get("token") ?? "", [searchParams]);
 
   const canLoad = appointmentId.length > 0 && token.length > 0;
+
+  const patientTimeZone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
 
   const [state, setState] = useState<RescheduleUiState>("idle");
   const [isLoadingAppointment, setIsLoadingAppointment] = useState(false);
@@ -157,6 +163,7 @@ function RescheduleContent() {
           token,
           date: selectedDate,
           time: selectedSlot,
+          timezone: patientTimeZone,
         }),
       });
 

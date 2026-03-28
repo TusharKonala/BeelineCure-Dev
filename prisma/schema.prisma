@@ -63,6 +63,8 @@ model Appointment {
   patientName      String
   email            String
   phone            String
+  /// IANA timezone used when interpreting date + time for reminders (e.g. America/New_York)
+  timezone         String            @default("UTC")
   date             DateTime          @db.Date
   time             String
   notes            String?
@@ -82,6 +84,8 @@ model BookingSession {
   patientName      String
   email            String
   phone            String
+  /// IANA timezone for patient-local date/time (e.g. America/New_York)
+  timezone         String               @default("UTC")
   date             String
   time             String
   notes            String?
