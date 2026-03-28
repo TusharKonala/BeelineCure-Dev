@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsultationType, AppointmentStatus } from "@/generated/prisma/client";
+import { timeToMinutes } from "@/lib/time";
 
 type RescheduleUiState =
   | "idle"
@@ -139,6 +140,13 @@ function RescheduleContent() {
 
   const slots = slotsData?.slots ?? [];
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
+
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const isToday = selectedDate === todayISO();
+  const filteredSlots = slots.filter(
+    (s) => !isToday || timeToMinutes(s) > currentMinutes,
+  );
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setHasSelectionInteraction(true);
@@ -319,15 +327,15 @@ function RescheduleContent() {
                           </div>
                         )}
 
-                        {!slotsLoadingOrFetching && slots.length === 0 && (
+                        {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
                           <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
                             No slots available for this date.
                           </p>
                         )}
 
-                        {!slotsLoadingOrFetching && slots.length > 0 && (
+                        {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
                           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                            {slots.map((time) => (
+                            {filteredSlots.map((time) => (
                               <Button
                                 key={time}
                                 variant={

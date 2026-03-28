@@ -1,11 +1,7 @@
 import { prisma } from "@/lib/db";
+import { timeToMinutes } from "@/lib/time";
 import { NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus } from "@/generated/prisma/client";
-
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
 
 function minutesToTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -80,14 +76,8 @@ export async function GET(
   );
 
   const booked = new Set(appointments.map((a) => a.time));
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const isToday = date.getTime() === today.getTime();
 
-  const available = [...new Set(slots)]
-    .filter((s) => !booked.has(s))
-    .filter((s) => !isToday || timeToMinutes(s) > currentMinutes)
-    .sort();
+  const available = [...new Set(slots)].filter((s) => !booked.has(s)).sort();
 
   return NextResponse.json({ slots: available });
 }
