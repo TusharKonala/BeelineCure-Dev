@@ -36,6 +36,20 @@ enum BookingSessionStatus {
   EXPIRED
 }
 
+enum UserRole {
+  PATIENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String   @unique
+  password  String
+  role      UserRole @default(PATIENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Doctor {
   id              String               @id @default(cuid())
   name            String

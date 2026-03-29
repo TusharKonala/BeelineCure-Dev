@@ -26,24 +26,21 @@ export function Navbar() {
 
         {/* Right: links + Join Us button */}
         <div className="flex min-w-0 shrink items-center gap-3 md:gap-6">
-          <div className="hidden xl:flex items-center gap-6 text-sm font-medium">
+          <div className="hidden lg:flex items-center gap-6 text-sm font-medium">
             <Link href="/" className="nav-link">
               Home
             </Link>
             <Link href="/about" className="nav-link">
               About
             </Link>
-            <Link href="/employers" className="nav-link">
-              Employers/Plan Administrators
+            <Link href="/notice-board" className="nav-link">
+              Notice Board
             </Link>
-            <Link href="/support-partners" className="nav-link">
-              Support Partners
+            <Link href="/careers" className="nav-link">
+              Careers
             </Link>
-            <Link href="/physicians-providers" className="nav-link">
-              Physicians and Providers
-            </Link>
-            <Link href="/advisors" className="nav-link">
-              Advisors
+            <Link href="/auth/signin" className="nav-link">
+              Login
             </Link>
           </div>
 
@@ -70,7 +67,7 @@ export function Navbar() {
 
         {/* Mobile menu */}
         {isMobileMenuOpen && (
-          <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 xl:hidden">
+          <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 lg:hidden">
             <div className="flex flex-col gap-3 font-medium">
               <Link
                 href="/"
@@ -87,32 +84,25 @@ export function Navbar() {
                 About
               </Link>
               <Link
-                href="/employers"
+                href="/notice-board"
                 className="nav-link"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Employers/Plan Administrators
+                Notice Board
               </Link>
               <Link
-                href="/support-partners"
+                href="/careers"
                 className="nav-link"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Support Partners
+                Careers
               </Link>
               <Link
-                href="/physicians-providers"
+                href="/auth/signin"
                 className="nav-link"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                Physicians and Providers
-              </Link>
-              <Link
-                href="/advisors"
-                className="nav-link"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Advisors
+                Login
               </Link>
             </div>
           </div>
