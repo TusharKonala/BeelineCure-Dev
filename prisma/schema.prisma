@@ -44,7 +44,8 @@ model User {
   id        String   @id @default(cuid())
   name      String?
   email     String   @unique
-  password  String
+  /// Null for OAuth-only accounts (e.g. Google sign-in).
+  password  String?
   role      UserRole @default(PATIENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
