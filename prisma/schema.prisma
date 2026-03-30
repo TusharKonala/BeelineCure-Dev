@@ -44,6 +44,12 @@ model User {
   id        String   @id @default(cuid())
   name      String?
   email     String   @unique
+  /// When set, the user can sign in with credentials.
+  emailVerifiedAt DateTime?
+  /// Hash of the email verification token sent to the user's email.
+  /// Null for accounts that don't require verification (e.g. OAuth sign-ins).
+  emailVerificationTokenHash     String?
+  emailVerificationTokenExpiresAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
   role      UserRole @default(PATIENT)

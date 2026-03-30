@@ -35,6 +35,12 @@ export const authOptions: NextAuthOptions = {
         const valid = await bcrypt.compare(parsed.data.password, user.password);
         if (!valid) return null;
 
+        // Credentials sign-ins are blocked until the user verifies their email.
+        // OAuth (e.g. Google) is unaffected.
+        if (!user.emailVerifiedAt) {
+          throw new Error("EMAIL_NOT_VERIFIED");
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -63,9 +69,11 @@ export const authOptions: NextAuthOptions = {
             name: user.name,
             password: null,
             role: UserRole.PATIENT,
+            emailVerifiedAt: new Date(),
           },
           update: {
             name: user.name ?? undefined,
+            emailVerifiedAt: new Date(),
           },
         });
 

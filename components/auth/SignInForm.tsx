@@ -12,6 +12,7 @@ export function SignInForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/patient/dashboard";
   const registered = searchParams.get("registered") === "1";
+  const verified = searchParams.get("verified") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -30,7 +31,11 @@ export function SignInForm() {
         redirect: false,
       });
       if (result?.error) {
-        setError("Invalid email or password.");
+        if (result.error === "EMAIL_NOT_VERIFIED") {
+          setError("Please verify your email before signing in.");
+        } else {
+          setError("Invalid email or password.");
+        }
         return;
       }
       router.push(callbackUrl);
@@ -56,7 +61,13 @@ export function SignInForm() {
 
       {registered && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
-          Account created. You can sign in now.
+          Account created. Please verify your email before signing in.
+        </p>
+      )}
+
+      {verified && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
+          Email verified. You can sign in now.
         </p>
       )}
 

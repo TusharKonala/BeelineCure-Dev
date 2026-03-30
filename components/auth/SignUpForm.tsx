@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -39,18 +38,8 @@ export function SignUpForm() {
         return;
       }
 
-      const signInResult = await signIn("credentials", {
-        email: email.trim(),
-        password,
-        redirect: false,
-      });
-
-      if (signInResult?.error) {
-        router.push("/auth/signin?registered=1");
-        return;
-      }
-
-      router.push("/patient/dashboard");
+      // After signup we require email verification before credentials login.
+      router.push("/auth/signin?registered=1");
       router.refresh();
     } finally {
       setPending(false);
