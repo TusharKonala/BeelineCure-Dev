@@ -53,6 +53,11 @@ model User {
   /// Hash of password reset token for one-time reset flows.
   passwordResetTokenHash     String?
   passwordResetTokenExpiresAt DateTime?
+  /// Passwordless email (magic link) sign-in — raw token is never stored.
+  magicLinkTokenHash     String?
+  magicLinkTokenExpiresAt DateTime?
+  /// Throttle magic-link email sends per user.
+  magicLinkLastSentAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
   role      UserRole @default(PATIENT)

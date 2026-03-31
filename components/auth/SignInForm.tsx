@@ -20,6 +20,8 @@ export function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [magicLinkPending, setMagicLinkPending] = useState(false);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +48,37 @@ export function SignInForm() {
     }
   }
 
+  async function sendMagicLink() {
+    setError(null);
+    setMagicLinkSent(false);
+    const trimmed = email.trim();
+    if (!trimmed || !trimmed.includes("@")) {
+      setError("Enter a valid email address.");
+      return;
+    }
+
+    setMagicLinkPending(true);
+    try {
+      const res = await fetch("/api/auth/magic-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: trimmed,
+          callbackUrl,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Something went wrong.");
+        return;
+      }
+      setMagicLinkSent(true);
+    } finally {
+      setMagicLinkPending(false);
+    }
+  }
+
   const inputClassName =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm outline-none placeholder:text-[#5E5E5E]/70 focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20";
 
@@ -56,7 +89,8 @@ export function SignInForm() {
           Sign in
         </h1>
         <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E] md:text-base">
-          Continue with Google or sign in with your email and password.
+          Continue with Google, sign in with email and password, or use a
+          one-time email link.
         </p>
       </div>
 
@@ -75,6 +109,13 @@ export function SignInForm() {
       {reset && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
           Password reset successfully. You can sign in now.
+        </p>
+      )}
+
+      {magicLinkSent && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
+          If an account exists for this email, we sent a sign-in link. Check your
+          inbox.
         </p>
       )}
 
@@ -173,6 +214,31 @@ export function SignInForm() {
       >
         {pending ? "Signing in…" : "Sign in"}
       </Button>
+
+      <div className="relative py-1">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-[#e5e5e5]" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="bg-white px-3 font-montserrat text-xs font-medium uppercase tracking-wide text-[#5E5E5E]">
+            or
+          </span>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        disabled={magicLinkPending || pending}
+        className="h-11 w-full cursor-pointer rounded-xl border-[#e5e5e5] bg-white font-montserrat text-sm font-medium text-[#333333] shadow-sm hover:bg-[#fafafa] md:h-12 md:text-base"
+        onClick={() => void sendMagicLink()}
+      >
+        {magicLinkPending ? "Sending link…" : "Email me a sign-in link"}
+      </Button>
+
+      <p className="text-center font-montserrat text-xs text-[#5E5E5E]">
+        Uses the email address above. Link expires in 15 minutes.
+      </p>
 
       <p className="text-center font-montserrat text-sm text-[#5E5E5E]">
         Don&apos;t have an account?{" "}

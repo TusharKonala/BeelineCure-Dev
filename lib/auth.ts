@@ -2,6 +2,7 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import { createHash } from "crypto";
 import { z } from "zod";
 import { UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
@@ -10,6 +11,43 @@ const credentialsSchema = z.object({
   email: z.email(),
   password: z.string().min(1),
 });
+
+async function authorizeMagicLink(rawToken: string) {
+  if (rawToken.length > 1024) return null;
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const now = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.findFirst({
+      where: {
+        magicLinkTokenHash: tokenHash,
+        magicLinkTokenExpiresAt: { gt: now },
+      },
+    });
+    if (!user) return null;
+
+    const cleared = await tx.user.updateMany({
+      where: {
+        id: user.id,
+        magicLinkTokenHash: tokenHash,
+        magicLinkTokenExpiresAt: { gt: now },
+      },
+      data: {
+        magicLinkTokenHash: null,
+        magicLinkTokenExpiresAt: null,
+        emailVerifiedAt: user.emailVerifiedAt ?? new Date(),
+      },
+    });
+    if (cleared.count !== 1) return null;
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    };
+  });
+}
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -22,8 +60,17 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        magicLinkToken: { label: "Magic link token", type: "text" },
       },
       async authorize(credentials) {
+        const magicLinkToken =
+          typeof credentials?.magicLinkToken === "string"
+            ? credentials.magicLinkToken.trim()
+            : "";
+        if (magicLinkToken.length > 0) {
+          return authorizeMagicLink(magicLinkToken);
+        }
+
         const parsed = credentialsSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
