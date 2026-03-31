@@ -5,7 +5,9 @@ export function reminderAtMsFromPatientLocal(
   dateParam: string,
   time: string,
   timeZone: string,
-): number {
+): number | null {
   const utcDate = fromZonedTime(`${dateParam}T${time}:00`, timeZone);
-  return utcDate.getTime() - 24 * 60 * 60 * 1000;
+  const target = utcDate.getTime() - 24 * 60 * 60 * 1000;
+  if (target <= Date.now()) return null;
+  return target;
 }

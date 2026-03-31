@@ -202,13 +202,15 @@ export async function POST(request: NextRequest) {
         bookingSession.timezone,
       );
 
-      await inngest.send({
-        name: "appointment/reminder.scheduled",
-        data: {
-          appointmentId: appointment.id,
-        },
-        ts: reminderAtMs,
-      });
+      if (reminderAtMs !== null) {
+        await inngest.send({
+          name: "appointment/reminder.scheduled",
+          data: {
+            appointmentId: appointment.id,
+          },
+          ts: reminderAtMs,
+        });
+      }
     } catch (err) {
       console.error("[webhooks] Failed to schedule reminder:", err);
     }

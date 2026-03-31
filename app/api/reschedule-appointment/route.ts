@@ -172,13 +172,15 @@ export async function POST(request: NextRequest) {
       reminderTz,
     );
 
-    await inngest.send({
-      name: "appointment/reminder.scheduled",
-      data: {
-        appointmentId: updatedAppointment.id,
-      },
-      ts: reminderAtMs,
-    });
+    if (reminderAtMs !== null) {
+      await inngest.send({
+        name: "appointment/reminder.scheduled",
+        data: {
+          appointmentId: updatedAppointment.id,
+        },
+        ts: reminderAtMs,
+      });
+    }
   } catch (err) {
     console.error("[reschedule] Failed to re-schedule reminder:", err);
   }
