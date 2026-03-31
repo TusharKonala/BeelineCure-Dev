@@ -4,9 +4,12 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CalendarCheck, Menu } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export function Navbar() {
+  const { status } = useSession();
+  const isAuthenticated = status === "authenticated";
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
@@ -39,9 +42,24 @@ export function Navbar() {
             <Link href="/careers" className="nav-link">
               Careers
             </Link>
-            <Link href="/auth/signin" className="nav-link">
-              Login
-            </Link>
+            {!isAuthenticated && (
+              <Link href="/auth/signin" className="nav-link">
+                Sign in
+              </Link>
+            )}
+            {isAuthenticated && (
+              <button
+                type="button"
+                className="nav-link cursor-pointer"
+                onClick={() =>
+                  signOut({
+                    callbackUrl: "/",
+                  })
+                }
+              >
+                Sign out
+              </button>
+            )}
           </div>
 
           {/* Mobile hamburger */}
@@ -97,13 +115,27 @@ export function Navbar() {
               >
                 Careers
               </Link>
-              <Link
-                href="/auth/signin"
-                className="nav-link"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Login
-              </Link>
+              {!isAuthenticated && (
+                <Link
+                  href="/auth/signin"
+                  className="nav-link"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Sign in
+                </Link>
+              )}
+              {isAuthenticated && (
+                <button
+                  type="button"
+                  className="nav-link text-left"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    void signOut({ callbackUrl: "/" });
+                  }}
+                >
+                  Sign out
+                </button>
+              )}
             </div>
           </div>
         )}
