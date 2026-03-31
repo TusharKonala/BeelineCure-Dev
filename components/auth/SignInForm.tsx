@@ -13,6 +13,7 @@ export function SignInForm() {
   const callbackUrl = searchParams.get("callbackUrl") ?? "/patient/dashboard";
   const registered = searchParams.get("registered") === "1";
   const verified = searchParams.get("verified") === "1";
+  const reset = searchParams.get("reset") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,6 +69,12 @@ export function SignInForm() {
       {verified && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
           Email verified. You can sign in now.
+        </p>
+      )}
+
+      {reset && (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
+          Password reset successfully. You can sign in now.
         </p>
       )}
 
@@ -148,6 +155,14 @@ export function SignInForm() {
               <Eye className="size-4 shrink-0" />
             )}
           </button>
+        </div>
+        <div className="text-right">
+          <Link
+            href="/auth/forgot-password"
+            className="font-montserrat text-xs font-medium text-[#2555F3] hover:underline"
+          >
+            Forgot password?
+          </Link>
         </div>
       </div>
 

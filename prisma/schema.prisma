@@ -50,6 +50,9 @@ model User {
   /// Null for accounts that don't require verification (e.g. OAuth sign-ins).
   emailVerificationTokenHash     String?
   emailVerificationTokenExpiresAt DateTime?
+  /// Hash of password reset token for one-time reset flows.
+  passwordResetTokenHash     String?
+  passwordResetTokenExpiresAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
   role      UserRole @default(PATIENT)
