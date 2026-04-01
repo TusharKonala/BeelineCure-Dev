@@ -74,6 +74,70 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
   }
 
+  const existingSameDate = await prisma.appointment.findFirst({
+    where: {
+      email,
+      date,
+    },
+    select: {
+      id: true,
+      rescheduleToken: true,
+    },
+  });
+
+  if (existingSameDate) {
+    let rescheduleToken = existingSameDate.rescheduleToken;
+    if (!rescheduleToken) {
+      rescheduleToken = randomBytes(32).toString("hex");
+      await prisma.appointment.update({
+        where: { id: existingSameDate.id },
+        data: { rescheduleToken },
+      });
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          "You already have an appointment on this date. Would you like to reschedule it instead?",
+        code: "EXISTING_APPOINTMENT_SAME_DATE",
+        link: {
+          href: `/reschedule?appointmentId=${encodeURIComponent(
+            existingSameDate.id,
+          )}&token=${encodeURIComponent(rescheduleToken)}`,
+          label: "reschedule it",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  const upcomingCount = await prisma.appointment.count({
+    where: {
+      email,
+      status: {
+        in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
+      },
+      date: {
+        gte: new Date(new Date().toISOString().slice(0, 10)),
+      },
+    },
+  });
+
+  if (upcomingCount >= 2) {
+    return NextResponse.json(
+      {
+        error:
+          "You've reached the limit of 2 upcoming appointments. Please complete or cancel an existing appointment before booking a new one.",
+        code: "UPCOMING_APPOINTMENT_LIMIT_REACHED",
+        link: {
+          href: "/patient/appointments",
+          label: "cancel an existing appointment",
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   const existing = await prisma.appointment.findFirst({
     where: {
       doctorId,

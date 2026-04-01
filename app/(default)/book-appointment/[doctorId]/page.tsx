@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -27,6 +28,34 @@ const patientFormSchema = z.object({
 });
 
 type PatientFormValues = z.infer<typeof patientFormSchema>;
+
+type SubmitErrorState = {
+  message: string;
+  link?: {
+    href: string;
+    label: string;
+  };
+} | null;
+
+function renderSubmitErrorMessage(submitError: NonNullable<SubmitErrorState>) {
+  if (!submitError.link) return submitError.message;
+
+  const idx = submitError.message.indexOf(submitError.link.label);
+  if (idx === -1) return submitError.message;
+
+  const before = submitError.message.slice(0, idx);
+  const after = submitError.message.slice(idx + submitError.link.label.length);
+
+  return (
+    <>
+      {before}
+      <Link href={submitError.link.href} className="font-medium underline">
+        {submitError.link.label}
+      </Link>
+      {after}
+    </>
+  );
+}
 
 async function getDoctor(doctorId: string) {
   const res = await fetch(`/api/doctors/${doctorId}`);
@@ -76,7 +105,7 @@ export default function BookAppointmentDoctorPage() {
     defaultValues: { patientName: "", email: "", phone: "", notes: "" },
   });
 
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<SubmitErrorState>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookedConfirmation, setBookedConfirmation] = useState<{
     doctorName: string;
@@ -117,11 +146,18 @@ export default function BookAppointmentDoctorPage() {
           const json = await res.json().catch(() => ({}));
 
           if (!res.ok) {
-            setSubmitError(
-              typeof json?.error === "string"
-                ? json.error
-                : "Failed to book appointment",
-            );
+            setSubmitError({
+              message:
+                typeof json?.error === "string"
+                  ? json.error
+                  : "Failed to book appointment",
+              link:
+                json?.link &&
+                typeof json.link.href === "string" &&
+                typeof json.link.label === "string"
+                  ? { href: json.link.href, label: json.link.label }
+                  : undefined,
+            });
             return;
           }
 
@@ -156,11 +192,21 @@ export default function BookAppointmentDoctorPage() {
             .catch(() => null);
 
           if (!bookingSessionRes.ok || !bookingSessionJson?.bookingSessionId) {
-            setSubmitError(
-              typeof bookingSessionJson?.error === "string"
-                ? bookingSessionJson.error
-                : "Failed to create booking session",
-            );
+            setSubmitError({
+              message:
+                typeof bookingSessionJson?.error === "string"
+                  ? bookingSessionJson.error
+                  : "Failed to create booking session",
+              link:
+                bookingSessionJson?.link &&
+                typeof bookingSessionJson.link.href === "string" &&
+                typeof bookingSessionJson.link.label === "string"
+                  ? {
+                      href: bookingSessionJson.link.href,
+                      label: bookingSessionJson.link.label,
+                    }
+                  : undefined,
+            });
             return;
           }
 
@@ -175,7 +221,7 @@ export default function BookAppointmentDoctorPage() {
 
         setSelectedSlot(null);
       } catch {
-        setSubmitError("Network error. Please try again.");
+        setSubmitError({ message: "Network error. Please try again." });
       } finally {
         setIsSubmitting(false);
       }
@@ -495,7 +541,7 @@ export default function BookAppointmentDoctorPage() {
                   </div>
                   {submitError && (
                     <p className="font-montserrat text-sm text-red-600">
-                      {submitError}
+                      {renderSubmitErrorMessage(submitError)}
                     </p>
                   )}
                   <Button
