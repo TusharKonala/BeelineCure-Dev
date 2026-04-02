@@ -7,8 +7,8 @@ import { signIn } from "next-auth/react";
 import { Container } from "@/components/layout/Container";
 
 function safeCallbackPath(raw: string): string {
-  if (!raw || raw.length === 0) return "/patient/dashboard";
-  if (!raw.startsWith("/") || raw.startsWith("//")) return "/patient/dashboard";
+  if (!raw || raw.length === 0) return "/patient/overview";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/patient/overview";
   return raw;
 }
 

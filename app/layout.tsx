@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Montaga, Montserrat } from "next/font/google";
-import { Navbar } from "@/components/Navbar";
 import { QueryProvider } from "@/components/QueryProvider";
 import { SessionProvider } from "@/components/SessionProvider";
 import "@/app/globals.css";
@@ -43,7 +42,6 @@ export default function RootLayout({
       >
         <SessionProvider>
           <QueryProvider>
-            <Navbar />
             {children}
           </QueryProvider>
         </SessionProvider>

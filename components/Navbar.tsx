@@ -8,9 +8,19 @@ import { signOut, useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 
 export function Navbar() {
-  const { status } = useSession();
+  const { status, data: session } = useSession();
   const isAuthenticated = status === "authenticated";
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const role = (session?.user as { role?: unknown } | undefined)?.role;
+  const roleKey = typeof role === "string" ? role.toLowerCase() : "";
+  const dashboardHref =
+    roleKey === "patient"
+      ? "/patient/overview"
+      : roleKey === "doctor"
+        ? "/doctor/overview"
+        : roleKey === "admin"
+          ? "/admin/overview"
+          : "/patient/overview";
 
   return (
     <header className="w-full bg-white border-b">
@@ -48,17 +58,22 @@ export function Navbar() {
               </Link>
             )}
             {isAuthenticated && (
-              <button
-                type="button"
-                className="nav-link cursor-pointer"
-                onClick={() =>
-                  signOut({
-                    callbackUrl: "/",
-                  })
-                }
-              >
-                Sign out
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="nav-link cursor-pointer"
+                  onClick={() =>
+                    signOut({
+                      callbackUrl: "/",
+                    })
+                  }
+                >
+                  Sign out
+                </button>
+                <Link href={dashboardHref} className="nav-link">
+                  Dashboard
+                </Link>
+              </>
             )}
           </div>
 
@@ -135,6 +150,15 @@ export function Navbar() {
                 >
                   Sign out
                 </button>
+              )}
+              {isAuthenticated && (
+                <Link
+                  href={dashboardHref}
+                  className="nav-link text-left"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Dashboard
+                </Link>
               )}
             </div>
           </div>

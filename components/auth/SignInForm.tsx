@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/patient/dashboard";
+  const callbackUrl = searchParams.get("callbackUrl") ?? "/patient/overview";
   const registered = searchParams.get("registered") === "1";
   const verified = searchParams.get("verified") === "1";
   const reset = searchParams.get("reset") === "1";

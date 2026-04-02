@@ -16,13 +16,13 @@ const MAGIC_LINK_TTL_MS = 1000 * 60 * 15; // 15 minutes
 const RESEND_COOLDOWN_MS = 1000 * 60; // 1 minute per user
 
 function safeCallbackPath(raw: string | undefined): string {
-  if (!raw || raw.length === 0) return "/patient/dashboard";
+  if (!raw || raw.length === 0) return "/patient/overview";
   try {
     if (!raw.startsWith("/") || raw.startsWith("//"))
-      return "/patient/dashboard";
+      return "/patient/overview";
     return raw;
   } catch {
-    return "/patient/dashboard";
+    return "/patient/overview";
   }
 }
 

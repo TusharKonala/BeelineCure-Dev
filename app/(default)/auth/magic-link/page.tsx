@@ -9,7 +9,7 @@ export default async function MagicLinkPage({
   return (
     <MagicLinkClient
       token={token ?? ""}
-      callbackUrlRaw={callbackUrl ?? "/patient/dashboard"}
+      callbackUrlRaw={callbackUrl ?? "/patient/overview"}
     />
   );
 }
