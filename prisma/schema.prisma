@@ -21,6 +21,7 @@ enum ConsultationType {
 enum AppointmentStatus {
   PENDING
   CONFIRMED
+  COMPLETED
   CANCELLED
 }
 
