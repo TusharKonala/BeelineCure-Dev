@@ -39,16 +39,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (bookingSession.status !== BookingSessionStatus.PENDING) {
+    const isExpired =
+      bookingSession.status === BookingSessionStatus.EXPIRED ||
+      bookingSession.expiresAt < new Date();
+
+    if (isExpired) {
       return NextResponse.json(
-        { error: "Booking session is no longer valid" },
+        {
+          error:
+            "This booking session expired after 10 minutes. Please start a new booking.",
+          code: "BOOKING_SESSION_EXPIRED",
+          doctorId: bookingSession.doctorId,
+        },
         { status: 400 },
       );
     }
 
-    if (bookingSession.expiresAt < new Date()) {
+    if (bookingSession.status !== BookingSessionStatus.PENDING) {
       return NextResponse.json(
-        { error: "Booking session expired" },
+        { error: "Booking session is no longer valid" },
         { status: 400 },
       );
     }

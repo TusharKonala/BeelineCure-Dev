@@ -1,18 +1,25 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type ConfirmAndPayButtonProps = {
   bookingSessionId: string;
+  doctorId: string;
 };
 
-export function ConfirmAndPayButton({ bookingSessionId }: ConfirmAndPayButtonProps) {
+export function ConfirmAndPayButton({
+  bookingSessionId,
+  doctorId,
+}: ConfirmAndPayButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showExpired, setShowExpired] = useState(false);
 
   const handleClick = async () => {
     setError(null);
+    setShowExpired(false);
     setIsLoading(true);
 
     try {
@@ -24,9 +31,19 @@ export function ConfirmAndPayButton({ bookingSessionId }: ConfirmAndPayButtonPro
         body: JSON.stringify({ bookingSessionId }),
       });
 
-      const json = await res.json().catch(() => null);
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+        url?: string;
+        doctorId?: string;
+      } | null;
 
       if (!res.ok || !json?.url) {
+        if (json?.code === "BOOKING_SESSION_EXPIRED") {
+          setShowExpired(true);
+          setIsLoading(false);
+          return;
+        }
         setError(
           typeof json?.error === "string"
             ? json.error
@@ -53,6 +70,20 @@ export function ConfirmAndPayButton({ bookingSessionId }: ConfirmAndPayButtonPro
       >
         {isLoading ? "Redirecting…" : "Confirm & Pay"}
       </Button>
+      {showExpired && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 p-4">
+          <p className="font-montserrat text-sm text-[#333333]">
+            This booking session expired after 10 minutes. Please choose your
+            slot again and start a new booking.
+          </p>
+          <Link
+            href={`/book-appointment/${doctorId}`}
+            className="mt-3 inline-block font-montserrat text-sm font-medium text-[#2555F3] underline underline-offset-2 hover:text-[#1a45d9]"
+          >
+            Book again
+          </Link>
+        </div>
+      )}
       {error && (
         <p className="mt-3 font-montserrat text-sm text-red-600">{error}</p>
       )}

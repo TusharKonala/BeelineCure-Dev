@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { Container } from "@/components/layout/Container";
 import { ConfirmAndPayButton } from "@/components/booking/ConfirmAndPayButton";
 import { notFound } from "next/navigation";
+import { BookingSessionStatus } from "@/generated/prisma/client";
+import { ExpiredBookingSession } from "./ExpiredBookingSession";
 import { PatientLocalDateTime } from "./PatientLocalDateTime";
 
 type PageProps = {
@@ -23,11 +25,20 @@ export default async function BookingReviewPage({ params }: PageProps) {
     where: { id: bookingSession.doctorId },
   });
 
+  // Time comparison is server-only; expiresAt is authoritative for checkout TTL (10 min).
+  const isExpired =
+    bookingSession.status === BookingSessionStatus.EXPIRED ||
+    bookingSession.expiresAt <= new Date();
+
   return (
     <div className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
       <Container>
         <section className="mx-auto max-w-xl">
           <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
+            {isExpired ? (
+              <ExpiredBookingSession doctorId={bookingSession.doctorId} />
+            ) : (
+              <>
             <h1 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
               Review your booking
             </h1>
@@ -74,7 +85,12 @@ export default async function BookingReviewPage({ params }: PageProps) {
               </div>
             </div>
 
-            <ConfirmAndPayButton bookingSessionId={bookingSessionId} />
+            <ConfirmAndPayButton
+              bookingSessionId={bookingSessionId}
+              doctorId={bookingSession.doctorId}
+            />
+              </>
+            )}
           </div>
         </section>
       </Container>
