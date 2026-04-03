@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { Container } from "@/components/layout/Container";
 import { ConfirmAndPayButton } from "@/components/booking/ConfirmAndPayButton";
 import { notFound } from "next/navigation";
+import { PatientLocalDateTime } from "./PatientLocalDateTime";
 
 type PageProps = {
   params: Promise<{ bookingSessionId: string }>;
@@ -22,36 +23,6 @@ export default async function BookingReviewPage({ params }: PageProps) {
     where: { id: bookingSession.doctorId },
   });
 
-  const details = [
-    {
-      label: "Doctor",
-      value: doctor?.name ?? "Your doctor",
-    },
-    {
-      label: "Consultation type",
-      value:
-        bookingSession.consultationType === "ONLINE"
-          ? "Online consultation"
-          : "Clinic visit",
-    },
-    {
-      label: "Date",
-      value: bookingSession.date || "-",
-    },
-    {
-      label: "Time",
-      value: bookingSession.time || "-",
-    },
-    {
-      label: "Patient",
-      value: bookingSession.patientName || "-",
-    },
-    {
-      label: "Consultation price",
-      value: "$30",
-    },
-  ];
-
   return (
     <div className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
       <Container>
@@ -66,19 +37,41 @@ export default async function BookingReviewPage({ params }: PageProps) {
             </p>
 
             <div className="mt-6 space-y-4">
-              {details.map((item) => (
-                <div
-                  key={item.label}
-                  className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center"
-                >
-                  <span className="font-medium text-[#111111]">
-                    {item.label}
-                  </span>
-                  <span className="text-[#5E5E5E] sm:text-right">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
+              <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
+                <span className="font-medium text-[#111111]">Doctor</span>
+                <span className="text-[#5E5E5E] sm:text-right">
+                  {doctor?.name ?? "Your doctor"}
+                </span>
+              </div>
+              <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
+                <span className="font-medium text-[#111111]">
+                  Consultation type
+                </span>
+                <span className="text-[#5E5E5E] sm:text-right">
+                  {bookingSession.consultationType === "ONLINE"
+                    ? "Online consultation"
+                    : "Clinic visit"}
+                </span>
+              </div>
+
+              <PatientLocalDateTime
+                date={bookingSession.date}
+                time={bookingSession.time}
+                doctorTimezone={bookingSession.timezone}
+              />
+
+              <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
+                <span className="font-medium text-[#111111]">Patient</span>
+                <span className="text-[#5E5E5E] sm:text-right">
+                  {bookingSession.patientName || "-"}
+                </span>
+              </div>
+              <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
+                <span className="font-medium text-[#111111]">
+                  Consultation price
+                </span>
+                <span className="text-[#5E5E5E] sm:text-right">$30</span>
+              </div>
             </div>
 
             <ConfirmAndPayButton bookingSessionId={bookingSessionId} />
