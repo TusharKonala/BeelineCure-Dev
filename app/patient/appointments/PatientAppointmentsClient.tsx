@@ -54,6 +54,24 @@ function formatAppointmentTime(time: string) {
   return `${h12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
+function isAppointmentInPastLocal(dateParam: string, timeParam: string) {
+  const dParts = dateParam.split("-").map((p) => Number.parseInt(p, 10));
+  const tParts = timeParam.split(":").map((p) => Number.parseInt(p, 10));
+  if (
+    dParts.length !== 3 ||
+    dParts.some((n) => Number.isNaN(n)) ||
+    tParts.length < 2 ||
+    tParts.some((n) => Number.isNaN(n))
+  ) {
+    return false; // don't hide actions if formatting is unexpected
+  }
+
+  const [y, m, d] = dParts;
+  const [hour, minute] = tParts;
+  const start = new Date(y, m - 1, d, hour, minute, 0, 0);
+  return start.getTime() <= Date.now();
+}
+
 function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
 }
@@ -442,6 +460,9 @@ export default function PatientAppointmentsClient({
                 </div>
 
                 {tab === "upcoming" &&
+                  !isAppointmentInPastLocal(a.date, a.time) &&
+                  a.status !== "COMPLETED" &&
+                  a.status !== "CANCELLED" &&
                   (a.cancelToken || a.rescheduleToken) && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {a.rescheduleToken && (

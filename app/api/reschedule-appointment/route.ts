@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import { fromZonedTime } from "date-fns-tz";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -75,6 +76,24 @@ export async function GET(request: NextRequest) {
     } satisfies RescheduleResponse);
   }
 
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    return NextResponse.json({
+      status: "invalid_link",
+    } satisfies RescheduleResponse);
+  }
+
+  const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
+  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
+  const appointmentStartMs = fromZonedTime(
+    `${appointmentDateParam}T${timeWithSeconds}`,
+    appointment.timezone,
+  ).getTime();
+  if (appointmentStartMs <= Date.now()) {
+    return NextResponse.json({
+      status: "invalid_link",
+    } satisfies RescheduleResponse);
+  }
+
   return NextResponse.json({
     status: "success",
     appointment: {
@@ -129,6 +148,24 @@ export async function POST(request: NextRequest) {
   if (appointment.status === AppointmentStatus.CANCELLED) {
     return NextResponse.json({
       status: "already_cancelled",
+    } satisfies RescheduleResponse);
+  }
+
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    return NextResponse.json({
+      status: "invalid_link",
+    } satisfies RescheduleResponse);
+  }
+
+  const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
+  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
+  const appointmentStartMs = fromZonedTime(
+    `${appointmentDateParam}T${timeWithSeconds}`,
+    appointment.timezone,
+  ).getTime();
+  if (appointmentStartMs <= Date.now()) {
+    return NextResponse.json({
+      status: "invalid_link",
     } satisfies RescheduleResponse);
   }
 

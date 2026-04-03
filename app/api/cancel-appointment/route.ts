@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import React from "react";
 import { Resend } from "resend";
 import { z } from "zod";
+import { fromZonedTime } from "date-fns-tz";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -38,8 +39,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "invalid_link" as const });
   }
 
+  // Disallow cancelling past or completed appointments.
   if (appointment.status === AppointmentStatus.CANCELLED) {
     return NextResponse.json({ status: "already_cancelled" as const });
+  }
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    return NextResponse.json({ status: "invalid_link" as const });
+  }
+
+  const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
+  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
+  const appointmentStartMs = fromZonedTime(
+    `${appointmentDateParam}T${timeWithSeconds}`,
+    appointment.timezone,
+  ).getTime();
+  if (appointmentStartMs <= Date.now()) {
+    return NextResponse.json({ status: "invalid_link" as const });
   }
 
   return NextResponse.json({ status: "valid" as const });
@@ -63,8 +78,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "invalid_link" as const });
   }
 
+  // Disallow cancelling past or completed appointments.
   if (appointment.status === AppointmentStatus.CANCELLED) {
     return NextResponse.json({ status: "already_cancelled" as const });
+  }
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    return NextResponse.json({ status: "invalid_link" as const });
+  }
+
+  const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
+  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
+  const appointmentStartMs = fromZonedTime(
+    `${appointmentDateParam}T${timeWithSeconds}`,
+    appointment.timezone,
+  ).getTime();
+  if (appointmentStartMs <= Date.now()) {
+    return NextResponse.json({ status: "invalid_link" as const });
   }
 
   await prisma.appointment.update({
