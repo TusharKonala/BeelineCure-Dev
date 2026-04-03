@@ -3,6 +3,10 @@ import { prisma } from "@/lib/db";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { Resend } from "resend";
 import { inngest } from "./client";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -28,6 +32,8 @@ export const sendAppointmentReminder = inngest.createFunction(
         email: true,
         date: true,
         time: true,
+        timezone: true,
+        patientTimezone: true,
         patientName: true,
         consultationType: true,
         status: true,
@@ -49,7 +55,7 @@ export const sendAppointmentReminder = inngest.createFunction(
       return { skipped: true, reason: "missing_tokens" };
     }
 
-    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const dateStr = appointment.date.toISOString().slice(0, 10);
     const origin =
       process.env.NEXT_PUBLIC_APP_URL ??
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
@@ -71,8 +77,18 @@ export const sendAppointmentReminder = inngest.createFunction(
           "This is a reminder that your appointment is scheduled in 24 hours. If you need to cancel or reschedule, please use the links below.",
         showActionLinks: true,
         doctorName: appointment.doctor.name,
-        appointmentDate,
-        appointmentTime: appointment.time,
+        appointmentDate: formatDateInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        appointmentTime: formatTimeInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
         patientName: appointment.patientName,
         consultationType: appointment.consultationType,
         cancelUrl,

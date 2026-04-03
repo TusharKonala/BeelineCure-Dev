@@ -18,6 +18,7 @@ const bookingSessionSchema = z.object({
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
   timezone: z.string().min(1).max(128).default("UTC"),
+  patientTimezone: z.string().min(1).max(128).default("UTC"),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
     email,
     phone,
     notes,
+    patientTimezone,
   } = parsed.data;
 
   const appointmentDate = parseDateOnly(date);
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
       date,
       time,
       timezone: doctorTimezone,
+      patientTimezone,
       notes: notes,
       consultationType,
       status: "PENDING",

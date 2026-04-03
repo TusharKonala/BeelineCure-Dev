@@ -98,6 +98,8 @@ model Appointment {
   phone            String
   /// Doctor's IANA timezone — date + time are stored in this timezone (e.g. "America/New_York")
   timezone         String            @default("UTC")
+  /// Patient's IANA timezone for displaying times in emails (e.g. "Asia/Kolkata")
+  patientTimezone  String            @default("UTC")
   date             DateTime          @db.Date
   time             String
   notes            String?
@@ -119,6 +121,8 @@ model BookingSession {
   phone            String
   /// Doctor's IANA timezone — date + time are stored in this timezone (e.g. "America/New_York")
   timezone         String               @default("UTC")
+  /// Patient's IANA timezone for displaying times in emails (e.g. "Asia/Kolkata")
+  patientTimezone  String               @default("UTC")
   date             String
   time             String
   notes            String?

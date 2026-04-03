@@ -7,6 +7,10 @@ import React from "react";
 import { Resend } from "resend";
 import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -135,8 +139,18 @@ export async function POST(request: NextRequest) {
         ),
         showActionLinks: false,
         doctorName: doctor?.name ?? "Your Doctor",
-        appointmentDate,
-        appointmentTime: appointment.time,
+        appointmentDate: formatDateInPatientTz(
+          appointmentDate,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        appointmentTime: formatTimeInPatientTz(
+          appointmentDate,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
         patientName: appointment.patientName,
         consultationType: appointment.consultationType,
         cancelUrl: "",

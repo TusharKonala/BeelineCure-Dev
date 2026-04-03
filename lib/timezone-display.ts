@@ -14,31 +14,35 @@ export function doctorLocalToUtc(
 }
 
 /**
- * Format a doctor-local time as a display string in the patient's browser timezone.
- * E.g. "09:00" in "America/New_York" → "7:30 PM" for a patient in "Asia/Kolkata".
+ * Format a doctor-local time as a display string in the patient's timezone.
+ * On the client, omit `patientTimezone` to use the browser default.
+ * On the server (emails), pass it explicitly.
  */
 export function formatTimeInPatientTz(
   dateStr: string,
   timeStr: string,
   doctorTimezone: string,
+  patientTimezone?: string,
 ): string {
   const utcDate = doctorLocalToUtc(dateStr, timeStr, doctorTimezone);
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
+    ...(patientTimezone ? { timeZone: patientTimezone } : {}),
   }).format(utcDate);
 }
 
 /**
- * Format a doctor-local date as a display string in the patient's browser timezone.
- * The date may differ from the stored date if the conversion crosses midnight.
- * E.g. "2026-04-04" with time "23:00" in "America/New_York" → "Sat, 5 Apr 2026" in "Asia/Kolkata".
+ * Format a doctor-local date as a display string in the patient's timezone.
+ * On the client, omit `patientTimezone` to use the browser default.
+ * On the server (emails), pass it explicitly.
  */
 export function formatDateInPatientTz(
   dateStr: string,
   timeStr: string,
   doctorTimezone: string,
+  patientTimezone?: string,
 ): string {
   const utcDate = doctorLocalToUtc(dateStr, timeStr, doctorTimezone);
   return new Intl.DateTimeFormat("en-GB", {
@@ -46,6 +50,7 @@ export function formatDateInPatientTz(
     day: "numeric",
     month: "short",
     year: "numeric",
+    ...(patientTimezone ? { timeZone: patientTimezone } : {}),
   }).format(utcDate);
 }
 

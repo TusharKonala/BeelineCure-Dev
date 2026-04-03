@@ -9,6 +9,10 @@ import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -26,6 +30,7 @@ const appointmentSchema = z.object({
   notes: z.string().optional(),
   consultationType: z.enum(["CLINIC", "ONLINE"]).default("CLINIC"),
   timezone: z.string().min(1).max(128).default("UTC"),
+  patientTimezone: z.string().min(1).max(128).default("UTC"),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -55,6 +60,7 @@ export async function POST(request: NextRequest) {
     phone,
     notes,
     consultationType,
+    patientTimezone,
   } = parsed.data;
 
   const date = parseDateOnly(dateParam);
@@ -176,6 +182,7 @@ export async function POST(request: NextRequest) {
         notes,
         consultationType,
         timezone: doctorTimezone,
+        patientTimezone,
         status: AppointmentStatus.CONFIRMED,
         cancelToken,
         rescheduleToken,
@@ -212,8 +219,8 @@ export async function POST(request: NextRequest) {
       subject: "Appointment Confirmation",
       react: EmailTemplate({
         doctorName: doctor.name,
-        appointmentDate: dateParam,
-        appointmentTime: time,
+        appointmentDate: formatDateInPatientTz(dateParam, time, doctorTimezone, patientTimezone),
+        appointmentTime: formatTimeInPatientTz(dateParam, time, doctorTimezone, patientTimezone),
         patientName,
         consultationType,
         cancelUrl,

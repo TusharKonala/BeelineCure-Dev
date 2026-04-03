@@ -15,6 +15,10 @@ import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -117,6 +121,7 @@ export async function POST(request: NextRequest) {
           cancelToken,
           rescheduleToken,
           timezone: bookingSession.timezone,
+          patientTimezone: bookingSession.patientTimezone,
         },
       });
     } catch (err) {
@@ -177,8 +182,18 @@ export async function POST(request: NextRequest) {
         subject: "Appointment Confirmation",
         react: EmailTemplate({
           doctorName: doctor.name,
-          appointmentDate: bookingSession.date,
-          appointmentTime: bookingSession.time,
+          appointmentDate: formatDateInPatientTz(
+            bookingSession.date,
+            bookingSession.time,
+            bookingSession.timezone,
+            bookingSession.patientTimezone,
+          ),
+          appointmentTime: formatTimeInPatientTz(
+            bookingSession.date,
+            bookingSession.time,
+            bookingSession.timezone,
+            bookingSession.patientTimezone,
+          ),
           patientName: bookingSession.patientName,
           consultationType: bookingSession.consultationType as
             | "CLINIC"

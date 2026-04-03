@@ -78,6 +78,11 @@ function RescheduleContent() {
 
   const canLoad = appointmentId.length > 0 && token.length > 0;
 
+  const patientTimezone = useMemo(
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+    [],
+  );
+
   const [state, setState] = useState<RescheduleUiState>("idle");
   const [isLoadingAppointment, setIsLoadingAppointment] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -168,6 +173,7 @@ function RescheduleContent() {
           token,
           date: selectedDate,
           time: selectedSlot,
+          patientTimezone,
         }),
       });
 

@@ -8,6 +8,10 @@ import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { fromZonedTime } from "date-fns-tz";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -21,6 +25,7 @@ const rescheduleSchema = z.object({
   token: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
+  patientTimezone: z.string().min(1).max(128).optional(),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -122,7 +127,7 @@ export async function POST(request: NextRequest) {
     } satisfies RescheduleResponse);
   }
 
-  const { appointmentId, token, date: dateParam, time } = parsed.data;
+  const { appointmentId, token, date: dateParam, time, patientTimezone } = parsed.data;
   const date = parseDateOnly(dateParam);
   if (!date) {
     return NextResponse.json({
@@ -186,7 +191,11 @@ export async function POST(request: NextRequest) {
 
   const updatedAppointment = await prisma.appointment.update({
     where: { id: appointmentId },
-    data: { date, time },
+    data: {
+      date,
+      time,
+      ...(patientTimezone ? { patientTimezone } : {}),
+    },
   });
 
   try {
@@ -257,8 +266,18 @@ export async function POST(request: NextRequest) {
               ? "Your appointment has been rescheduled. Please be available at the scheduled time. To cancel or reschedule, use the links below."
               : "Your appointment has been rescheduled. Please arrive a few minutes early. To cancel or reschedule, use the links below.",
           doctorName: doctor.name,
-          appointmentDate: dateParam,
-          appointmentTime: time,
+          appointmentDate: formatDateInPatientTz(
+            dateParam,
+            time,
+            updatedAppointment.timezone,
+            updatedAppointment.patientTimezone,
+          ),
+          appointmentTime: formatTimeInPatientTz(
+            dateParam,
+            time,
+            updatedAppointment.timezone,
+            updatedAppointment.patientTimezone,
+          ),
           patientName: updatedAppointment.patientName,
           consultationType: updatedAppointment.consultationType,
           cancelUrl,
