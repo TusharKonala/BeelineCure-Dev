@@ -1,6 +1,6 @@
 import { fromZonedTime } from "date-fns-tz";
 
-/** 24h before appointment start in UTC ms, using patient-local date/time + IANA timezone. */
+/** 24h before appointment start in UTC ms, using doctor-local date/time + IANA timezone. */
 export function reminderAtMsFromPatientLocal(
   dateParam: string,
   time: string,

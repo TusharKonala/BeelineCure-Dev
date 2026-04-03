@@ -71,6 +71,9 @@ model Doctor {
   name            String
   specialization  String
   image           String
+  /// IANA timezone for the doctor's clinic (e.g. "America/New_York").
+  /// All availability times and stored appointment times are in this timezone.
+  timezone        String               @default("UTC")
   createdAt       DateTime             @default(now())
   availabilities  DoctorAvailability[]
   appointments    Appointment[]
@@ -93,7 +96,7 @@ model Appointment {
   patientName      String
   email            String
   phone            String
-  /// IANA timezone used when interpreting date + time for reminders (e.g. America/New_York)
+  /// Doctor's IANA timezone — date + time are stored in this timezone (e.g. "America/New_York")
   timezone         String            @default("UTC")
   date             DateTime          @db.Date
   time             String
@@ -114,7 +117,7 @@ model BookingSession {
   patientName      String
   email            String
   phone            String
-  /// IANA timezone for patient-local date/time (e.g. America/New_York)
+  /// Doctor's IANA timezone — date + time are stored in this timezone (e.g. "America/New_York")
   timezone         String               @default("UTC")
   date             String
   time             String

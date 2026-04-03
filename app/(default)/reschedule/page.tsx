@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsultationType, AppointmentStatus } from "@/generated/prisma/client";
-import { timeToMinutes } from "@/lib/time";
+import {
+  formatTimeInPatientTz,
+  formatDateInPatientTz,
+  isDoctorTimeInPast,
+} from "@/lib/timezone-display";
 
 type RescheduleUiState =
   | "idle"
@@ -54,7 +58,7 @@ async function getSlots(
   doctorId: string,
   date: string,
   excludeAppointmentId: string,
-): Promise<{ slots: string[] }> {
+): Promise<{ slots: string[]; doctorTimezone: string }> {
   const res = await fetch(
     `/api/doctors/${doctorId}/slots?date=${encodeURIComponent(
       date,
@@ -73,11 +77,6 @@ function RescheduleContent() {
   const token = useMemo(() => searchParams.get("token") ?? "", [searchParams]);
 
   const canLoad = appointmentId.length > 0 && token.length > 0;
-
-  const patientTimeZone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
-  );
 
   const [state, setState] = useState<RescheduleUiState>("idle");
   const [isLoadingAppointment, setIsLoadingAppointment] = useState(false);
@@ -139,13 +138,11 @@ function RescheduleContent() {
   });
 
   const slots = slotsData?.slots ?? [];
+  const doctorTz = slotsData?.doctorTimezone ?? appointment?.timezone ?? "UTC";
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
 
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const isToday = selectedDate === todayISO();
   const filteredSlots = slots.filter(
-    (s) => !isToday || timeToMinutes(s) > currentMinutes,
+    (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -171,7 +168,6 @@ function RescheduleContent() {
           token,
           date: selectedDate,
           time: selectedSlot,
-          timezone: patientTimeZone,
         }),
       });
 
@@ -259,11 +255,15 @@ function RescheduleContent() {
               <div className="mt-6 flex flex-col gap-2 rounded-lg bg-[#fafafa] p-4 font-montserrat text-sm text-[#111111]">
                 <p>
                   <span className="font-medium text-[#111111]">New date:</span>{" "}
-                  <span className="text-[#333333]">{selectedDate}</span>
+                  <span className="text-[#333333]">
+                    {formatDateInPatientTz(selectedDate, selectedSlot, doctorTz)}
+                  </span>
                 </p>
                 <p>
                   <span className="font-medium text-[#111111]">New time:</span>{" "}
-                  <span className="text-[#333333]">{selectedSlot}</span>
+                  <span className="text-[#333333]">
+                    {formatTimeInPatientTz(selectedDate, selectedSlot, doctorTz)}
+                  </span>
                 </p>
                 <p className="mt-1 text-[#5E5E5E]">
                   A confirmation email has been sent with your updated appointment details.
@@ -348,7 +348,7 @@ function RescheduleContent() {
                                   setSubmitError(null);
                                 }}
                               >
-                                {time}
+                                {formatTimeInPatientTz(selectedDate, time, doctorTz)}
                               </Button>
                             ))}
                           </div>

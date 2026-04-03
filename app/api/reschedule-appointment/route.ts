@@ -21,7 +21,6 @@ const rescheduleSchema = z.object({
   token: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().regex(/^\d{2}:\d{2}$/),
-  timezone: z.string().min(1).max(128).optional(),
 });
 
 function parseDateOnly(value: string): Date | null {
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest) {
     } satisfies RescheduleResponse);
   }
 
-  const { appointmentId, token, date: dateParam, time, timezone } = parsed.data;
+  const { appointmentId, token, date: dateParam, time } = parsed.data;
   const date = parseDateOnly(dateParam);
   if (!date) {
     return NextResponse.json({
@@ -187,11 +186,7 @@ export async function POST(request: NextRequest) {
 
   const updatedAppointment = await prisma.appointment.update({
     where: { id: appointmentId },
-    data: {
-      date,
-      time,
-      ...(timezone !== undefined ? { timezone } : {}),
-    },
+    data: { date, time },
   });
 
   try {
@@ -202,11 +197,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    const reminderTz = timezone ?? appointment.timezone;
     const reminderAtMs = reminderAtMsFromPatientLocal(
       dateParam,
       time,
-      reminderTz,
+      appointment.timezone,
     );
 
     if (reminderAtMs !== null) {

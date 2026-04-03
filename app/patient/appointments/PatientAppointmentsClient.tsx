@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  formatTimeInPatientTz,
+  formatDateInPatientTz,
+  isDoctorTimeInPast,
+} from "@/lib/timezone-display";
 
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -12,8 +17,9 @@ export type PatientAppointmentItem = {
   doctorId: string;
   cancelToken: string | null;
   rescheduleToken: string | null;
-  date: string; // ISO date-only (YYYY-MM-DD)
-  time: string;
+  date: string; // ISO date-only (YYYY-MM-DD) in doctor's timezone
+  time: string; // HH:mm in doctor's timezone
+  timezone: string; // Doctor's IANA timezone
   consultationType: ConsultationType;
   status: AppointmentStatus;
   doctor: {
@@ -28,49 +34,6 @@ type TabKey = "upcoming" | "completed" | "cancelled";
 const SELECT_CHEVRON =
   'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
 
-/** `YYYY-MM-DD` → e.g. Mon, 24 Mar 2026 (calendar date, no UTC shift). */
-function formatAppointmentDate(isoDate: string) {
-  const parts = isoDate.split("-").map((p) => Number.parseInt(p, 10));
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return isoDate;
-  const [y, m, d] = parts;
-  const date = new Date(y, m - 1, d);
-  return new Intl.DateTimeFormat("en-GB", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-}
-
-/** `HH:mm` or `HH:mm:ss` → e.g. 2:30 PM */
-function formatAppointmentTime(time: string) {
-  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec(time.trim());
-  if (!m) return time;
-  const hour = Number.parseInt(m[1], 10);
-  const minute = Number.parseInt(m[2], 10);
-  if (Number.isNaN(hour) || Number.isNaN(minute)) return time;
-  const period = hour >= 12 ? "PM" : "AM";
-  const h12 = hour % 12 || 12;
-  return `${h12}:${String(minute).padStart(2, "0")} ${period}`;
-}
-
-function isAppointmentInPastLocal(dateParam: string, timeParam: string) {
-  const dParts = dateParam.split("-").map((p) => Number.parseInt(p, 10));
-  const tParts = timeParam.split(":").map((p) => Number.parseInt(p, 10));
-  if (
-    dParts.length !== 3 ||
-    dParts.some((n) => Number.isNaN(n)) ||
-    tParts.length < 2 ||
-    tParts.some((n) => Number.isNaN(n))
-  ) {
-    return false; // don't hide actions if formatting is unexpected
-  }
-
-  const [y, m, d] = dParts;
-  const [hour, minute] = tParts;
-  const start = new Date(y, m - 1, d, hour, minute, 0, 0);
-  return start.getTime() <= Date.now();
-}
 
 function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
@@ -424,7 +387,7 @@ export default function PatientAppointmentsClient({
                     <div className="mt-3 flex flex-col gap-1 font-montserrat text-sm text-[#333333] min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center">
                       <span>
                         <span className="font-medium">Date:</span>{" "}
-                        {formatAppointmentDate(a.date)}
+                        {formatDateInPatientTz(a.date, a.time, a.timezone)}
                       </span>
                       <span
                         className="hidden text-[#e5e5e5] min-[400px]:mx-2 min-[400px]:inline"
@@ -434,7 +397,7 @@ export default function PatientAppointmentsClient({
                       </span>
                       <span>
                         <span className="font-medium">Time:</span>{" "}
-                        {formatAppointmentTime(a.time)}
+                        {formatTimeInPatientTz(a.date, a.time, a.timezone)}
                       </span>
                     </div>
                   </div>
@@ -460,7 +423,7 @@ export default function PatientAppointmentsClient({
                 </div>
 
                 {tab === "upcoming" &&
-                  !isAppointmentInPastLocal(a.date, a.time) &&
+                  !isDoctorTimeInPast(a.date, a.time, a.timezone) &&
                   a.status !== "COMPLETED" &&
                   a.status !== "CANCELLED" &&
                   (a.cancelToken || a.rescheduleToken) && (

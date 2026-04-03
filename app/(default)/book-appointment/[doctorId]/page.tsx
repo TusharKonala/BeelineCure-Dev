@@ -4,14 +4,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Container } from "@/components/layout/Container";
-import { timeToMinutes } from "@/lib/time";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  formatTimeInPatientTz,
+  formatDateInPatientTz,
+  isDoctorTimeInPast,
+} from "@/lib/timezone-display";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -63,7 +67,10 @@ async function getDoctor(doctorId: string) {
   return res.json();
 }
 
-async function getSlots(doctorId: string, date: string) {
+async function getSlots(
+  doctorId: string,
+  date: string,
+): Promise<{ slots: string[]; doctorTimezone: string }> {
   const res = await fetch(
     `/api/doctors/${doctorId}/slots?date=${encodeURIComponent(date)}`,
   );
@@ -88,11 +95,6 @@ export default function BookAppointmentDoctorPage() {
   const queryClient = useQueryClient();
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  const patientTimeZone = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    [],
-  );
-
   const minDate = todayISO();
 
   const {
@@ -113,6 +115,7 @@ export default function BookAppointmentDoctorPage() {
     appointmentTime: string;
     patientName: string;
     consultationType: "CLINIC" | "ONLINE";
+    doctorTimezone: string;
   } | null>(null);
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
@@ -121,11 +124,24 @@ export default function BookAppointmentDoctorPage() {
     enabled: !!doctorId,
   });
 
+  const dateForSlots = selectedDate;
+  const {
+    data: slotsData,
+    isLoading: slotsLoading,
+    isFetching: slotsFetching,
+  } = useQuery({
+    queryKey: ["slots", doctorId, dateForSlots],
+    queryFn: () => getSlots(doctorId, dateForSlots),
+    enabled: !!doctorId && !!dateForSlots,
+  });
+
   const onPatientFormSubmit = useCallback(
     async (data: PatientFormValues) => {
       setSubmitError(null);
       setIsSubmitting(true);
       try {
+        const doctorTimezone = slotsData?.doctorTimezone ?? "UTC";
+
         if (consultationType === "CLINIC") {
           const res = await fetch("/api/appointments", {
             method: "POST",
@@ -139,7 +155,7 @@ export default function BookAppointmentDoctorPage() {
               email: data.email,
               phone: data.phone,
               notes: data.notes ?? undefined,
-              timezone: patientTimeZone,
+              timezone: doctorTimezone,
             }),
           });
 
@@ -167,6 +183,7 @@ export default function BookAppointmentDoctorPage() {
             appointmentTime: selectedSlot ?? "",
             patientName: data.patientName,
             consultationType,
+            doctorTimezone,
           });
 
           window.scrollTo({ top: 0, behavior: "smooth" });
@@ -183,7 +200,7 @@ export default function BookAppointmentDoctorPage() {
               email: data.email,
               phone: data.phone,
               notes: data.notes,
-              timezone: patientTimeZone,
+              timezone: doctorTimezone,
             }),
           });
 
@@ -232,30 +249,17 @@ export default function BookAppointmentDoctorPage() {
       selectedSlot,
       consultationType,
       doctor?.name,
-      patientTimeZone,
+      slotsData?.doctorTimezone,
       queryClient,
       router,
     ],
   );
 
-  const dateForSlots = selectedDate;
-  const {
-    data: slotsData,
-    isLoading: slotsLoading,
-    isFetching: slotsFetching,
-  } = useQuery({
-    queryKey: ["slots", doctorId, dateForSlots],
-    queryFn: () => getSlots(doctorId, dateForSlots),
-    enabled: !!doctorId && !!dateForSlots,
-  });
-
   const slots: string[] = slotsData?.slots ?? [];
+  const doctorTz = slotsData?.doctorTimezone ?? "UTC";
 
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const isToday = selectedDate === todayISO();
   const filteredSlots = slots.filter(
-    (s) => !isToday || timeToMinutes(s) > currentMinutes,
+    (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,13 +295,21 @@ export default function BookAppointmentDoctorPage() {
                 <p>
                   <span className="font-medium text-[#111111]">Date:</span>{" "}
                   <span className="text-[#333333]">
-                    {bookedConfirmation.appointmentDate}
+                    {formatDateInPatientTz(
+                      bookedConfirmation.appointmentDate,
+                      bookedConfirmation.appointmentTime,
+                      bookedConfirmation.doctorTimezone,
+                    )}
                   </span>
                 </p>
                 <p>
                   <span className="font-medium text-[#111111]">Time:</span>{" "}
                   <span className="text-[#333333]">
-                    {bookedConfirmation.appointmentTime}
+                    {formatTimeInPatientTz(
+                      bookedConfirmation.appointmentDate,
+                      bookedConfirmation.appointmentTime,
+                      bookedConfirmation.doctorTimezone,
+                    )}
                   </span>
                 </p>
                 <p>
@@ -440,7 +452,7 @@ export default function BookAppointmentDoctorPage() {
                       className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                       onClick={() => setSelectedSlot(time)}
                     >
-                      {time}
+                      {formatTimeInPatientTz(selectedDate, time, doctorTz)}
                     </Button>
                   ))}
                 </div>

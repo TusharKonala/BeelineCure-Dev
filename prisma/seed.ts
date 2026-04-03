@@ -7,10 +7,41 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-const doctors = [
-  { name: "Dr. Sharma", specialization: "Cardiologist", image: "/doctors/sharma.jpg" },
-  { name: "Dr. Johnson", specialization: "General Physician", image: "/doctors/johnson.jpg" },
-  { name: "Dr. Fernandes", specialization: "Orthopedic", image: "/doctors/fernandes.jpg" },
+/** Local clock times for each doctor’s clinic day (interpreted in that doctor’s `timezone`). */
+type DoctorSeed = {
+  name: string;
+  specialization: string;
+  image: string;
+  timezone: string;
+  /** One or more availability windows per calendar day. */
+  dayBlocks: { startTime: string; endTime: string }[];
+};
+
+/** 9:00–13:00 local per doctor; slots API uses 30-minute steps. */
+const dayBlock9to1 = [{ startTime: "09:00", endTime: "13:00" }] as const;
+
+const doctorSeeds: DoctorSeed[] = [
+  {
+    name: "Dr. Sharma",
+    specialization: "Cardiologist",
+    image: "/doctors/sharma.jpg",
+    timezone: "Asia/Kolkata",
+    dayBlocks: [...dayBlock9to1],
+  },
+  {
+    name: "Dr. Johnson",
+    specialization: "General Physician",
+    image: "/doctors/johnson.jpg",
+    timezone: "America/New_York",
+    dayBlocks: [...dayBlock9to1],
+  },
+  {
+    name: "Dr. Fernandes",
+    specialization: "Orthopedic",
+    image: "/doctors/fernandes.jpg",
+    timezone: "Europe/Paris",
+    dayBlocks: [...dayBlock9to1],
+  },
 ];
 
 function toDateOnly(d: Date): Date {
@@ -26,42 +57,49 @@ function addDays(d: Date, days: number): Date {
 }
 
 async function main() {
-  // Clear dependent data that can block doctor resets
+  // Order matters: children before parents where FKs exist.
   await prisma.bookingSession.deleteMany({});
   await prisma.appointment.deleteMany({});
   await prisma.doctorAvailability.deleteMany({});
-
-  // Reset doctors and seed base doctor data
   await prisma.doctor.deleteMany({});
-  await prisma.doctor.createMany({ data: doctors });
-
-  const allDoctors = await prisma.doctor.findMany();
-  if (allDoctors.length === 0) return;
+  await prisma.user.deleteMany({});
 
   const today = toDateOnly(new Date());
-  const daysToSeed = 30;
+  const daysToSeed = 365;
 
-  // Create availability slots for all doctors for the next 30 days
-  for (const doctor of allDoctors) {
+  for (const seed of doctorSeeds) {
+    const doctor = await prisma.doctor.create({
+      data: {
+        name: seed.name,
+        specialization: seed.specialization,
+        image: seed.image,
+        timezone: seed.timezone,
+      },
+    });
+
     for (let offset = 0; offset < daysToSeed; offset++) {
       const date = addDays(today, offset);
 
-      const existing = await prisma.doctorAvailability.findFirst({
-        where: { doctorId: doctor.id, date },
-      });
-
-      if (!existing) {
+      for (const block of seed.dayBlocks) {
         await prisma.doctorAvailability.create({
           data: {
             doctorId: doctor.id,
             date,
-            startTime: "09:00",
-            endTime: "13:00",
+            startTime: block.startTime,
+            endTime: block.endTime,
           },
         });
       }
     }
   }
+
+  console.log("Cleared all users (sign up again manually).");
+  console.log(
+    `Seeded ${doctorSeeds.length} doctors: ${doctorSeeds.map((d) => `${d.name} (${d.timezone})`).join(", ")}`,
+  );
+  console.log(
+    `Availability: ${daysToSeed} days, 9:00–13:00 local (30 min slots) per doctor.`,
+  );
 }
 
 main()

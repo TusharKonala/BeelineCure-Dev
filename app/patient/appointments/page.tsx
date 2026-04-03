@@ -28,6 +28,7 @@ async function PatientAppointmentsPageContent() {
       rescheduleToken: true,
       date: true,
       time: true,
+      timezone: true,
       consultationType: true,
       status: true,
       doctor: {
@@ -46,6 +47,7 @@ async function PatientAppointmentsPageContent() {
     rescheduleToken: a.rescheduleToken,
     date: a.date.toISOString().slice(0, 10),
     time: a.time,
+    timezone: a.timezone,
     consultationType: a.consultationType,
     status: a.status as PatientAppointmentItem["status"],
     doctor: {

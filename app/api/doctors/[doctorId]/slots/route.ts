@@ -55,7 +55,11 @@ export async function GET(
     );
   }
 
-  const [availabilities, appointments] = await Promise.all([
+  const [doctor, availabilities, appointments] = await Promise.all([
+    prisma.doctor.findUnique({
+      where: { id: doctorId },
+      select: { timezone: true },
+    }),
     prisma.doctorAvailability.findMany({
       where: { doctorId, date },
     }),
@@ -79,5 +83,8 @@ export async function GET(
 
   const available = [...new Set(slots)].filter((s) => !booked.has(s)).sort();
 
-  return NextResponse.json({ slots: available });
+  return NextResponse.json({
+    slots: available,
+    doctorTimezone: doctor?.timezone ?? "UTC",
+  });
 }

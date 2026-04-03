@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
     email,
     phone,
     notes,
-    timezone,
   } = parsed.data;
 
   const appointmentDate = parseDateOnly(date);
@@ -60,11 +59,14 @@ export async function POST(request: NextRequest) {
 
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
+    select: { id: true, timezone: true },
   });
 
   if (!doctor) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
   }
+
+  const doctorTimezone = doctor.timezone;
 
   const existingSameDate = await prisma.appointment.findFirst({
     where: {
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
       phone,
       date,
       time,
-      timezone,
+      timezone: doctorTimezone,
       notes: notes,
       consultationType,
       status: "PENDING",
