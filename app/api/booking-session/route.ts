@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
   const existingSameDate = await prisma.appointment.findFirst({
     where: {
       email,
+      doctorId,
       date: appointmentDate,
       status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
     },
