@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
     where: {
       email,
       date,
+      status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
     },
     select: {
       id: true,
