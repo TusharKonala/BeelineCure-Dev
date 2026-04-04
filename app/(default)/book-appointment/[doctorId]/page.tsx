@@ -4,7 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -85,6 +86,7 @@ function todayISO(): string {
 }
 
 export default function BookAppointmentDoctorPage() {
+  const { data: session, status: sessionStatus } = useSession();
   const params = useParams();
   const doctorId = String(params?.doctorId ?? "");
   const router = useRouter();
@@ -106,12 +108,29 @@ export default function BookAppointmentDoctorPage() {
   const {
     register,
     handleSubmit,
+    reset,
+    getValues,
     formState: { errors, isValid },
   } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
     mode: "onBlur",
     defaultValues: { patientName: "", email: "", phone: "", notes: "" },
   });
+
+  useEffect(() => {
+    if (sessionStatus !== "authenticated" || !session?.user) return;
+    const name = (session.user.name ?? "").trim();
+    const email = (session.user.email ?? "").trim();
+    if (!name && !email) return;
+
+    const current = getValues();
+    reset({
+      patientName: current.patientName.trim() ? current.patientName : name,
+      email: current.email.trim() ? current.email : email,
+      phone: current.phone,
+      notes: current.notes ?? "",
+    });
+  }, [sessionStatus, session?.user, reset, getValues]);
 
   const [submitError, setSubmitError] = useState<SubmitErrorState>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
