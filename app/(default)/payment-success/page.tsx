@@ -3,6 +3,10 @@ import { Button } from "@/components/ui/button";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
 
 type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -26,38 +30,46 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
     try {
       const session = await stripe.checkout.sessions.retrieve(sessionId);
       const metadata = session.metadata ?? {};
+      const bookingSessionId = metadata.bookingSessionId;
 
-      const doctorId = metadata.doctorId;
-      if (doctorId) {
-        const doctor = await prisma.doctor.findUnique({
-          where: { id: doctorId },
-        });
-        if (doctor?.name) {
-          doctorName = doctor.name;
-        }
-      }
+      const bookingSession = bookingSessionId
+        ? await prisma.bookingSession.findUnique({
+            where: { id: bookingSessionId },
+            include: { doctor: { select: { name: true } } },
+          })
+        : null;
 
-      if (metadata.date) {
-        appointmentDate = metadata.date;
-      }
-
-      if (metadata.time) {
-        appointmentTime = metadata.time;
-      }
-
-      if (metadata.patientName) {
-        patientName = metadata.patientName;
-      }
-
-      if (metadata.consultationType === "ONLINE") {
-        consultationTypeLabel = "Online consultation";
+      if (bookingSession) {
+        doctorName = bookingSession.doctor?.name ?? "Your doctor";
+        appointmentDate = formatDateInPatientTz(
+          bookingSession.date,
+          bookingSession.time,
+          bookingSession.timezone,
+          bookingSession.patientTimezone,
+        );
+        appointmentTime = formatTimeInPatientTz(
+          bookingSession.date,
+          bookingSession.time,
+          bookingSession.timezone,
+          bookingSession.patientTimezone,
+        );
+        patientName = bookingSession.patientName;
+        consultationTypeLabel =
+          bookingSession.consultationType === "ONLINE"
+            ? "Online consultation"
+            : "Clinic visit";
       } else {
-        consultationTypeLabel = "Clinic visit";
+        if (metadata.date) appointmentDate = metadata.date;
+        if (metadata.time) appointmentTime = metadata.time;
+        if (metadata.patientName) patientName = metadata.patientName;
+        consultationTypeLabel =
+          metadata.consultationType === "ONLINE"
+            ? "Online consultation"
+            : "Clinic visit";
       }
 
       hasDetails = true;
     } catch {
-      // If anything goes wrong, we simply fall back to the default placeholders.
       hasDetails = false;
     }
   }
