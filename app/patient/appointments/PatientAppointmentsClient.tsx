@@ -110,7 +110,9 @@ export default function PatientAppointmentsClient({
 
   const { upcoming, completed, cancelled } = useMemo(() => {
     const upcoming = appointments.filter(
-      (a) => a.status === "PENDING" || a.status === "CONFIRMED",
+      (a) =>
+        (a.status === "PENDING" || a.status === "CONFIRMED") &&
+        !isDoctorTimeInPast(a.date, a.time, a.timezone),
     );
     const completed = appointments.filter((a) => a.status === "COMPLETED");
     const cancelled = appointments.filter((a) => a.status === "CANCELLED");
