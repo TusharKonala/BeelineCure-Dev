@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
+  doctorLocalToUtc,
   formatTimeInPatientTz,
   formatDateInPatientTz,
   isDoctorTimeInPast,
@@ -39,14 +40,15 @@ function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
 }
 
-/** Compare by calendar date, then time string (HH:mm). */
+/** Compare by true chronological instant (date+time resolved in each doctor's timezone). */
 function compareAppointmentDateTime(
   a: PatientAppointmentItem,
   b: PatientAppointmentItem,
 ) {
-  const byDate = a.date.localeCompare(b.date);
-  if (byDate !== 0) return byDate;
-  return a.time.localeCompare(b.time, undefined, { numeric: true });
+  return (
+    doctorLocalToUtc(a.date, a.time, a.timezone).getTime() -
+    doctorLocalToUtc(b.date, b.time, b.timezone).getTime()
+  );
 }
 
 function localYMD(d: Date): string {
