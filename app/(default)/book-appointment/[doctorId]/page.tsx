@@ -9,6 +9,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Container } from "@/components/layout/Container";
+import { PostAppointmentActions } from "@/components/PostAppointmentActions";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -333,6 +334,7 @@ export default function BookAppointmentDoctorPage() {
                   <span className="text-[#333333]">Clinic Visit</span>
                 </p>
               </div>
+              <PostAppointmentActions />
             </div>
           </section>
         ) : (

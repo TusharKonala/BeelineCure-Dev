@@ -9,6 +9,7 @@ import { z } from "zod";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
@@ -121,17 +122,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const upcomingCount = await prisma.appointment.count({
-    where: {
-      email,
-      status: {
-        in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
-      },
-      date: {
-        gte: new Date(new Date().toISOString().slice(0, 10)),
-      },
-    },
-  });
+  const upcomingCount = await countUpcomingAppointmentsForEmail(email);
 
   if (upcomingCount >= 2) {
     return NextResponse.json(

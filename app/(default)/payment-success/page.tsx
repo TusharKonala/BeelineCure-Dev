@@ -1,8 +1,7 @@
 import { Container } from "@/components/layout/Container";
-import { Button } from "@/components/ui/button";
+import { PostAppointmentActions } from "@/components/PostAppointmentActions";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
-import Link from "next/link";
 import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
@@ -139,14 +138,7 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
               </p>
             )}
 
-            <div className="mt-8">
-              <Button
-                asChild
-                className="h-11 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-              >
-                <Link href="/book-appointment">Book another appointment</Link>
-              </Button>
-            </div>
+            <PostAppointmentActions />
           </div>
         </section>
       </Container>

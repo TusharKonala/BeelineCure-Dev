@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { AppointmentStatus } from "@/generated/prisma/client";
+import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -109,17 +110,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const upcomingCount = await prisma.appointment.count({
-    where: {
-      email,
-      status: {
-        in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED],
-      },
-      date: {
-        gte: new Date(new Date().toISOString().slice(0, 10)),
-      },
-    },
-  });
+  const upcomingCount = await countUpcomingAppointmentsForEmail(email);
 
   if (upcomingCount >= 2) {
     return NextResponse.json(

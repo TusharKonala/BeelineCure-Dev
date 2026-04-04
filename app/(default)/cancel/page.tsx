@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -144,6 +145,17 @@ function CancelContent() {
                   className="h-11 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                 >
                   {isCancelling ? "Cancelling…" : "Confirm Cancel"}
+                </Button>
+              </div>
+            )}
+
+            {state === "success" && (
+              <div className="mt-8">
+                <Button
+                  asChild
+                  className="h-11 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                >
+                  <Link href="/book-appointment">Book a new appointment</Link>
                 </Button>
               </div>
             )}

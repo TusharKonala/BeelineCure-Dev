@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
+import { PostAppointmentActions } from "@/components/PostAppointmentActions";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsultationType, AppointmentStatus } from "@/generated/prisma/client";
 import {
@@ -276,6 +277,8 @@ function RescheduleContent() {
                 </p>
               </div>
             )}
+
+            {state === "success" && <PostAppointmentActions />}
 
             {state === "idle" && !canLoad && (
               <div className="mt-8">
