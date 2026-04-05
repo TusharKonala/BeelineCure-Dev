@@ -103,6 +103,8 @@ model Appointment {
   date             DateTime          @db.Date
   time             String
   notes            String?
+  /// Plain text or HTML from doctor (e.g. rich-text editor); PDF export normalizes to readable text.
+  prescription     String?
   consultationType ConsultationType
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)

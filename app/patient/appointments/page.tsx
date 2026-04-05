@@ -26,10 +26,12 @@ async function PatientAppointmentsPageContent() {
       doctorId: true,
       cancelToken: true,
       rescheduleToken: true,
+      patientName: true,
       date: true,
       time: true,
       timezone: true,
       consultationType: true,
+      prescription: true,
       status: true,
       doctor: {
         select: {
@@ -45,10 +47,12 @@ async function PatientAppointmentsPageContent() {
     doctorId: a.doctorId,
     cancelToken: a.cancelToken,
     rescheduleToken: a.rescheduleToken,
+    patientName: a.patientName,
     date: a.date.toISOString().slice(0, 10),
     time: a.time,
     timezone: a.timezone,
     consultationType: a.consultationType,
+    prescription: a.prescription,
     status: a.status as PatientAppointmentItem["status"],
     doctor: {
       name: a.doctor.name,

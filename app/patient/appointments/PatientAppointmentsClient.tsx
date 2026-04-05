@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { prescriptionToPlainTextForPdf } from "@/lib/prescription-pdf-text";
 import {
   doctorLocalToUtc,
   formatTimeInPatientTz,
@@ -18,10 +19,12 @@ export type PatientAppointmentItem = {
   doctorId: string;
   cancelToken: string | null;
   rescheduleToken: string | null;
+  patientName: string;
   date: string; // ISO date-only (YYYY-MM-DD) in doctor's timezone
   time: string; // HH:mm in doctor's timezone
   timezone: string; // Doctor's IANA timezone
   consultationType: ConsultationType;
+  prescription: string | null;
   status: AppointmentStatus;
   doctor: {
     name: string;
@@ -49,6 +52,67 @@ function compareAppointmentDateTime(
     doctorLocalToUtc(a.date, a.time, a.timezone).getTime() -
     doctorLocalToUtc(b.date, b.time, b.timezone).getTime()
   );
+}
+
+const PDF_MARGIN_X = 20;
+const PDF_MAX_WIDTH = 170;
+const PDF_LINE = 6;
+const PDF_PAGE_BOTTOM = 285;
+
+async function downloadPrescriptionPdf(appointment: PatientAppointmentItem) {
+  if (!appointment.prescription) return;
+
+  const { jsPDF } = await import("jspdf");
+  const doc = new jsPDF();
+  const dateLabel = formatDateInPatientTz(
+    appointment.date,
+    appointment.time,
+    appointment.timezone,
+  );
+  const fileDoctorName = appointment.doctor.name.replace(/[^a-z0-9]+/gi, "-");
+
+  const body = prescriptionToPlainTextForPdf(appointment.prescription);
+
+  let y = 20;
+  doc.setFontSize(18);
+  doc.text("Prescription", PDF_MARGIN_X, y);
+  y += 14;
+
+  doc.setFontSize(11);
+  doc.text(`Doctor: ${appointment.doctor.name}`, PDF_MARGIN_X, y);
+  y += PDF_LINE;
+  doc.text(`Patient: ${appointment.patientName}`, PDF_MARGIN_X, y);
+  y += PDF_LINE;
+  doc.text(`Date: ${dateLabel}`, PDF_MARGIN_X, y);
+  y += 12;
+
+  doc.setFontSize(12);
+  doc.text("Prescription details", PDF_MARGIN_X, y);
+  y += 10;
+
+  doc.setFontSize(11);
+  // Split on blank lines for section spacing; keep single newlines (e.g. list items) as separate lines.
+  const paragraphs = body.split(/\n{2,}/).filter(Boolean);
+  for (const para of paragraphs) {
+    const logicalLines = para
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    for (const segment of logicalLines) {
+      const wrapped = doc.splitTextToSize(segment, PDF_MAX_WIDTH);
+      for (const line of wrapped) {
+        if (y > PDF_PAGE_BOTTOM) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(line, PDF_MARGIN_X, y);
+        y += PDF_LINE;
+      }
+    }
+    y += 4;
+  }
+
+  doc.save(`prescription-${fileDoctorName || "doctor"}-${appointment.date}.pdf`);
 }
 
 function localYMD(d: Date): string {
@@ -467,6 +531,20 @@ export default function PatientAppointmentsClient({
                       )}
                     </div>
                   )}
+
+                {a.status === "COMPLETED" && a.prescription && (
+                  <div className="mt-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
+                      onClick={() => void downloadPrescriptionPdf(a)}
+                    >
+                      Download Prescription
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })}
