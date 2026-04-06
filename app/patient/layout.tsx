@@ -7,7 +7,6 @@ import { useSession } from "next-auth/react";
 import {
   Bell,
   CalendarDays,
-  FileText,
   HeartPulse,
   LayoutDashboard,
   Menu,
@@ -29,7 +28,6 @@ const navItems: PatientNavItem[] = [
     icon: CalendarDays,
     hasUnreadBadgePlaceholder: true,
   },
-  { href: "/patient/prescriptions", label: "Prescriptions", icon: FileText },
   {
     href: "/patient/health-profile",
     label: "Health Profile",

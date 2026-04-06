@@ -20,7 +20,7 @@ export function prescriptionToPlainTextForPdf(raw: string): string {
       );
       const root = doc.querySelector(".rx-root");
       if (root) {
-        return root.innerText
+        return (root as HTMLElement).innerText
           .replace(/\r\n/g, "\n")
           .replace(/\n{3,}/g, "\n\n")
           .trim();

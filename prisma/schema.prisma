@@ -64,6 +64,41 @@ model User {
   role      UserRole @default(PATIENT)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  healthProfile HealthProfile?
+}
+
+model HealthProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Personal
+  bloodGroup   String?
+  heightCm     Float?
+  weightKg     Float?
+  dateOfBirth  DateTime? @db.Date
+  gender       String?
+
+  /// Medical history
+  allergies            String? @db.Text
+  conditions           String? @db.Text
+  currentMedications   String? @db.Text
+  pastSurgeries        String? @db.Text
+  smokingStatus        String?
+  alcoholUse           String?
+  activityLevel        String?
+
+  /// Emergency contacts
+  emergencyContactName             String?
+  emergencyContactPhone            String?
+  emergencyContactRelationship     String?
+  emergencyContact2Name            String?
+  emergencyContact2Phone           String?
+  emergencyContact2Relationship    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Doctor {
