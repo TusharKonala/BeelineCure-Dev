@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
-import { UserRole } from "@/generated/prisma/client";
+import { USER_ROLE } from "@/lib/user-role";
 
 type ApiNotification = {
   id: string;
@@ -26,7 +26,7 @@ export function PatientNotificationToaster() {
   const hasInitializedRef = useRef(false);
 
   const isPatient = useMemo(() => {
-    return session?.user?.role === UserRole.PATIENT;
+    return session?.user?.role === USER_ROLE.PATIENT;
   }, [session?.user?.role]);
 
   useEffect(() => {
