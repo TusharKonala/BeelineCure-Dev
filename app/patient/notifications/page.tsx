@@ -73,16 +73,16 @@ export default async function PatientNotificationsPage() {
                   key={notification.id}
                   className="rounded-xl border border-[#e5e5e5] bg-white p-4 transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-montserrat text-sm font-semibold text-[#333333]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                    <div className="w-full min-w-0">
+                      <p className="wrap-break-word font-montserrat text-sm font-semibold text-[#333333]">
                         {notification.title}
                       </p>
-                      <p className="mt-2 whitespace-pre-wrap font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                      <p className="mt-2 whitespace-pre-wrap wrap-break-word font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
                         {notification.message}
                       </p>
                     </div>
-                    <time className="shrink-0 whitespace-nowrap font-montserrat text-xs text-[#9A9A9A]">
+                    <time className="shrink-0 whitespace-nowrap font-montserrat text-xs text-[#9A9A9A] sm:pt-0.5">
                       {formatDateTime(notification.createdAt)}
                     </time>
                   </div>
