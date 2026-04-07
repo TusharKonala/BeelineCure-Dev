@@ -23,6 +23,9 @@ export const PATIENT_UNREAD_COUNT_EVENT = "patient-notifications:unread-count";
 export function PatientNotificationToaster() {
   const { data: session, status } = useSession();
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const [pendingNavigationToastId, setPendingNavigationToastId] = useState<
+    string | null
+  >(null);
   const seenNotificationIdsRef = useRef<Set<string>>(new Set());
   const hasInitializedRef = useRef(false);
 
@@ -124,7 +127,11 @@ export function PatientNotificationToaster() {
         <Link
           key={toast.id}
           href="/patient/notifications"
-          className="pointer-events-auto block rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-lg transition-colors hover:bg-[#fafcff]"
+          onClick={() => setPendingNavigationToastId(toast.id)}
+          className={`pointer-events-auto block rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-lg transition-all hover:bg-[#fafcff] active:scale-[0.99] ${
+            pendingNavigationToastId === toast.id ? "opacity-80" : ""
+          }`}
+          aria-busy={pendingNavigationToastId === toast.id}
         >
           <article role="status" aria-live="polite">
             <p className="font-montserrat text-sm font-semibold text-[#333333]">
@@ -134,7 +141,9 @@ export function PatientNotificationToaster() {
               {toast.message}
             </p>
             <p className="mt-3 font-montserrat text-xs font-semibold text-[#2555F3]">
-              View notifications →
+              {pendingNavigationToastId === toast.id
+                ? "Opening notifications..."
+                : "View notifications →"}
             </p>
           </article>
         </Link>
