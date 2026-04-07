@@ -13,6 +13,7 @@ import {
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -311,12 +312,15 @@ export async function POST(request: NextRequest) {
       where: { id: updatedAppointment.doctorId },
       select: { name: true },
     });
+    const doctorDisplayName = doctor?.name
+      ? formatDoctorDisplayName(doctor.name)
+      : null;
     await createAppointmentNotificationForEmail({
       patientEmail: updatedAppointment.email,
       type: NotificationType.APPOINTMENT_RESCHEDULED,
       title: "Appointment rescheduled",
       message: `Your appointment${
-        doctor?.name ? ` with Dr. ${doctor.name}` : ""
+        doctorDisplayName ? ` with ${doctorDisplayName}` : ""
       } is now set for ${formattedDate} at ${formattedTime}.`,
     });
   } catch (err) {

@@ -12,6 +12,7 @@ import {
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -172,6 +173,9 @@ export async function POST(request: NextRequest) {
       where: { id: appointment.doctorId },
       select: { name: true },
     });
+    const doctorDisplayName = doctor?.name
+      ? formatDoctorDisplayName(doctor.name)
+      : null;
     const formattedDate = formatDateInPatientTz(
       appointmentDate,
       appointment.time,
@@ -189,7 +193,7 @@ export async function POST(request: NextRequest) {
       type: NotificationType.APPOINTMENT_CANCELLED,
       title: "Appointment cancelled",
       message: `Your appointment${
-        doctor?.name ? ` with Dr. ${doctor.name}` : ""
+        doctorDisplayName ? ` with ${doctorDisplayName}` : ""
       } on ${formattedDate} at ${formattedTime} was cancelled.`,
     });
   } catch (err) {

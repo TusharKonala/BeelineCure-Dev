@@ -15,6 +15,7 @@ import {
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -243,7 +244,7 @@ export async function POST(request: NextRequest) {
       patientEmail: email,
       type: NotificationType.APPOINTMENT_BOOKED,
       title: "Appointment booked",
-      message: `Your appointment with Dr. ${doctor.name} is confirmed for ${formattedDate} at ${formattedTime}.`,
+      message: `Your appointment with ${formatDoctorDisplayName(doctor.name)} is confirmed for ${formattedDate} at ${formattedTime}.`,
     });
   } catch (err) {
     console.error("[appointments] Failed to create notification:", err);
