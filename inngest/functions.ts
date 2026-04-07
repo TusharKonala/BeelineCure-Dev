@@ -1,12 +1,13 @@
 import { EmailTemplate } from "@/components/email-template";
 import { prisma } from "@/lib/db";
-import { AppointmentStatus } from "@/generated/prisma/client";
+import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { Resend } from "resend";
 import { inngest } from "./client";
 import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -95,6 +96,29 @@ export const sendAppointmentReminder = inngest.createFunction(
         rescheduleUrl,
       }),
     });
+
+    try {
+      await createAppointmentNotificationForEmail({
+        patientEmail: appointment.email,
+        type: NotificationType.APPOINTMENT_REMINDER,
+        title: "Appointment reminder",
+        message: `Reminder: your appointment with Dr. ${
+          appointment.doctor.name
+        } is on ${formatDateInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        )} at ${formatTimeInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        )}.`,
+      });
+    } catch (err) {
+      console.error("[appointments-reminder] Failed to create notification:", err);
+    }
 
     if (error) {
       throw new Error(

@@ -41,6 +41,13 @@ enum UserRole {
   PATIENT
 }
 
+enum NotificationType {
+  APPOINTMENT_BOOKED
+  APPOINTMENT_RESCHEDULED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_REMINDER
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String?
@@ -66,6 +73,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   healthProfile HealthProfile?
+  notifications Notification[]
 }
 
 model HealthProfile {
@@ -167,4 +175,18 @@ model BookingSession {
   status           BookingSessionStatus @default(PENDING)
   createdAt        DateTime             @default(now())
   expiresAt        DateTime
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String           @db.Text
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, readAt])
 }

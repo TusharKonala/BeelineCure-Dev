@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { AppointmentStatus } from "@/generated/prisma/client";
+import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { inngest } from "@/inngest/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -11,6 +11,7 @@ import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -163,6 +164,36 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[cancel] Cancellation email failed:", err);
+  }
+
+  try {
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: appointment.doctorId },
+      select: { name: true },
+    });
+    const formattedDate = formatDateInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    await createAppointmentNotificationForEmail({
+      patientEmail: appointment.email,
+      type: NotificationType.APPOINTMENT_CANCELLED,
+      title: "Appointment cancelled",
+      message: `Your appointment${
+        doctor?.name ? ` with Dr. ${doctor.name}` : ""
+      } on ${formattedDate} at ${formattedTime} was cancelled.`,
+    });
+  } catch (err) {
+    console.error("[cancel] Failed to create notification:", err);
   }
 
   return NextResponse.json({ status: "success" as const });

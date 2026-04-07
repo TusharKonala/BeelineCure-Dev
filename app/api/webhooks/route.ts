@@ -10,6 +10,7 @@ import {
   AppointmentStatus,
   PaymentStatus,
   ConsultationType,
+  NotificationType,
 } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
@@ -19,6 +20,7 @@ import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -208,6 +210,29 @@ export async function POST(request: NextRequest) {
       }
     } catch (emailError) {
       console.error("[webhooks] Confirmation email failed:", emailError);
+    }
+
+    try {
+      const formattedDate = formatDateInPatientTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+        bookingSession.patientTimezone,
+      );
+      const formattedTime = formatTimeInPatientTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+        bookingSession.patientTimezone,
+      );
+      await createAppointmentNotificationForEmail({
+        patientEmail: appointment.email,
+        type: NotificationType.APPOINTMENT_BOOKED,
+        title: "Appointment booked",
+        message: `Your appointment with Dr. ${doctor.name} is confirmed for ${formattedDate} at ${formattedTime}.`,
+      });
+    } catch (err) {
+      console.error("[webhooks] Failed to create notification:", err);
     }
 
     try {

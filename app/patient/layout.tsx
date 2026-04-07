@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -17,7 +17,6 @@ type PatientNavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  hasUnreadBadgePlaceholder?: boolean;
 };
 
 const navItems: PatientNavItem[] = [
@@ -26,7 +25,6 @@ const navItems: PatientNavItem[] = [
     href: "/patient/appointments",
     label: "Appointments",
     icon: CalendarDays,
-    hasUnreadBadgePlaceholder: true,
   },
   {
     href: "/patient/health-profile",
@@ -37,7 +35,6 @@ const navItems: PatientNavItem[] = [
     href: "/patient/notifications",
     label: "Notifications",
     icon: Bell,
-    hasUnreadBadgePlaceholder: true,
   },
 ];
 
@@ -49,6 +46,7 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const patientName = session?.user?.name?.trim() || "Patient";
   const initials =
     patientName
@@ -57,6 +55,34 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase() ?? "")
       .join("") || "P";
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch("/api/notifications/unread-count", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { count?: unknown };
+        const nextCount =
+          typeof data.count === "number" && Number.isFinite(data.count)
+            ? Math.max(0, Math.floor(data.count))
+            : 0;
+        if (!cancelled) setUnreadNotificationCount(nextCount);
+      } catch {
+        // best-effort badge fetch
+      }
+    }
+
+    void loadUnreadCount();
+    const interval = setInterval(() => void loadUnreadCount(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [pathname]);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
@@ -81,9 +107,14 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
                     <Icon className="size-4 shrink-0" />
                     <span>{item.label}</span>
                   </span>
-                  {item.hasUnreadBadgePlaceholder && (
-                    <span className="hidden size-2 rounded-full bg-red-500" />
-                  )}
+                  {item.href === "/patient/notifications" &&
+                    unreadNotificationCount > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                        {unreadNotificationCount > 99
+                          ? "99+"
+                          : unreadNotificationCount}
+                      </span>
+                    )}
                 </Link>
               );
             })}
@@ -145,9 +176,14 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
                       <Icon className="size-4 shrink-0" />
                       {item.label}
                     </span>
-                    {item.hasUnreadBadgePlaceholder && (
-                      <span className="hidden size-2 rounded-full bg-red-500" />
-                    )}
+                    {item.href === "/patient/notifications" &&
+                      unreadNotificationCount > 0 && (
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                          {unreadNotificationCount > 99
+                            ? "99+"
+                            : unreadNotificationCount}
+                        </span>
+                      )}
                   </Link>
                 );
               })}

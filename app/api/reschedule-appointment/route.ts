@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { AppointmentStatus } from "@/generated/prisma/client";
+import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -291,6 +292,35 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[reschedule] Confirmation email failed:", err);
+  }
+
+  try {
+    const formattedDate = formatDateInPatientTz(
+      dateParam,
+      time,
+      updatedAppointment.timezone,
+      updatedAppointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      dateParam,
+      time,
+      updatedAppointment.timezone,
+      updatedAppointment.patientTimezone,
+    );
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: updatedAppointment.doctorId },
+      select: { name: true },
+    });
+    await createAppointmentNotificationForEmail({
+      patientEmail: updatedAppointment.email,
+      type: NotificationType.APPOINTMENT_RESCHEDULED,
+      title: "Appointment rescheduled",
+      message: `Your appointment${
+        doctor?.name ? ` with Dr. ${doctor.name}` : ""
+      } is now set for ${formattedDate} at ${formattedTime}.`,
+    });
+  } catch (err) {
+    console.error("[reschedule] Failed to create notification:", err);
   }
 
   return NextResponse.json({ status: "success" } satisfies RescheduleResponse);

@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
-import { AppointmentStatus } from "@/generated/prisma/client";
+import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
@@ -14,6 +14,7 @@ import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -223,6 +224,29 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[appointments] Confirmation email failed:", err);
+  }
+
+  try {
+    const formattedDate = formatDateInPatientTz(
+      dateParam,
+      time,
+      doctorTimezone,
+      patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      dateParam,
+      time,
+      doctorTimezone,
+      patientTimezone,
+    );
+    await createAppointmentNotificationForEmail({
+      patientEmail: email,
+      type: NotificationType.APPOINTMENT_BOOKED,
+      title: "Appointment booked",
+      message: `Your appointment with Dr. ${doctor.name} is confirmed for ${formattedDate} at ${formattedTime}.`,
+    });
+  } catch (err) {
+    console.error("[appointments] Failed to create notification:", err);
   }
 
   try {
