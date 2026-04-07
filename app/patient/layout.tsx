@@ -12,6 +12,7 @@ import {
   Menu,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
+import { PATIENT_UNREAD_COUNT_EVENT } from "@/components/patient/PatientNotificationToaster";
 
 type PatientNavItem = {
   href: string;
@@ -83,6 +84,28 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
       clearInterval(interval);
     };
   }, [pathname]);
+
+  useEffect(() => {
+    function handleUnreadCountSync(event: Event) {
+      const customEvent = event as CustomEvent<number>;
+      const nextCount =
+        typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
+          ? Math.max(0, Math.floor(customEvent.detail))
+          : 0;
+      setUnreadNotificationCount(nextCount);
+    }
+
+    window.addEventListener(
+      PATIENT_UNREAD_COUNT_EVENT,
+      handleUnreadCountSync as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        PATIENT_UNREAD_COUNT_EVENT,
+        handleUnreadCountSync as EventListener,
+      );
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">

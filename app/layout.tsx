@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Montaga, Montserrat } from "next/font/google";
 import { QueryProvider } from "@/components/QueryProvider";
+import { PatientNotificationToaster } from "@/components/patient/PatientNotificationToaster";
 import { SessionProvider } from "@/components/SessionProvider";
 import "@/app/globals.css";
 
@@ -43,6 +44,7 @@ export default function RootLayout({
         <SessionProvider>
           <QueryProvider>
             {children}
+            <PatientNotificationToaster />
           </QueryProvider>
         </SessionProvider>
       </body>
