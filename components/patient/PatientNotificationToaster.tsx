@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { USER_ROLE } from "@/lib/user-role";
@@ -120,19 +121,23 @@ export function PatientNotificationToaster() {
   return (
     <div className="pointer-events-none fixed right-4 top-4 z-[100] flex w-full max-w-sm flex-col gap-2">
       {toasts.map((toast) => (
-        <article
+        <Link
           key={toast.id}
-          className="pointer-events-auto rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-lg"
-          role="status"
-          aria-live="polite"
+          href="/patient/notifications"
+          className="pointer-events-auto block rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-lg transition-colors hover:bg-[#fafcff]"
         >
-          <p className="font-montserrat text-sm font-semibold text-[#333333]">
-            {toast.title}
-          </p>
-          <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-            {toast.message}
-          </p>
-        </article>
+          <article role="status" aria-live="polite">
+            <p className="font-montserrat text-sm font-semibold text-[#333333]">
+              {toast.title}
+            </p>
+            <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+              {toast.message}
+            </p>
+            <p className="mt-3 font-montserrat text-xs font-semibold text-[#2555F3]">
+              View notifications →
+            </p>
+          </article>
+        </Link>
       ))}
     </div>
   );
