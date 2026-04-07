@@ -1,0 +1,126 @@
+"use client";
+
+import { Bell } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import useInfiniteScroll from "react-infinite-scroll-hook";
+
+type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  createdAt: string;
+};
+
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
+
+export default function PatientNotificationsClient() {
+  const [items, setItems] = useState<NotificationItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const loadPage = useCallback(async (nextPage: number, append: boolean) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(
+        `/api/patient/notifications?page=${nextPage}&limit=10`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        items?: NotificationItem[];
+        hasMore?: boolean;
+      };
+      const nextItems = Array.isArray(data.items) ? data.items : [];
+      setHasMore(Boolean(data.hasMore));
+      setPage(nextPage);
+      setItems((current) => (append ? [...current, ...nextItems] : nextItems));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadPage(1, false);
+  }, [loadPage]);
+
+  const [sentryRef] = useInfiniteScroll({
+    loading: isLoading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadPage(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
+
+  return (
+    <section className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1
+            style={{
+              WebkitTextStroke: "0.08px #333333",
+              WebkitTextFillColor: "#333333",
+            }}
+            className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl"
+          >
+            Notifications
+          </h1>
+          <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+            Updates about booked, rescheduled, cancelled, and upcoming appointments.
+          </p>
+        </div>
+      </div>
+
+      {!isLoading && items.length === 0 ? (
+        <div className="mt-8 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fcfcfc] p-8 text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-[#f5f5f5] text-[#5E5E5E]">
+            <Bell className="size-5" aria-hidden />
+          </div>
+          <p className="mt-3 font-montserrat text-sm font-semibold text-[#333333]">
+            No notifications yet
+          </p>
+          <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+            Appointment updates will appear here.
+          </p>
+        </div>
+      ) : (
+        <ul className="mt-8 space-y-3">
+          {items.map((notification) => (
+            <li
+              key={notification.id}
+              className="rounded-xl border border-[#e5e5e5] bg-white p-4 transition-colors"
+            >
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+                <div className="w-full min-w-0">
+                  <p className="wrap-break-word font-montserrat text-sm font-semibold text-[#333333]">
+                    {notification.title}
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap wrap-break-word font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                    {notification.message}
+                  </p>
+                </div>
+                <time className="shrink-0 whitespace-nowrap font-montserrat text-xs text-[#9A9A9A] sm:pt-0.5">
+                  {formatDateTime(notification.createdAt)}
+                </time>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {(hasMore || isLoading) && (
+        <div ref={sentryRef} className="py-4 text-center font-montserrat text-sm text-[#5E5E5E]">
+          {isLoading ? "Loading..." : "Scroll for more"}
+        </div>
+      )}
+    </section>
+  );
+}

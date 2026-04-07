@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
 import { prescriptionToPlainTextForPdf } from "@/lib/prescription-pdf-text";
 import {
-  doctorLocalToUtc,
   formatTimeInPatientTz,
   formatDateInPatientTz,
   isDoctorTimeInPast,
@@ -33,6 +33,8 @@ export type PatientAppointmentItem = {
 };
 
 type TabKey = "upcoming" | "completed" | "cancelled";
+type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
+type DoctorOption = { id: string; name: string };
 
 /** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` text inset. */
 const SELECT_CHEVRON =
@@ -41,17 +43,6 @@ const SELECT_CHEVRON =
 
 function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
-}
-
-/** Compare by true chronological instant (date+time resolved in each doctor's timezone). */
-function compareAppointmentDateTime(
-  a: PatientAppointmentItem,
-  b: PatientAppointmentItem,
-) {
-  return (
-    doctorLocalToUtc(a.date, a.time, a.timezone).getTime() -
-    doctorLocalToUtc(b.date, b.time, b.timezone).getTime()
-  );
 }
 
 const PDF_MARGIN_X = 20;
@@ -115,35 +106,6 @@ async function downloadPrescriptionPdf(appointment: PatientAppointmentItem) {
   doc.save(`prescription-${fileDoctorName || "doctor"}-${appointment.date}.pdf`);
 }
 
-function localYMD(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-/** Monday–Sunday (local), bounds as YYYY-MM-DD inclusive. */
-function thisWeekBounds(): { start: string; end: string } {
-  const now = new Date();
-  const day = now.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now);
-  monday.setDate(now.getDate() + mondayOffset);
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
-  return { start: localYMD(monday), end: localYMD(sunday) };
-}
-
-function thisMonthBounds(): { start: string; end: string } {
-  const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  return { start: localYMD(first), end: localYMD(last) };
-}
-
-type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
-
 function badgeClass(kind: "consultation" | "status", value: string) {
   if (kind === "consultation") {
     return value === "Online"
@@ -165,77 +127,72 @@ function badgeClass(kind: "consultation" | "status", value: string) {
   }
 }
 
-export default function PatientAppointmentsClient({
-  appointments,
-}: {
-  appointments: PatientAppointmentItem[];
-}) {
+export default function PatientAppointmentsClient() {
+  const [appointments, setAppointments] = useState<PatientAppointmentItem[]>([]);
+  const [doctorOptions, setDoctorOptions] = useState<DoctorOption[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [tab, setTab] = useState<TabKey>("upcoming");
   const [doctorId, setDoctorId] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
+  const [error, setError] = useState<string | null>(null);
 
-  const { upcoming, completed, cancelled } = useMemo(() => {
-    const upcoming = appointments.filter(
-      (a) =>
-        (a.status === "PENDING" || a.status === "CONFIRMED") &&
-        !isDoctorTimeInPast(a.date, a.time, a.timezone),
-    );
-    const completed = appointments.filter((a) => a.status === "COMPLETED");
-    const cancelled = appointments.filter((a) => a.status === "CANCELLED");
-    return { upcoming, completed, cancelled };
-  }, [appointments]);
+  const effectiveDoctorId = useMemo(
+    () => (doctorOptions.some((d) => d.id === doctorId) ? doctorId : ""),
+    [doctorId, doctorOptions],
+  );
 
-  const doctorOptions = useMemo(() => {
-    const byId = new Map<string, string>();
-    for (const a of appointments) {
-      if (!byId.has(a.doctorId)) {
-        byId.set(a.doctorId, a.doctor.name);
+  const loadAppointments = useCallback(
+    async (nextPage: number, append: boolean) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams({
+          tab,
+          dateFilter,
+          page: String(nextPage),
+          limit: "10",
+        });
+        if (effectiveDoctorId) params.set("doctorId", effectiveDoctorId);
+        const res = await fetch(`/api/patient/appointments?${params.toString()}`, {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          setError("Failed to load appointments.");
+          return;
+        }
+        const data = (await res.json()) as {
+          items?: PatientAppointmentItem[];
+          doctorOptions?: DoctorOption[];
+          hasMore?: boolean;
+          page?: number;
+        };
+        const nextItems = Array.isArray(data.items) ? data.items : [];
+        setAppointments((current) => (append ? [...current, ...nextItems] : nextItems));
+        setDoctorOptions(Array.isArray(data.doctorOptions) ? data.doctorOptions : []);
+        setHasMore(Boolean(data.hasMore));
+        setPage(typeof data.page === "number" ? data.page : nextPage);
+      } catch {
+        setError("Failed to load appointments.");
+      } finally {
+        setIsLoading(false);
       }
-    }
-    return Array.from(byId.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [appointments]);
+    },
+    [dateFilter, effectiveDoctorId, tab],
+  );
 
-  const active =
-    tab === "upcoming" ? upcoming : tab === "completed" ? completed : cancelled;
+  useEffect(() => {
+    void loadAppointments(1, false);
+  }, [loadAppointments]);
 
-  const effectiveDoctorId = useMemo(() => {
-    if (!doctorId) return "";
-    return doctorOptions.some((d) => d.id === doctorId) ? doctorId : "";
-  }, [doctorId, doctorOptions]);
-
-  const filtered = useMemo(() => {
-    if (!effectiveDoctorId) return active;
-    return active.filter((a) => a.doctorId === effectiveDoctorId);
-  }, [active, effectiveDoctorId]);
-
-  const rangeFiltered = useMemo(() => {
-    if (dateFilter === "asc" || dateFilter === "desc") return filtered;
-    const today = localYMD(new Date());
-    if (dateFilter === "today") {
-      return filtered.filter((a) => a.date === today);
-    }
-    if (dateFilter === "week") {
-      const { start, end } = thisWeekBounds();
-      return filtered.filter((a) => a.date >= start && a.date <= end);
-    }
-    if (dateFilter === "month") {
-      const { start, end } = thisMonthBounds();
-      return filtered.filter((a) => a.date >= start && a.date <= end);
-    }
-    return filtered;
-  }, [filtered, dateFilter]);
-
-  const sortedFiltered = useMemo(() => {
-    const list = [...rangeFiltered];
-    const sortDesc = dateFilter === "desc";
-    list.sort((a, b) => {
-      const c = compareAppointmentDateTime(a, b);
-      return sortDesc ? -c : c;
-    });
-    return list;
-  }, [rangeFiltered, dateFilter]);
+  const [sentryRef] = useInfiniteScroll({
+    loading: isLoading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadAppointments(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
 
   return (
     <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
@@ -320,122 +277,86 @@ export default function PatientAppointmentsClient({
         </button>
       </div>
 
-      {appointments.length > 0 && (
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
-          {doctorOptions.length > 1 && (
-            <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
-              <label
-                htmlFor="patient-appointments-doctor-filter"
-                className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
-              >
-                Doctor
-              </label>
-              <select
-                id="patient-appointments-doctor-filter"
-                value={effectiveDoctorId}
-                onChange={(e) => setDoctorId(e.target.value)}
-                className={`w-full min-w-0 cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
-              >
-                <option value="">All doctors</option>
-                {doctorOptions.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
+        {doctorOptions.length > 0 && (
           <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
             <label
-              htmlFor="patient-appointments-date-filter"
+              htmlFor="patient-appointments-doctor-filter"
               className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
             >
-              Date
+              Doctor
             </label>
             <select
-              id="patient-appointments-date-filter"
-              value={dateFilter}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (
-                  v === "asc" ||
-                  v === "desc" ||
-                  v === "today" ||
-                  v === "week" ||
-                  v === "month"
-                ) {
-                  setDateFilter(v);
-                }
-              }}
+              id="patient-appointments-doctor-filter"
+              value={effectiveDoctorId}
+              onChange={(e) => setDoctorId(e.target.value)}
               className={`w-full min-w-0 cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
             >
-              <option value="desc">Latest first</option>
-              <option value="asc">Earliest first</option>
-              <option value="today">Today</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
+              <option value="">All doctors</option>
+              {doctorOptions.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
             </select>
           </div>
+        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
+          <label
+            htmlFor="patient-appointments-date-filter"
+            className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
+          >
+            Date
+          </label>
+          <select
+            id="patient-appointments-date-filter"
+            value={dateFilter}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (
+                v === "asc" ||
+                v === "desc" ||
+                v === "today" ||
+                v === "week" ||
+                v === "month"
+              ) {
+                setDateFilter(v);
+              }
+            }}
+            className={`w-full min-w-0 cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
+          >
+            <option value="desc">Latest first</option>
+            <option value="asc">Earliest first</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+          </select>
         </div>
-      )}
+      </div>
 
-      {filtered.length === 0 ? (
+      {error ? (
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
-          {active.length > 0 && effectiveDoctorId ? (
-            <>
-              <p className="font-montserrat text-sm font-medium text-[#333333]">
-                No appointments with this doctor
-                {tab === "upcoming"
-                  ? " in upcoming."
-                  : tab === "completed"
-                    ? " in completed."
-                    : " in cancelled."}
-              </p>
-              <button
-                type="button"
-                onClick={() => setDoctorId("")}
-                className="mt-3 font-montserrat text-sm font-medium text-[#2555F3] underline underline-offset-2 hover:text-[#1a45d9]"
-              >
-                Show all doctors
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="font-montserrat text-sm font-medium text-[#333333]">
-                {tab === "upcoming"
-                  ? "No upcoming appointments."
-                  : tab === "completed"
-                    ? "No completed appointments yet."
-                    : "No cancelled appointments."}
-              </p>
-              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-                {tab === "upcoming"
-                  ? "Book an appointment to get started."
-                  : "Your appointments will show up here once available."}
-              </p>
-            </>
-          )}
+          <p className="font-montserrat text-sm font-medium text-[#333333]">{error}</p>
         </div>
-      ) : rangeFiltered.length === 0 ? (
+      ) : !isLoading && appointments.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">
-            {dateFilter === "today"
-              ? "No appointments today."
-              : dateFilter === "week"
-                ? "No appointments this week."
-                : "No appointments this month."}
+            {tab === "upcoming"
+              ? "No upcoming appointments."
+              : tab === "completed"
+                ? "No completed appointments yet."
+                : "No cancelled appointments."}
           </p>
-          <button
-            type="button"
-            onClick={() => setDateFilter("desc")}
-            className="mt-3 cursor-pointer font-montserrat text-sm font-medium text-[#2555F3] underline underline-offset-2 hover:text-[#1a45d9]"
-          >
-            Show all dates
-          </button>
+          <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+            {tab === "upcoming"
+              ? "Book an appointment to get started."
+              : "Your appointments will show up here once available."}
+          </p>
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-4">
-          {sortedFiltered.map((a) => {
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
+          <div className="mt-6 grid w-full grid-cols-1 gap-4">
+            {appointments.map((a) => {
             const consultation = consultationLabel(a.consultationType);
             return (
               <div
@@ -547,7 +468,16 @@ export default function PatientAppointmentsClient({
                 )}
               </div>
             );
-          })}
+            })}
+            {(hasMore || isLoading) && (
+              <div
+                ref={sentryRef}
+                className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
+              >
+                {isLoading ? "Loading..." : "Scroll for more"}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
