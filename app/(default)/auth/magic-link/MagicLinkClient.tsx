@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { Container } from "@/components/layout/Container";
+import { getPostLoginPath } from "@/lib/post-login-redirect";
 
 function safeCallbackPath(raw: string): string {
   if (!raw || raw.length === 0) return "/patient/overview";
@@ -21,6 +22,9 @@ export default function MagicLinkClient({
 }) {
   const router = useRouter();
   const [status, setStatus] = useState<"working" | "error">("working");
+  const [errorMessage, setErrorMessage] = useState(
+    "This sign-in link is invalid or has expired. Please request a new one.",
+  );
 
   const callbackUrl = safeCallbackPath(callbackUrlRaw);
 
@@ -41,11 +45,23 @@ export default function MagicLinkClient({
       if (cancelled) return;
 
       if (result?.error) {
+        if (result.error === "DOCTOR_NOT_APPROVED") {
+          setErrorMessage(
+            "Your doctor account is pending admin approval. Please sign in again after approval.",
+          );
+        }
         setStatus("error");
         return;
       }
 
-      router.push(callbackUrl);
+      const session = await getSession();
+      const fallbackPath = getPostLoginPath({
+        role: session?.user?.role ?? null,
+        doctorApprovalStatus: session?.user?.doctorApprovalStatus ?? null,
+        profileComplete: session?.user?.profileComplete ?? true,
+      });
+      const nextPath = callbackUrl === "/patient/overview" ? fallbackPath : callbackUrl;
+      router.push(nextPath);
       router.refresh();
     }
 
@@ -63,7 +79,7 @@ export default function MagicLinkClient({
     ) : (
       <div className="flex flex-col gap-3">
         <p className="font-montserrat text-sm text-red-800 md:text-base">
-          This sign-in link is invalid or has expired. Please request a new one.
+          {errorMessage}
         </p>
         <Link
           href="/auth/signin"

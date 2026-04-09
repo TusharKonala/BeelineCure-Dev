@@ -8,11 +8,34 @@ import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { EmailVerificationTemplate } from "@/components/email-verification-template";
 
-const registerSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  email: z.string().email(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+const doctorProfileSchema = z.object({
+  specialization: z.string().min(2, "Specialization is required"),
+  licenseNumber: z.string().min(3, "License number is required"),
+  yearsExperience: z.number().int().min(0).max(80).optional(),
+  bio: z.string().max(3000).optional(),
+  profilePhotoUrl: z
+    .string()
+    .min(1, "Doctor profile photo is required")
+    .max(100_000, "Profile photo is too large"),
 });
+
+const registerSchema = z
+  .object({
+    name: z.string().min(1).max(255).optional(),
+    email: z.string().email(),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    role: z.enum(["PATIENT", "DOCTOR"]).optional().default("PATIENT"),
+    doctorProfile: doctorProfileSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.role === "DOCTOR" && !value.doctorProfile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Doctor profile details are required",
+        path: ["doctorProfile"],
+      });
+    }
+  });
 
 export async function POST(request: Request) {
   let body: unknown;
@@ -30,9 +53,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, email, password, role, doctorProfile } = parsed.data;
+  const normalizedEmail = email.trim().toLowerCase();
 
-  const existing = await prisma.user.findUnique({ where: { email } });
+  const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
     return NextResponse.json(
       { error: "An account with this email already exists" },
@@ -61,13 +85,26 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.create({
     data: {
-      email,
+      email: normalizedEmail,
       password: hashed,
       name: name ?? null,
-      role: UserRole.PATIENT,
+      role: role === "DOCTOR" ? UserRole.DOCTOR : UserRole.PATIENT,
+      profileComplete: true,
       emailVerifiedAt: null,
       emailVerificationTokenHash: verificationTokenHash,
       emailVerificationTokenExpiresAt: verificationTokenExpiresAt,
+      doctorProfile:
+        role === "DOCTOR" && doctorProfile
+          ? {
+              create: {
+                specialization: doctorProfile.specialization.trim(),
+                licenseNumber: doctorProfile.licenseNumber.trim(),
+                yearsExperience: doctorProfile.yearsExperience,
+                bio: doctorProfile.bio?.trim() || null,
+                profilePhotoUrl: doctorProfile.profilePhotoUrl.trim(),
+              },
+            }
+          : undefined,
     },
   });
 
@@ -87,7 +124,7 @@ export async function POST(request: Request) {
 
     const { error } = await resend.emails.send({
       from,
-      to: email,
+      to: normalizedEmail,
       subject: "Verify your email",
       react: EmailVerificationTemplate({
         recipientName: user.name ?? "there",
@@ -112,5 +149,8 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true }, { status: 201 });
+  return NextResponse.json(
+    { ok: true, role, requiresApproval: role === "DOCTOR" },
+    { status: 201 },
+  );
 }

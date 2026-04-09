@@ -3,17 +3,20 @@
 import { useState, type SVGProps } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { getSession, signIn } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getPostLoginPath } from "@/lib/post-login-redirect";
 
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/patient/overview";
   const registered = searchParams.get("registered") === "1";
+  const registeredRole = searchParams.get("role");
   const verified = searchParams.get("verified") === "1";
   const reset = searchParams.get("reset") === "1";
+  const oauthError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,12 +39,23 @@ export function SignInForm() {
       if (result?.error) {
         if (result.error === "EMAIL_NOT_VERIFIED") {
           setError("Please verify your email before signing in.");
+        } else if (result.error === "DOCTOR_NOT_APPROVED") {
+          setError(
+            "Your doctor account is pending admin approval. Please try again after approval.",
+          );
         } else {
           setError("Invalid email or password.");
         }
         return;
       }
-      router.push(callbackUrl);
+      const session = await getSession();
+      const fallbackPath = getPostLoginPath({
+        role: session?.user?.role ?? null,
+        doctorApprovalStatus: session?.user?.doctorApprovalStatus ?? null,
+        profileComplete: session?.user?.profileComplete ?? true,
+      });
+      const nextPath = callbackUrl === "/patient/overview" ? fallbackPath : callbackUrl;
+      router.push(nextPath);
       router.refresh();
     } finally {
       setPending(false);
@@ -96,7 +110,9 @@ export function SignInForm() {
 
       {registered && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
-          Account created. Please verify your email before signing in.
+          {registeredRole === "doctor"
+            ? "Doctor account created. Verify your email first; admin approval is required before dashboard access."
+            : "Account created. Please verify your email before signing in."}
         </p>
       )}
 
@@ -125,11 +141,17 @@ export function SignInForm() {
         </p>
       )}
 
+      {!error && oauthError === "DOCTOR_NOT_APPROVED" && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 font-montserrat text-sm text-amber-900">
+          Your doctor account is pending admin approval.
+        </p>
+      )}
+
       <Button
         type="button"
         variant="outline"
         className="h-11 w-full cursor-pointer gap-2 rounded-xl border-[#e5e5e5] bg-white font-montserrat text-sm font-medium text-[#333333] shadow-sm hover:bg-[#fafafa] md:h-12 md:text-base"
-        onClick={() => void signIn("google", { callbackUrl })}
+        onClick={() => void signIn("google", { callbackUrl: "/auth/post-signin" })}
       >
         <GoogleMark className="size-5 shrink-0" aria-hidden />
         Continue with Google

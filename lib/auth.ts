@@ -4,7 +4,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { createHash } from "crypto";
 import { z } from "zod";
-import { UserRole } from "@/generated/prisma/client";
+import { DoctorApprovalStatus, UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 
 const credentialsSchema = z.object({
@@ -23,6 +23,13 @@ async function authorizeMagicLink(rawToken: string) {
         magicLinkTokenHash: tokenHash,
         magicLinkTokenExpiresAt: { gt: now },
       },
+      include: {
+        doctorProfile: {
+          select: {
+            approvalStatus: true,
+          },
+        },
+      },
     });
     if (!user) return null;
 
@@ -40,11 +47,20 @@ async function authorizeMagicLink(rawToken: string) {
     });
     if (cleared.count !== 1) return null;
 
+    if (
+      user.role === UserRole.DOCTOR &&
+      user.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+    ) {
+      throw new Error("DOCTOR_NOT_APPROVED");
+    }
+
     return {
       id: user.id,
       email: user.email,
       name: user.name,
       role: user.role,
+      doctorApprovalStatus: user.doctorProfile?.approvalStatus ?? null,
+      profileComplete: user.profileComplete,
     };
   });
 }
@@ -76,6 +92,13 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
+          include: {
+            doctorProfile: {
+              select: {
+                approvalStatus: true,
+              },
+            },
+          },
         });
         if (!user?.password) return null;
 
@@ -87,12 +110,20 @@ export const authOptions: NextAuthOptions = {
         if (!user.emailVerifiedAt) {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
+        if (
+          user.role === UserRole.DOCTOR &&
+          user.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+        ) {
+          throw new Error("DOCTOR_NOT_APPROVED");
+        }
 
         return {
           id: user.id,
           email: user.email,
           name: user.name,
           role: user.role,
+          doctorApprovalStatus: user.doctorProfile?.approvalStatus ?? null,
+          profileComplete: user.profileComplete,
         };
       },
     }),
@@ -102,7 +133,7 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
   },
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger, session }) {
       if (user && account?.provider === "google") {
         const email = user.email;
         if (!email) {
@@ -117,21 +148,65 @@ export const authOptions: NextAuthOptions = {
             password: null,
             role: UserRole.PATIENT,
             emailVerifiedAt: new Date(),
+            profileComplete: false,
           },
           update: {
             name: user.name ?? undefined,
             emailVerifiedAt: new Date(),
           },
+          include: {
+            doctorProfile: {
+              select: {
+                approvalStatus: true,
+              },
+            },
+          },
         });
+        if (
+          dbUser.role === UserRole.DOCTOR &&
+          dbUser.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+        ) {
+          throw new Error("DOCTOR_NOT_APPROVED");
+        }
 
         token.id = dbUser.id;
         token.role = dbUser.role;
+        token.doctorApprovalStatus = dbUser.doctorProfile?.approvalStatus ?? null;
+        token.profileComplete = dbUser.profileComplete;
         return token;
       }
 
       if (user) {
         token.id = user.id;
         token.role = user.role;
+        token.doctorApprovalStatus = user.doctorApprovalStatus ?? null;
+        token.profileComplete = user.profileComplete ?? true;
+      }
+
+      if (trigger === "update" && session) {
+        if (typeof session.profileComplete === "boolean") {
+          token.profileComplete = session.profileComplete;
+        }
+      }
+
+      // Keep JWT claims in sync after onboarding actions that update DB state.
+      if (token.id && token.profileComplete === false) {
+        const latestUser = await prisma.user.findUnique({
+          where: { id: token.id },
+          include: {
+            doctorProfile: {
+              select: {
+                approvalStatus: true,
+              },
+            },
+          },
+        });
+        if (latestUser) {
+          token.role = latestUser.role;
+          token.doctorApprovalStatus =
+            latestUser.doctorProfile?.approvalStatus ?? null;
+          token.profileComplete = latestUser.profileComplete;
+        }
       }
       return token;
     },
@@ -139,6 +214,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         session.user.id = token.id;
         session.user.role = token.role;
+        session.user.doctorApprovalStatus = token.doctorApprovalStatus ?? null;
+        session.user.profileComplete = token.profileComplete ?? true;
       }
       return session;
     },
