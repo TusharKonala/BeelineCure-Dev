@@ -25,6 +25,7 @@ export function SignUpForm({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [photoUploadPending, setPhotoUploadPending] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -303,19 +304,41 @@ export function SignUpForm({
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                if (file.size > 2 * 1024 * 1024) {
-                  setError("Profile photo upload must be 2MB or less.");
-                  return;
-                }
-                const reader = new FileReader();
-                reader.onload = () => {
-                  if (typeof reader.result === "string") {
-                    setProfilePhotoUrl(reader.result);
+                void (async () => {
+                  setError(null);
+                  setPhotoUploadPending(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append("file", file);
+                    const res = await fetch("/api/uploads/doctor-photo", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    const data = (await res.json().catch(() => ({}))) as {
+                      error?: string;
+                      url?: string;
+                    };
+                    if (!res.ok || !data.url) {
+                      setError(data.error ?? "Unable to upload profile photo.");
+                      return;
+                    }
+                    setProfilePhotoUrl(data.url);
+                  } finally {
+                    setPhotoUploadPending(false);
                   }
-                };
-                reader.readAsDataURL(file);
+                })();
               }}
             />
+            {photoUploadPending && (
+              <p className="font-montserrat text-xs text-[#5E5E5E]">
+                Uploading image...
+              </p>
+            )}
+            {!photoUploadPending && profilePhotoUrl && (
+              <p className="font-montserrat text-xs text-emerald-700">
+                Photo uploaded successfully.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -340,10 +363,14 @@ export function SignUpForm({
 
       <Button
         type="submit"
-        disabled={pending}
+        disabled={pending || photoUploadPending}
         className="h-11 w-full cursor-pointer rounded-xl bg-[#2555F3] font-montserrat text-sm font-medium hover:bg-[#1e44c7] md:h-12 md:text-base"
       >
-        {pending ? "Creating account…" : "Sign up"}
+        {pending
+          ? "Creating account..."
+          : photoUploadPending
+            ? "Uploading photo..."
+            : "Sign up"}
       </Button>
 
       <p className="text-center font-montserrat text-sm text-[#5E5E5E]">
