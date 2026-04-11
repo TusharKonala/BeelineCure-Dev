@@ -112,7 +112,7 @@ export function SignUpForm({
         <div className="grid grid-cols-2 gap-2">
           <button
             type="button"
-            className={`h-11 rounded-xl border font-montserrat text-sm font-medium transition-colors ${
+            className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
               role === "PATIENT"
                 ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
                 : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
@@ -123,7 +123,7 @@ export function SignUpForm({
           </button>
           <button
             type="button"
-            className={`h-11 rounded-xl border font-montserrat text-sm font-medium transition-colors ${
+            className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
               role === "DOCTOR"
                 ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
                 : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"

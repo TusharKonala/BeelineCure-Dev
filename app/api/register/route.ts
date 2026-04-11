@@ -7,6 +7,7 @@ import { headers } from "next/headers";
 import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { EmailVerificationTemplate } from "@/components/email-verification-template";
+import { formatDoctorStoredName } from "@/lib/doctor-name";
 
 const doctorSignupSchema = z.object({
   specialization: z.string().min(2, "Specialization is required"),
@@ -56,6 +57,12 @@ export async function POST(request: Request) {
 
   const { name, email, password, role, doctor: doctorSignup } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
+  const emailLocal = normalizedEmail.split("@")[0] || "Doctor";
+
+  const resolvedUserName =
+    role === "DOCTOR"
+      ? formatDoctorStoredName(name, emailLocal)
+      : name?.trim() || null;
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
   if (existing) {
@@ -88,7 +95,7 @@ export async function POST(request: Request) {
     data: {
       email: normalizedEmail,
       password: hashed,
-      name: name ?? null,
+      name: resolvedUserName,
       role: role === "DOCTOR" ? UserRole.DOCTOR : UserRole.PATIENT,
       profileComplete: true,
       emailVerifiedAt: null,
@@ -98,7 +105,7 @@ export async function POST(request: Request) {
         role === "DOCTOR" && doctorSignup
           ? {
               create: {
-                name: name?.trim() || normalizedEmail.split("@")[0] || "Doctor",
+                name: formatDoctorStoredName(name, emailLocal),
                 specialization: doctorSignup.specialization.trim(),
                 licenseNumber: doctorSignup.licenseNumber.trim(),
                 yearsExperience: doctorSignup.yearsExperience,
