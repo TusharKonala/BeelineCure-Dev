@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { NextResponse } from "next/server";
 
 export async function GET(
@@ -6,8 +7,8 @@ export async function GET(
   { params }: { params: Promise<{ doctorId: string }> }
 ) {
   const { doctorId } = await params;
-  const doctor = await prisma.doctor.findUnique({
-    where: { id: doctorId },
+  const doctor = await prisma.doctor.findFirst({
+    where: publicDoctorByIdWhere(doctorId),
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });

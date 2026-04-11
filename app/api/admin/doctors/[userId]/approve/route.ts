@@ -21,15 +21,15 @@ export async function POST(
     return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
   }
 
-  const doctorProfile = await prisma.doctorProfile.findUnique({
+  const doctor = await prisma.doctor.findUnique({
     where: { userId },
     select: { id: true },
   });
-  if (!doctorProfile) {
+  if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
   }
 
-  await prisma.doctorProfile.update({
+  await prisma.doctor.update({
     where: { userId },
     data: {
       approvalStatus: DoctorApprovalStatus.APPROVED,

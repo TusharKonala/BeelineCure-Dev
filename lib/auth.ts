@@ -24,7 +24,7 @@ async function authorizeMagicLink(rawToken: string) {
         magicLinkTokenExpiresAt: { gt: now },
       },
       include: {
-        doctorProfile: {
+        doctor: {
           select: {
             approvalStatus: true,
           },
@@ -49,7 +49,7 @@ async function authorizeMagicLink(rawToken: string) {
 
     if (
       user.role === UserRole.DOCTOR &&
-      user.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+      user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
     ) {
       throw new Error("DOCTOR_NOT_APPROVED");
     }
@@ -59,7 +59,7 @@ async function authorizeMagicLink(rawToken: string) {
       email: user.email,
       name: user.name,
       role: user.role,
-      doctorApprovalStatus: user.doctorProfile?.approvalStatus ?? null,
+      doctorApprovalStatus: user.doctor?.approvalStatus ?? null,
       profileComplete: user.profileComplete,
     };
   });
@@ -93,7 +93,7 @@ export const authOptions: NextAuthOptions = {
         const user = await prisma.user.findUnique({
           where: { email: parsed.data.email },
           include: {
-            doctorProfile: {
+            doctor: {
               select: {
                 approvalStatus: true,
               },
@@ -112,7 +112,7 @@ export const authOptions: NextAuthOptions = {
         }
         if (
           user.role === UserRole.DOCTOR &&
-          user.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+          user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
         ) {
           throw new Error("DOCTOR_NOT_APPROVED");
         }
@@ -122,7 +122,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
-          doctorApprovalStatus: user.doctorProfile?.approvalStatus ?? null,
+          doctorApprovalStatus: user.doctor?.approvalStatus ?? null,
           profileComplete: user.profileComplete,
         };
       },
@@ -155,7 +155,7 @@ export const authOptions: NextAuthOptions = {
             emailVerifiedAt: new Date(),
           },
           include: {
-            doctorProfile: {
+            doctor: {
               select: {
                 approvalStatus: true,
               },
@@ -164,14 +164,14 @@ export const authOptions: NextAuthOptions = {
         });
         if (
           dbUser.role === UserRole.DOCTOR &&
-          dbUser.doctorProfile?.approvalStatus !== DoctorApprovalStatus.APPROVED
+          dbUser.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
         ) {
           throw new Error("DOCTOR_NOT_APPROVED");
         }
 
         token.id = dbUser.id;
         token.role = dbUser.role;
-        token.doctorApprovalStatus = dbUser.doctorProfile?.approvalStatus ?? null;
+        token.doctorApprovalStatus = dbUser.doctor?.approvalStatus ?? null;
         token.profileComplete = dbUser.profileComplete;
         return token;
       }
@@ -194,7 +194,7 @@ export const authOptions: NextAuthOptions = {
         const latestUser = await prisma.user.findUnique({
           where: { id: token.id },
           include: {
-            doctorProfile: {
+            doctor: {
               select: {
                 approvalStatus: true,
               },
@@ -204,7 +204,7 @@ export const authOptions: NextAuthOptions = {
         if (latestUser) {
           token.role = latestUser.role;
           token.doctorApprovalStatus =
-            latestUser.doctorProfile?.approvalStatus ?? null;
+            latestUser.doctor?.approvalStatus ?? null;
           token.profileComplete = latestUser.profileComplete;
         }
       }

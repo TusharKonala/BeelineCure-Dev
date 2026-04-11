@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import { randomBytes } from "crypto";
@@ -60,8 +61,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid date. Use YYYY-MM-DD." }, { status: 400 });
   }
 
-  const doctor = await prisma.doctor.findUnique({
-    where: { id: doctorId },
+  const doctor = await prisma.doctor.findFirst({
+    where: publicDoctorByIdWhere(doctorId),
     select: { id: true, timezone: true },
   });
 

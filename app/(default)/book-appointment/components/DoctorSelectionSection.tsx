@@ -62,7 +62,7 @@ export function DoctorSelectionSection() {
                 id: string;
                 name: string;
                 specialization: string;
-                image: string;
+                profilePhotoUrl: string;
               }) => (
                 <Link
                   key={doctor.id}
@@ -71,7 +71,7 @@ export function DoctorSelectionSection() {
                 >
                   <div className="relative w-full overflow-hidden rounded-t-2xl bg-[#f5f5f5] aspect-4/3 min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64">
                     <Image
-                      src={doctor.image}
+                      src={doctor.profilePhotoUrl}
                       alt={doctor.name}
                       fill
                       className="object-cover object-top"

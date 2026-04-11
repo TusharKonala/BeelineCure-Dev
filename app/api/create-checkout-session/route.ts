@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { BookingSessionStatus } from "@/generated/prisma/client";
 import { z } from "zod";
 
@@ -62,8 +63,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const doctor = await prisma.doctor.findUnique({
-      where: { id: bookingSession.doctorId },
+    const doctor = await prisma.doctor.findFirst({
+      where: publicDoctorByIdWhere(bookingSession.doctorId),
     });
 
     if (!doctor) {

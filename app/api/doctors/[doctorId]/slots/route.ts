@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { timeToMinutes } from "@/lib/time";
 import { NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus } from "@/generated/prisma/client";
@@ -56,8 +57,8 @@ export async function GET(
   }
 
   const [doctor, availabilities, appointments] = await Promise.all([
-    prisma.doctor.findUnique({
-      where: { id: doctorId },
+    prisma.doctor.findFirst({
+      where: publicDoctorByIdWhere(doctorId),
       select: { timezone: true },
     }),
     prisma.doctorAvailability.findMany({
@@ -75,6 +76,10 @@ export async function GET(
     }),
   ]);
 
+  if (!doctor) {
+    return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
+  }
+
   const slots = availabilities.flatMap((a) =>
     generateSlots(a.startTime, a.endTime, 30),
   );
@@ -85,6 +90,6 @@ export async function GET(
 
   return NextResponse.json({
     slots: available,
-    doctorTimezone: doctor?.timezone ?? "UTC",
+    doctorTimezone: doctor.timezone,
   });
 }

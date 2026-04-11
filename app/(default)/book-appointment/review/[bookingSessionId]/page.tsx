@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { Container } from "@/components/layout/Container";
 import { ConfirmAndPayButton } from "@/components/booking/ConfirmAndPayButton";
 import { notFound } from "next/navigation";
@@ -21,9 +22,13 @@ export default async function BookingReviewPage({ params }: PageProps) {
     notFound();
   }
 
-  const doctor = await prisma.doctor.findUnique({
-    where: { id: bookingSession.doctorId },
+  const doctor = await prisma.doctor.findFirst({
+    where: publicDoctorByIdWhere(bookingSession.doctorId),
   });
+
+  if (!doctor) {
+    notFound();
+  }
 
   // Time comparison is server-only; expiresAt is authoritative for checkout TTL (10 min).
   const isExpired =
@@ -51,7 +56,7 @@ export default async function BookingReviewPage({ params }: PageProps) {
               <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
                 <span className="font-medium text-[#111111]">Doctor</span>
                 <span className="text-[#5E5E5E] sm:text-right">
-                  {doctor?.name ?? "Your doctor"}
+                  {doctor.name}
                 </span>
               </div>
               <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">

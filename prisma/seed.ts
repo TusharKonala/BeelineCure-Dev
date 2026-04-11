@@ -1,6 +1,7 @@
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaClient, UserRole } from "../generated/prisma/client.js";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -11,7 +12,7 @@ const prisma = new PrismaClient({ adapter });
 type DoctorSeed = {
   name: string;
   specialization: string;
-  image: string;
+  profilePhotoUrl: string;
   timezone: string;
   /** One or more availability windows per calendar day. */
   dayBlocks: { startTime: string; endTime: string }[];
@@ -24,21 +25,21 @@ const doctorSeeds: DoctorSeed[] = [
   {
     name: "Dr. Sharma",
     specialization: "Cardiologist",
-    image: "/doctors/sharma.jpg",
+    profilePhotoUrl: "/doctors/sharma.jpg",
     timezone: "Asia/Kolkata",
     dayBlocks: [...dayBlock9to1],
   },
   {
     name: "Dr. Johnson",
     specialization: "General Physician",
-    image: "/doctors/johnson.jpg",
+    profilePhotoUrl: "/doctors/johnson.jpg",
     timezone: "America/New_York",
     dayBlocks: [...dayBlock9to1],
   },
   {
     name: "Dr. Fernandes",
     specialization: "Orthopedic",
-    image: "/doctors/fernandes.jpg",
+    profilePhotoUrl: "/doctors/fernandes.jpg",
     timezone: "Europe/Paris",
     dayBlocks: [...dayBlock9to1],
   },
@@ -72,7 +73,8 @@ async function main() {
       data: {
         name: seed.name,
         specialization: seed.specialization,
-        image: seed.image,
+        licenseNumber: "SEED",
+        profilePhotoUrl: seed.profilePhotoUrl,
         timezone: seed.timezone,
       },
     });
@@ -93,12 +95,34 @@ async function main() {
     }
   }
 
-  console.log("Cleared all users (sign up again manually).");
+  const adminEmail =
+    process.env.ADMIN_SEED_EMAIL ?? "admin-local@clinivo.test";
+  const adminPasswordPlain =
+    process.env.ADMIN_SEED_PASSWORD ?? "ClinivoAdmin2026!";
+
+  await prisma.user.create({
+    data: {
+      email: adminEmail,
+      password: await bcrypt.hash(adminPasswordPlain, 12),
+      name: "Local Admin",
+      role: UserRole.ADMIN,
+      emailVerifiedAt: new Date(),
+      profileComplete: true,
+    },
+  });
+
+  console.log(
+    "Cleared all users, then seeded a local admin account (see below).",
+  );
+
   console.log(
     `Seeded ${doctorSeeds.length} doctors: ${doctorSeeds.map((d) => `${d.name} (${d.timezone})`).join(", ")}`,
   );
   console.log(
     `Availability: ${daysToSeed} days, 9:00–13:00 local (30 min slots) per doctor.`,
+  );
+  console.log(
+    `Admin: ${adminEmail} (set ADMIN_SEED_EMAIL / ADMIN_SEED_PASSWORD in .env to override; default password only for local dev).`,
   );
 }
 

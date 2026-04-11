@@ -8,7 +8,7 @@ import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { EmailVerificationTemplate } from "@/components/email-verification-template";
 
-const doctorProfileSchema = z.object({
+const doctorSignupSchema = z.object({
   specialization: z.string().min(2, "Specialization is required"),
   licenseNumber: z.string().min(3, "License number is required"),
   yearsExperience: z.number().int().min(0).max(80).optional(),
@@ -17,6 +17,7 @@ const doctorProfileSchema = z.object({
     .string()
     .min(1, "Doctor profile photo is required")
     .max(100_000, "Profile photo is too large"),
+  timezone: z.string().min(1).max(128),
 });
 
 const registerSchema = z
@@ -25,14 +26,14 @@ const registerSchema = z
     email: z.string().email(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     role: z.enum(["PATIENT", "DOCTOR"]).optional().default("PATIENT"),
-    doctorProfile: doctorProfileSchema.optional(),
+    doctor: doctorSignupSchema.optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.role === "DOCTOR" && !value.doctorProfile) {
+    if (value.role === "DOCTOR" && !value.doctor) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Doctor profile details are required",
-        path: ["doctorProfile"],
+        path: ["doctor"],
       });
     }
   });
@@ -53,7 +54,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, password, role, doctorProfile } = parsed.data;
+  const { name, email, password, role, doctor: doctorSignup } = parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
 
   const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -93,15 +94,17 @@ export async function POST(request: Request) {
       emailVerifiedAt: null,
       emailVerificationTokenHash: verificationTokenHash,
       emailVerificationTokenExpiresAt: verificationTokenExpiresAt,
-      doctorProfile:
-        role === "DOCTOR" && doctorProfile
+      doctor:
+        role === "DOCTOR" && doctorSignup
           ? {
               create: {
-                specialization: doctorProfile.specialization.trim(),
-                licenseNumber: doctorProfile.licenseNumber.trim(),
-                yearsExperience: doctorProfile.yearsExperience,
-                bio: doctorProfile.bio?.trim() || null,
-                profilePhotoUrl: doctorProfile.profilePhotoUrl.trim(),
+                name: name?.trim() || normalizedEmail.split("@")[0] || "Doctor",
+                specialization: doctorSignup.specialization.trim(),
+                licenseNumber: doctorSignup.licenseNumber.trim(),
+                yearsExperience: doctorSignup.yearsExperience,
+                bio: doctorSignup.bio?.trim() || null,
+                profilePhotoUrl: doctorSignup.profilePhotoUrl.trim(),
+                timezone: doctorSignup.timezone.trim(),
               },
             }
           : undefined,

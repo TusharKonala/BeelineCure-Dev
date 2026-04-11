@@ -21,6 +21,7 @@ export function SignUpForm({
   const [licenseNumber, setLicenseNumber] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
   const [bio, setBio] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function SignUpForm({
           email: email.trim(),
           password,
           role,
-          doctorProfile:
+          doctor:
             role === "DOCTOR"
               ? {
                   specialization: specialization.trim(),
@@ -62,6 +63,7 @@ export function SignUpForm({
                       : undefined,
                   bio: bio.trim() || undefined,
                   profilePhotoUrl: profilePhotoUrl.trim() || undefined,
+                  timezone: timezone.trim(),
                 }
               : undefined,
         }),
@@ -226,6 +228,37 @@ export function SignUpForm({
               onChange={(e) => setSpecialization(e.target.value)}
               className={inputClassName}
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-timezone"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Clinic timezone
+            </label>
+            <select
+              id="signup-timezone"
+              name="timezone"
+              required
+              value={timezone}
+              onChange={(e) => setTimezone(e.target.value)}
+              className={`${inputClassName} cursor-pointer`}
+            >
+              <option value="UTC">UTC</option>
+              <option value="America/New_York">America/New_York</option>
+              <option value="America/Chicago">America/Chicago</option>
+              <option value="America/Los_Angeles">America/Los_Angeles</option>
+              <option value="Europe/London">Europe/London</option>
+              <option value="Europe/Paris">Europe/Paris</option>
+              <option value="Asia/Dubai">Asia/Dubai</option>
+              <option value="Asia/Kolkata">Asia/Kolkata</option>
+              <option value="Asia/Singapore">Asia/Singapore</option>
+              <option value="Australia/Sydney">Australia/Sydney</option>
+            </select>
+            <p className="font-montserrat text-xs text-[#5E5E5E]">
+              Used for your availability and appointment times.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

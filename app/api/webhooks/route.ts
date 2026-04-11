@@ -22,6 +22,7 @@ import {
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -87,8 +88,8 @@ export async function POST(request: NextRequest) {
       return new NextResponse("OK", { status: 200 });
     }
 
-    const doctor = await prisma.doctor.findUnique({
-      where: { id: bookingSession.doctorId },
+    const doctor = await prisma.doctor.findFirst({
+      where: publicDoctorByIdWhere(bookingSession.doctorId),
     });
 
     if (!doctor) {

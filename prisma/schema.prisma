@@ -82,24 +82,8 @@ model User {
   updatedAt DateTime @updatedAt
 
   healthProfile HealthProfile?
-  doctorProfile DoctorProfile?
+  doctor        Doctor?
   notifications Notification[]
-}
-
-model DoctorProfile {
-  id              String               @id @default(cuid())
-  userId          String               @unique
-  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  specialization  String
-  licenseNumber   String
-  yearsExperience Int?
-  bio             String?              @db.Text
-  profilePhotoUrl String
-  approvalStatus  DoctorApprovalStatus @default(PENDING)
-  approvedAt      DateTime?
-  approvedByUserId String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
 }
 
 model HealthProfile {
@@ -136,17 +120,27 @@ model HealthProfile {
 }
 
 model Doctor {
-  id              String               @id @default(cuid())
-  name            String
-  specialization  String
-  image           String
+  id               String               @id @default(cuid())
+  /// Set when this row is tied to a user account (doctor signup); null for seeded doctors.
+  userId           String?              @unique
+  user             User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name             String
+  specialization   String
+  licenseNumber    String
+  yearsExperience  Int?
+  bio              String?              @db.Text
+  profilePhotoUrl  String
   /// IANA timezone for the doctor's clinic (e.g. "America/New_York").
   /// All availability times and stored appointment times are in this timezone.
-  timezone        String               @default("UTC")
-  createdAt       DateTime             @default(now())
-  availabilities  DoctorAvailability[]
-  appointments    Appointment[]
-  bookingSessions BookingSession[]
+  timezone         String               @default("UTC")
+  approvalStatus   DoctorApprovalStatus @default(PENDING)
+  approvedAt       DateTime?
+  approvedByUserId String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  availabilities   DoctorAvailability[]
+  appointments     Appointment[]
+  bookingSessions  BookingSession[]
 }
 
 model DoctorAvailability {
