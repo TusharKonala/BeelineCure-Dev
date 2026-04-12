@@ -59,7 +59,11 @@ async function getSlots(
   doctorId: string,
   date: string,
   excludeAppointmentId: string,
-): Promise<{ slots: string[]; doctorTimezone: string }> {
+): Promise<{
+  slots: string[];
+  doctorTimezone: string;
+  slotDurationMinutes: number;
+}> {
   const res = await fetch(
     `/api/doctors/${doctorId}/slots?date=${encodeURIComponent(
       date,
@@ -145,6 +149,7 @@ function RescheduleContent() {
 
   const slots = slotsData?.slots ?? [];
   const doctorTz = slotsData?.doctorTimezone ?? appointment?.timezone ?? "UTC";
+  const slotDurationMinutes = slotsData?.slotDurationMinutes ?? 30;
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
 
   const filteredSlots = slots.filter(
@@ -324,6 +329,11 @@ function RescheduleContent() {
                         <h2 className="font-montaga text-xl font-semibold leading-tight text-[#333333]">
                           Available times
                         </h2>
+                        {!slotsLoadingOrFetching && (
+                          <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+                            {slotDurationMinutes}-minute appointments
+                          </p>
+                        )}
 
                         {slotsLoadingOrFetching && (
                           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">

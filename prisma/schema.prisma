@@ -133,6 +133,8 @@ model Doctor {
   /// IANA timezone for the doctor's clinic (e.g. "America/New_York").
   /// All availability times and stored appointment times are in this timezone.
   timezone         String               @default("UTC")
+  /// Length of each bookable slot (minutes). Used when generating and displaying slots.
+  slotDurationMinutes Int               @default(30)
   approvalStatus   DoctorApprovalStatus @default(PENDING)
   approvedAt       DateTime?
   approvedByUserId String?

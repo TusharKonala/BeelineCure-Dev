@@ -1,0 +1,282 @@
+import { UserRole } from "@/generated/prisma/client";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import {
+  coerceAllowedSlotDurationMinutes,
+  expandAvailabilityRows,
+  inferSlotDurationMinutesFromRows,
+  isValidSlotStartForDuration,
+  slotEndFromStart,
+} from "@/lib/doctor-availability-slots";
+import {
+  enumerateInclusiveYmd,
+  getDoctorLocalTodayIso,
+  ymdToPrismaDate,
+} from "@/lib/doctor-local-date";
+import { getServerSession } from "next-auth/next";
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const durationSchema = z.union([
+  z.literal(15),
+  z.literal(30),
+  z.literal(45),
+  z.literal(60),
+]);
+
+function parseYmdOrNull(s: string | null): string | null {
+  if (!s?.trim()) return null;
+  const t = s.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const d = new Date(t + "T12:00:00.000Z");
+  if (Number.isNaN(d.getTime())) return null;
+  return t;
+}
+
+const putBodySchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("range"),
+    startDate: ymd,
+    endDate: ymd,
+    slotStarts: z.array(z.string()),
+    slotDurationMinutes: durationSchema,
+  }),
+  z.object({
+    mode: z.literal("single"),
+    singleDate: ymd,
+    slotStarts: z.array(z.string()),
+    slotDurationMinutes: durationSchema,
+  }),
+]);
+
+const patchBodySchema = z.object({
+  slotDurationMinutes: durationSchema,
+});
+
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== UserRole.DOCTOR) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, timezone: true, slotDurationMinutes: true },
+  });
+  if (!doctor) {
+    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+  }
+
+  const tz = doctor.timezone;
+  const today = getDoctorLocalTodayIso(tz);
+  const fallbackDuration = coerceAllowedSlotDurationMinutes(
+    doctor.slotDurationMinutes,
+  );
+
+  const view = request.nextUrl.searchParams.get("view");
+  if (view === "list") {
+    const rows = await prisma.doctorAvailability.findMany({
+      where: {
+        doctorId: doctor.id,
+        date: { gte: ymdToPrismaDate(today) },
+      },
+      select: { date: true, startTime: true, endTime: true },
+      orderBy: [{ date: "asc" }, { startTime: "asc" }],
+    });
+
+    const byDate = new Map<string, { startTime: string; endTime: string }[]>();
+    for (const r of rows) {
+      const key = r.date.toISOString().slice(0, 10);
+      const list = byDate.get(key) ?? [];
+      list.push({ startTime: r.startTime, endTime: r.endTime });
+      byDate.set(key, list);
+    }
+
+    const days: { date: string; slotStarts: string[] }[] = [];
+    for (const [dateStr, windows] of byDate) {
+      const slotStarts = expandAvailabilityRows(windows, fallbackDuration);
+      if (slotStarts.length === 0) continue;
+      days.push({ date: dateStr, slotStarts });
+    }
+    days.sort((a, b) => a.date.localeCompare(b.date));
+
+    return NextResponse.json({
+      timezone: tz,
+      today,
+      slotDurationMinutes: fallbackDuration,
+      days,
+    });
+  }
+
+  const dateParam = parseYmdOrNull(request.nextUrl.searchParams.get("date"));
+  if (dateParam === null && request.nextUrl.searchParams.has("date")) {
+    return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+  }
+
+  if (!dateParam) {
+    return NextResponse.json({
+      timezone: tz,
+      today,
+      slotDurationMinutes: fallbackDuration,
+    });
+  }
+
+  if (dateParam < today) {
+    return NextResponse.json(
+      { error: "Cannot load availability for past dates" },
+      { status: 400 },
+    );
+  }
+
+  const rows = await prisma.doctorAvailability.findMany({
+    where: { doctorId: doctor.id, date: ymdToPrismaDate(dateParam) },
+    select: { startTime: true, endTime: true },
+  });
+
+  const slotDurationMinutes = inferSlotDurationMinutesFromRows(
+    rows,
+    fallbackDuration,
+  );
+
+  return NextResponse.json({
+    timezone: tz,
+    today,
+    slotDurationMinutes,
+    slotStarts: expandAvailabilityRows(rows, fallbackDuration),
+  });
+}
+
+export async function PATCH(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== UserRole.DOCTOR) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let parsed: z.infer<typeof patchBodySchema>;
+  try {
+    const json: unknown = await request.json();
+    parsed = patchBodySchema.parse(json);
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  if (!doctor) {
+    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+  }
+
+  await prisma.doctor.update({
+    where: { id: doctor.id },
+    data: { slotDurationMinutes: parsed.slotDurationMinutes },
+  });
+
+  return NextResponse.json({ ok: true, slotDurationMinutes: parsed.slotDurationMinutes });
+}
+
+export async function PUT(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== UserRole.DOCTOR) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, timezone: true },
+  });
+  if (!doctor) {
+    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+  }
+
+  let parsed: z.infer<typeof putBodySchema>;
+  try {
+    const json: unknown = await request.json();
+    parsed = putBodySchema.parse(json);
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const tz = doctor.timezone;
+  const today = getDoctorLocalTodayIso(tz);
+  const duration = parsed.slotDurationMinutes;
+
+  const slotStarts = [...new Set(parsed.slotStarts)];
+  for (const s of slotStarts) {
+    if (!isValidSlotStartForDuration(s, duration)) {
+      return NextResponse.json(
+        {
+          error: `Each slot must align to a ${duration}-minute schedule (valid start times for this duration).`,
+        },
+        { status: 400 },
+      );
+    }
+  }
+  slotStarts.sort();
+
+  let affectedYmd: string[];
+  if (parsed.mode === "range") {
+    if (parsed.startDate > parsed.endDate) {
+      return NextResponse.json(
+        { error: "startDate must be on or before endDate" },
+        { status: 400 },
+      );
+    }
+    affectedYmd = enumerateInclusiveYmd(parsed.startDate, parsed.endDate);
+  } else {
+    affectedYmd = [parsed.singleDate];
+  }
+
+  if (affectedYmd.length === 0) {
+    return NextResponse.json({ error: "No dates in range" }, { status: 400 });
+  }
+
+  for (const d of affectedYmd) {
+    if (d < today) {
+      return NextResponse.json(
+        { error: "Cannot set availability for past dates" },
+        { status: 400 },
+      );
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.doctor.update({
+      where: { id: doctor.id },
+      data: { slotDurationMinutes: duration },
+    });
+    for (const ymdStr of affectedYmd) {
+      const date = ymdToPrismaDate(ymdStr);
+      await tx.doctorAvailability.deleteMany({
+        where: { doctorId: doctor.id, date },
+      });
+      if (slotStarts.length > 0) {
+        await tx.doctorAvailability.createMany({
+          data: slotStarts.map((startTime) => ({
+            doctorId: doctor.id,
+            date,
+            startTime,
+            endTime: slotEndFromStart(startTime, duration),
+          })),
+        });
+      }
+    }
+  });
+
+  return NextResponse.json({
+    ok: true,
+    affectedDates: affectedYmd.length,
+  });
+}

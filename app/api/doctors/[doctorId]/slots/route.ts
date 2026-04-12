@@ -1,28 +1,12 @@
 import { prisma } from "@/lib/db";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
-import { timeToMinutes } from "@/lib/time";
+import {
+  coerceAllowedSlotDurationMinutes,
+  expandAvailabilityRows,
+  inferSlotDurationMinutesFromRows,
+} from "@/lib/doctor-availability-slots";
 import { NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus } from "@/generated/prisma/client";
-
-function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function generateSlots(
-  startTime: string,
-  endTime: string,
-  intervalMinutes: number,
-): string[] {
-  const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
-  const slots: string[] = [];
-  for (let t = start; t + intervalMinutes <= end; t += intervalMinutes) {
-    slots.push(minutesToTime(t));
-  }
-  return slots;
-}
 
 export async function GET(
   request: NextRequest,
@@ -59,7 +43,7 @@ export async function GET(
   const [doctor, availabilities, appointments] = await Promise.all([
     prisma.doctor.findFirst({
       where: publicDoctorByIdWhere(doctorId),
-      select: { timezone: true },
+      select: { timezone: true, slotDurationMinutes: true },
     }),
     prisma.doctorAvailability.findMany({
       where: { doctorId, date },
@@ -80,9 +64,13 @@ export async function GET(
     return NextResponse.json({ error: "Doctor not found" }, { status: 404 });
   }
 
-  const slots = availabilities.flatMap((a) =>
-    generateSlots(a.startTime, a.endTime, 30),
-  );
+  const fallback = coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
+  const rows = availabilities.map((a) => ({
+    startTime: a.startTime,
+    endTime: a.endTime,
+  }));
+  const slots = expandAvailabilityRows(rows, fallback);
+  const slotDurationMinutes = inferSlotDurationMinutesFromRows(rows, fallback);
 
   const booked = new Set(appointments.map((a) => a.time));
 
@@ -91,5 +79,6 @@ export async function GET(
   return NextResponse.json({
     slots: available,
     doctorTimezone: doctor.timezone,
+    slotDurationMinutes,
   });
 }

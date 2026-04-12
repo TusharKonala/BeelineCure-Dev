@@ -1,5 +1,5 @@
-import { DoctorPlaceholderPage } from "@/components/doctor/DoctorPlaceholderPage";
+import { MyScheduleClient } from "./MyScheduleClient";
 
 export default function DoctorMySchedulePage() {
-  return <DoctorPlaceholderPage title="My Schedule" />;
+  return <MyScheduleClient />;
 }
