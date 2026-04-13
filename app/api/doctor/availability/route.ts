@@ -44,13 +44,13 @@ const putBodySchema = z.discriminatedUnion("mode", [
     startDate: ymd,
     endDate: ymd,
     slotStarts: z.array(z.string()),
-    slotDurationMinutes: durationSchema,
+    slotDurationMinutes: durationSchema.optional(),
   }),
   z.object({
     mode: z.literal("single"),
     singleDate: ymd,
     slotStarts: z.array(z.string()),
-    slotDurationMinutes: durationSchema,
+    slotDurationMinutes: durationSchema.optional(),
   }),
 ]);
 
@@ -198,7 +198,7 @@ export async function PUT(request: Request) {
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, timezone: true },
+    select: { id: true, timezone: true, slotDurationMinutes: true },
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
@@ -214,7 +214,9 @@ export async function PUT(request: Request) {
 
   const tz = doctor.timezone;
   const today = getDoctorLocalTodayIso(tz);
-  const duration = parsed.slotDurationMinutes;
+  const duration =
+    parsed.slotDurationMinutes ??
+    coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
 
   const slotStarts = [...new Set(parsed.slotStarts)];
   for (const s of slotStarts) {
