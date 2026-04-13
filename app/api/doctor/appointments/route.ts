@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 type TabKey = "upcoming" | "completed" | "cancelled";
+type DateFilterValue = "asc" | "desc";
 
 function normalizeTab(raw: string | null): TabKey {
   if (raw === "completed") return "completed";
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
   }
 
   const tab = normalizeTab(request.nextUrl.searchParams.get("tab"));
+  const patientName = (request.nextUrl.searchParams.get("patientName") ?? "").trim();
+  const dateFilter = request.nextUrl.searchParams.get("dateFilter") === "asc" ? "asc" : "desc";
   const statuses =
     tab === "completed"
       ? [AppointmentStatus.COMPLETED]
@@ -37,25 +40,42 @@ export async function GET(request: NextRequest) {
         ? [AppointmentStatus.CANCELLED]
         : [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED];
 
-  const appointments = await prisma.appointment.findMany({
-    where: {
-      doctorId: doctor.id,
-      status: { in: statuses },
-    },
-    orderBy: [{ date: "desc" }, { time: "desc" }],
-    select: {
-      id: true,
-      patientName: true,
-      email: true,
-      phone: true,
-      date: true,
-      time: true,
-      timezone: true,
-      consultationType: true,
-      status: true,
-      notes: true,
-    },
-  });
+  const baseWhere = {
+    doctorId: doctor.id,
+    status: { in: statuses },
+  } as const;
+
+  const selectedWhere = patientName ? { ...baseWhere, patientName } : baseWhere;
+  const sortDesc = (dateFilter as DateFilterValue) !== "asc";
+
+  const [appointments, optionSourceAppointments] = await Promise.all([
+    prisma.appointment.findMany({
+      where: selectedWhere,
+      orderBy: [{ date: sortDesc ? "desc" : "asc" }, { time: sortDesc ? "desc" : "asc" }],
+      select: {
+        id: true,
+        patientName: true,
+        email: true,
+        phone: true,
+        date: true,
+        time: true,
+        timezone: true,
+        consultationType: true,
+        status: true,
+        notes: true,
+      },
+    }),
+    prisma.appointment.findMany({
+      where: baseWhere,
+      select: {
+        patientName: true,
+      },
+    }),
+  ]);
+
+  const patientOptions = Array.from(
+    new Set(optionSourceAppointments.map((appointment) => appointment.patientName)),
+  ).sort((a, b) => a.localeCompare(b));
 
   return NextResponse.json({
     items: appointments.map((a) => ({
@@ -70,5 +90,6 @@ export async function GET(request: NextRequest) {
       status: a.status,
       notes: a.notes,
     })),
+    patientOptions,
   });
 }
