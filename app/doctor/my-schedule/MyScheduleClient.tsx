@@ -12,6 +12,7 @@ import {
   DEFAULT_SLOT_WINDOW_END,
   DEFAULT_SLOT_WINDOW_START,
   generateSlots,
+  minutesToTime,
   type AllowedSlotDurationMinutes,
 } from "@/lib/doctor-availability-slots";
 import { timeToMinutes } from "@/lib/time";
@@ -57,6 +58,13 @@ export function MyScheduleClient() {
   const rangeEndInputRef = useRef<HTMLInputElement>(null);
   const slotWindowStartInputRef = useRef<HTMLInputElement>(null);
   const slotWindowEndInputRef = useRef<HTMLInputElement>(null);
+  /** Latest window for async fetch when the loaded day has no saved slots (keep previous window). */
+  const slotWindowStartRef = useRef(DEFAULT_SLOT_WINDOW_START);
+  const slotWindowEndRef = useRef(DEFAULT_SLOT_WINDOW_END);
+  /** Latest slot length (matches `slotDurationMinutes`) for fetch fallback when API omits or invalidates duration. */
+  const slotDurationRef = useRef<AllowedSlotDurationMinutes>(
+    DEFAULT_SLOT_DURATION_MINUTES,
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -107,8 +115,15 @@ export function MyScheduleClient() {
     [slotWindowStart, slotWindowEnd, slotDurationMinutes],
   );
 
-  const displaySlotsRef = useRef(displaySlots);
-  displaySlotsRef.current = displaySlots;
+  useEffect(() => {
+    slotWindowStartRef.current = slotWindowStart;
+  }, [slotWindowStart]);
+  useEffect(() => {
+    slotWindowEndRef.current = slotWindowEnd;
+  }, [slotWindowEnd]);
+  useEffect(() => {
+    slotDurationRef.current = slotDurationMinutes;
+  }, [slotDurationMinutes]);
 
   const fetchSlotsForDate = useCallback(async (date: string) => {
     setLoadingSlots(true);
@@ -127,21 +142,46 @@ export function MyScheduleClient() {
         timezone: string;
         slotDurationMinutes?: number;
       };
-      if (
+
+      const rawStarts = [...data.slotStarts].sort();
+      const apiDurationValid =
         data.slotDurationMinutes !== undefined &&
         ALLOWED_SLOT_DURATION_MINUTES.includes(
           data.slotDurationMinutes as AllowedSlotDurationMinutes,
-        )
-      ) {
-        setSlotDurationMinutes(data.slotDurationMinutes as AllowedSlotDurationMinutes);
+        );
+      const apiDuration = apiDurationValid
+        ? (data.slotDurationMinutes as AllowedSlotDurationMinutes)
+        : slotDurationRef.current;
+      /** Empty days: API sends the doctor's global default, not a per-day save — keep the current Set-tab duration (ref). Days with saves: use inferred duration from rows. */
+      const duration: AllowedSlotDurationMinutes =
+        rawStarts.length > 0 ? apiDuration : slotDurationRef.current;
+      let windowStart = slotWindowStartRef.current;
+      let windowEnd = slotWindowEndRef.current;
+      if (rawStarts.length > 0) {
+        const first = rawStarts[0]!;
+        const last = rawStarts[rawStarts.length - 1]!;
+        const lastEndExclusive = minutesToTime(
+          timeToMinutes(last) + duration,
+        );
+        windowStart = alignWindowStartToSlotGrid(first, duration);
+        windowEnd = alignWindowEndExclusiveToSlotGrid(lastEndExclusive, duration);
+        slotWindowStartRef.current = windowStart;
+        slotWindowEndRef.current = windowEnd;
+        setSlotWindowStart(windowStart);
+        setSlotWindowEnd(windowEnd);
       }
+
+      setSlotDurationMinutes(duration);
+
       let starts = data.slotStarts;
       if (date === data.today) {
         starts = starts.filter(
           (t) => !isDoctorTimeInPast(date, t, data.timezone),
         );
       }
-      const allowed = new Set(displaySlotsRef.current);
+      const allowed = new Set(
+        generateSlots(windowStart, windowEnd, duration),
+      );
       setSelected(new Set(starts.filter((t) => allowed.has(t))));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load");
@@ -155,6 +195,7 @@ export function MyScheduleClient() {
   const applySlotDurationForEditing = useCallback(
     (minutes: AllowedSlotDurationMinutes) => {
       setSaveOk(null);
+      slotDurationRef.current = minutes;
       setSlotDurationMinutes(minutes);
       setSlotWindowStart((s) => alignWindowStartToSlotGrid(s, minutes));
       setSlotWindowEnd((e) => alignWindowEndExclusiveToSlotGrid(e, minutes));
