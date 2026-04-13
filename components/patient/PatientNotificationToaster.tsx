@@ -44,6 +44,9 @@ export function PatientNotificationToaster() {
 
     async function loadUnreadNotifications() {
       try {
+        const shouldNotifyOnInit =
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("notify") === "1";
         const res = await fetch("/api/notifications/unread", { cache: "no-store" });
         if (!res.ok) return;
 
@@ -58,10 +61,29 @@ export function PatientNotificationToaster() {
         );
 
         if (!hasInitializedRef.current) {
+          const latestNotification =
+            notifications.length > 0
+              ? [...notifications].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+              : null;
           notifications.forEach((notification) => {
             seenNotificationIdsRef.current.add(notification.id);
           });
           hasInitializedRef.current = true;
+          if (shouldNotifyOnInit && latestNotification && !cancelled) {
+            const now = Date.now();
+            setToasts((current) => {
+              if (current.some((toast) => toast.id === latestNotification.id)) {
+                return current;
+              }
+              return [
+                ...current,
+                {
+                  ...latestNotification,
+                  dismissAt: now + TOAST_TTL_MS,
+                },
+              ];
+            });
+          }
           return;
         }
 

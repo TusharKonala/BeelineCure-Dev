@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&notify=1`,
       cancel_url: `${origin}/book-appointment`,
       metadata: {
         bookingSessionId: bookingSession.id,
