@@ -55,6 +55,57 @@ export function formatDateInPatientTz(
 }
 
 /**
+ * Format a doctor-local date directly for doctor-facing UI.
+ * This intentionally does not convert across timezones.
+ */
+export function formatDateInDoctorTz(
+  dateStr: string,
+  timeStr: string,
+  doctorTimezone: string,
+): string {
+  void timeStr;
+  void doctorTimezone;
+  const [y, m, d] = dateStr.split("-").map((part) => Number(part));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return dateStr;
+  }
+
+  // Use UTC to preserve the exact calendar date label without timezone shifts.
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(y, m - 1, d, 12, 0, 0)));
+}
+
+/**
+ * Format a doctor-local time directly for doctor-facing UI.
+ * This intentionally does not convert across timezones.
+ */
+export function formatTimeInDoctorTz(
+  _dateStr: string,
+  timeStr: string,
+  doctorTimezone: string,
+): string {
+  void doctorTimezone;
+  const [hourRaw, minuteRaw] = timeStr.split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return timeStr;
+  }
+
+  const normalizedHour = ((hour % 24) + 24) % 24;
+  const period = normalizedHour >= 12 ? "PM" : "AM";
+  const hour12 = normalizedHour % 12 || 12;
+  const minuteLabel = String(minute).padStart(2, "0");
+  return `${hour12}:${minuteLabel} ${period}`;
+}
+
+/**
  * Check whether a doctor-local appointment time is in the past.
  */
 export function isDoctorTimeInPast(

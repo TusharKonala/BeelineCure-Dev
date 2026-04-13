@@ -1,7 +1,7 @@
 import { UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { formatDateInPatientTz, formatTimeInPatientTz } from "@/lib/timezone-display";
+import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 import { Container } from "@/components/layout/Container";
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
@@ -107,7 +107,7 @@ export default async function DoctorAppointmentsPage() {
                         <div className="mt-3 flex flex-col gap-1 font-montserrat text-sm text-[#333333] min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center">
                           <span>
                             <span className="font-medium">Date:</span>{" "}
-                            {formatDateInPatientTz(dateStr, a.time, a.timezone, a.timezone)}
+                            {formatDateInDoctorTz(dateStr, a.time, a.timezone)}
                           </span>
                           <span
                             className="hidden text-[#e5e5e5] min-[400px]:mx-2 min-[400px]:inline"
@@ -117,7 +117,7 @@ export default async function DoctorAppointmentsPage() {
                           </span>
                           <span>
                             <span className="font-medium">Time:</span>{" "}
-                            {formatTimeInPatientTz(dateStr, a.time, a.timezone, a.timezone)}
+                            {formatTimeInDoctorTz(dateStr, a.time, a.timezone)}
                           </span>
                         </div>
                       </div>
