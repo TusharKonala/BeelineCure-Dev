@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 type ListDay = { date: string; slotStarts: string[] };
+const ALL_MONTHS_VALUE = "__all_months__";
 
 function formatScheduleDayHeading(isoDate: string): string {
   const [y, m, d] = isoDate.split("-").map(Number);
@@ -191,6 +192,7 @@ export function ViewSchedulePanel({
       try {
         const res = await fetch(
           `/api/doctor/availability?date=${encodeURIComponent(d)}`,
+          { cache: "no-store" },
         );
         if (!res.ok) {
           const data = (await res.json()) as { error?: string };
@@ -217,7 +219,9 @@ export function ViewSchedulePanel({
   }, [quickCheckDate]);
 
   const loadList = useCallback(async () => {
-    const res = await fetch("/api/doctor/availability?view=list");
+    const res = await fetch("/api/doctor/availability?view=list", {
+      cache: "no-store",
+    });
     if (!res.ok) {
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Failed to load schedule");
@@ -254,12 +258,11 @@ export function ViewSchedulePanel({
       return;
     }
     const months = uniqueSortedMonths(days);
-    const currentYm = todayFromApi.slice(0, 7);
-    const defaultMonth = months.includes(currentYm) ? currentYm : months[0];
 
     setSelectedMonth((prev) => {
+      if (prev === ALL_MONTHS_VALUE) return prev;
       if (prev !== null && months.includes(prev)) return prev;
-      return defaultMonth;
+      return ALL_MONTHS_VALUE;
     });
   }, [days, todayFromApi]);
 
@@ -274,12 +277,16 @@ export function ViewSchedulePanel({
 
   const dateOptionsInMonth = useMemo(() => {
     if (!days?.length || !selectedMonth) return [];
+    if (selectedMonth === ALL_MONTHS_VALUE) return [...days.map((d) => d.date)].sort();
     return sortedDatesInMonth(days, selectedMonth);
   }, [days, selectedMonth]);
 
   const filteredDays = useMemo(() => {
     if (!days?.length || selectedMonth === null) return [];
-    let out = days.filter((d) => d.date.slice(0, 7) === selectedMonth);
+    let out =
+      selectedMonth === ALL_MONTHS_VALUE
+        ? [...days]
+        : days.filter((d) => d.date.slice(0, 7) === selectedMonth);
     if (selectedDateFilter !== "all") {
       out = out.filter((d) => d.date === selectedDateFilter);
     }
@@ -536,6 +543,7 @@ export function ViewSchedulePanel({
                   }}
                   className={scheduleFilterSelectClassName("mt-1.5")}
                 >
+                  <option value={ALL_MONTHS_VALUE}>All months</option>
                   {monthOptions.map((ym) => (
                     <option key={ym} value={ym}>
                       {formatMonthOptionLabel(ym)}

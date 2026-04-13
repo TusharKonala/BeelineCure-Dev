@@ -17,6 +17,9 @@ import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 const durationSchema = z.union([
