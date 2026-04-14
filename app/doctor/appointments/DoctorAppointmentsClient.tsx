@@ -6,7 +6,7 @@ import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-displ
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 type TabKey = "upcoming" | "completed" | "cancelled";
-type DateFilterValue = "asc" | "desc";
+type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
 
 type DoctorAppointmentItem = {
   id: string;
@@ -204,7 +204,7 @@ export default function DoctorAppointmentsClient() {
             value={dateFilter}
             onChange={(e) => {
               const v = e.target.value;
-              if (v === "asc" || v === "desc") {
+              if (v === "asc" || v === "desc" || v === "today" || v === "week" || v === "month") {
                 setDateFilter(v);
               }
             }}
@@ -212,6 +212,9 @@ export default function DoctorAppointmentsClient() {
           >
             <option value="desc">Latest first</option>
             <option value="asc">Earliest first</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
           </select>
         </div>
       </div>
