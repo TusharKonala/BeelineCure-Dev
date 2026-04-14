@@ -11,6 +11,10 @@ export interface EmailTemplateProps {
   consultationType: "CLINIC" | "ONLINE";
   cancelUrl: string;
   rescheduleUrl: string;
+  primaryActionLabel?: string;
+  primaryActionUrl?: string;
+  secondaryActionLabel?: string;
+  secondaryActionUrl?: string;
 }
 
 const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
@@ -32,7 +36,16 @@ export function EmailTemplate({
   consultationType,
   cancelUrl,
   rescheduleUrl,
+  primaryActionLabel,
+  primaryActionUrl,
+  secondaryActionLabel,
+  secondaryActionUrl,
 }: EmailTemplateProps) {
+  const firstActionLabel = primaryActionLabel ?? "Cancel Appointment";
+  const firstActionUrl = primaryActionUrl ?? cancelUrl;
+  const secondActionLabel = secondaryActionLabel ?? "Reschedule Appointment";
+  const secondActionUrl = secondaryActionUrl ?? rescheduleUrl;
+
   return (
     <div
       style={{ fontFamily: "sans-serif", maxWidth: "600px", margin: "0 auto" }}
@@ -79,30 +92,34 @@ export function EmailTemplate({
       )}
       {showActionLinks && (
         <>
-          <div style={{ marginTop: "1rem" }}>
-            <a
-              href={cancelUrl}
-              style={{
-                color: "#2555F3",
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
-              Cancel Appointment
-            </a>
-          </div>
-          <div style={{ marginTop: "0.75rem" }}>
-            <a
-              href={rescheduleUrl}
-              style={{
-                color: "#2555F3",
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
-              Reschedule Appointment
-            </a>
-          </div>
+          {firstActionLabel && firstActionUrl && (
+            <div style={{ marginTop: "1rem" }}>
+              <a
+                href={firstActionUrl}
+                style={{
+                  color: "#2555F3",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                {firstActionLabel}
+              </a>
+            </div>
+          )}
+          {secondActionLabel && secondActionUrl && (
+            <div style={{ marginTop: "0.75rem" }}>
+              <a
+                href={secondActionUrl}
+                style={{
+                  color: "#2555F3",
+                  textDecoration: "none",
+                  fontWeight: 600,
+                }}
+              >
+                {secondActionLabel}
+              </a>
+            </div>
+          )}
         </>
       )}
       <p

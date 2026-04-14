@@ -4,10 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
-import {
-  prescriptionToPlainTextForPdf,
-  type StructuredPrescription,
-} from "@/lib/prescription-pdf-text";
+import { type StructuredPrescription } from "@/lib/prescription-pdf-text";
+import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import {
   formatTimeInPatientTz,
   formatDateInPatientTz,
@@ -48,65 +46,16 @@ function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
 }
 
-const PDF_MARGIN_X = 20;
-const PDF_MAX_WIDTH = 170;
-const PDF_LINE = 6;
-const PDF_PAGE_BOTTOM = 285;
-
-async function downloadPrescriptionPdf(appointment: PatientAppointmentItem) {
+async function downloadPrescriptionPdfFromAppointment(appointment: PatientAppointmentItem) {
   if (!appointment.prescription) return;
-
-  const { jsPDF } = await import("jspdf");
-  const doc = new jsPDF();
-  const dateLabel = formatDateInPatientTz(
-    appointment.date,
-    appointment.time,
-    appointment.timezone,
-  );
-  const fileDoctorName = appointment.doctor.name.replace(/[^a-z0-9]+/gi, "-");
-
-  const body = prescriptionToPlainTextForPdf(appointment.prescription);
-
-  let y = 20;
-  doc.setFontSize(18);
-  doc.text("Prescription", PDF_MARGIN_X, y);
-  y += 14;
-
-  doc.setFontSize(11);
-  doc.text(`Doctor: ${appointment.doctor.name}`, PDF_MARGIN_X, y);
-  y += PDF_LINE;
-  doc.text(`Patient: ${appointment.patientName}`, PDF_MARGIN_X, y);
-  y += PDF_LINE;
-  doc.text(`Date: ${dateLabel}`, PDF_MARGIN_X, y);
-  y += 12;
-
-  doc.setFontSize(12);
-  doc.text("Prescription details", PDF_MARGIN_X, y);
-  y += 10;
-
-  doc.setFontSize(11);
-  // Split on blank lines for section spacing; keep single newlines (e.g. list items) as separate lines.
-  const paragraphs = body.split(/\n{2,}/).filter(Boolean);
-  for (const para of paragraphs) {
-    const logicalLines = para
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean);
-    for (const segment of logicalLines) {
-      const wrapped = doc.splitTextToSize(segment, PDF_MAX_WIDTH);
-      for (const line of wrapped) {
-        if (y > PDF_PAGE_BOTTOM) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(line, PDF_MARGIN_X, y);
-        y += PDF_LINE;
-      }
-    }
-    y += 4;
-  }
-
-  doc.save(`prescription-${fileDoctorName || "doctor"}-${appointment.date}.pdf`);
+  await downloadPrescriptionPdf({
+    doctorName: appointment.doctor.name,
+    patientName: appointment.patientName,
+    date: appointment.date,
+    time: appointment.time,
+    timezone: appointment.timezone,
+    prescription: appointment.prescription,
+  });
 }
 
 function badgeClass(kind: "consultation" | "status", value: string) {
@@ -463,7 +412,7 @@ export default function PatientAppointmentsClient() {
                       variant="outline"
                       size="sm"
                       className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
-                      onClick={() => void downloadPrescriptionPdf(a)}
+                      onClick={() => void downloadPrescriptionPdfFromAppointment(a)}
                     >
                       Download Prescription
                     </Button>

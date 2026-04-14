@@ -47,6 +47,7 @@ export const sendAppointmentReminder = inngest.createFunction(
       where: { id: appointmentId },
       select: {
         id: true,
+        doctorId: true,
         email: true,
         date: true,
         time: true,
@@ -166,6 +167,7 @@ export const sendPrescriptionReminder = inngest.createFunction(
       where: { id: appointmentId },
       select: {
         id: true,
+        doctorId: true,
         email: true,
         date: true,
         time: true,
@@ -212,8 +214,16 @@ export const sendPrescriptionReminder = inngest.createFunction(
       reminderType === "HALFWAY" ? "Medication Progress Check-in" : "Medication Course Completed";
     const message =
       reminderType === "HALFWAY"
-        ? `You are halfway through your medication course (${courseDaysText}). Please continue your prescribed medicines as directed by your doctor.`
-        : `You have completed your medication course (${courseDaysText}). If symptoms continue, please book a follow-up consultation.`;
+        ? `You are halfway through your medication course (${courseDaysText}). Please continue your prescribed medicines as advised by your doctor.`
+        : `You have completed your medication course (${courseDaysText}). If needed, you can book a follow-up consultation with the same doctor.`;
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    const viewPrescriptionUrl = `${origin}/patient/appointments/${encodeURIComponent(
+      appointment.id,
+    )}/prescription`;
+    const followUpUrl = `${origin}/book-appointment/${encodeURIComponent(appointment.doctorId)}`;
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -222,7 +232,7 @@ export const sendPrescriptionReminder = inngest.createFunction(
       react: EmailTemplate({
         heading,
         message,
-        showActionLinks: false,
+        showActionLinks: true,
         doctorName: appointment.doctor.name,
         appointmentDate: formatDateInPatientTz(
           dateStr,
@@ -238,8 +248,14 @@ export const sendPrescriptionReminder = inngest.createFunction(
         ),
         patientName: appointment.patientName,
         consultationType: appointment.consultationType,
-        cancelUrl: "",
-        rescheduleUrl: "",
+        cancelUrl: viewPrescriptionUrl,
+        rescheduleUrl: followUpUrl,
+        primaryActionLabel:
+          reminderType === "HALFWAY" ? "View prescription" : "Book a follow-up if needed",
+        primaryActionUrl:
+          reminderType === "HALFWAY" ? viewPrescriptionUrl : followUpUrl,
+        secondaryActionLabel: "",
+        secondaryActionUrl: "",
       }),
     });
 

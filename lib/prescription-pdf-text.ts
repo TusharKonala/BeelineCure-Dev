@@ -61,21 +61,19 @@ export function prescriptionToPlainTextForPdf(raw: string | StructuredPrescripti
   }
 
   if (!Array.isArray(raw.medicines) || raw.medicines.length === 0) return "";
-  const sections: string[] = [];
-
-  for (const [index, medicine] of raw.medicines.entries()) {
-    sections.push(
+  const medicineSections = raw.medicines.map((medicine, index) =>
+    [
       `${index + 1}. ${medicine.name}`,
       `Dosage: ${medicine.dosage}`,
       `Frequency: ${medicine.frequency}`,
       `Duration: ${medicine.durationDays} day${medicine.durationDays === 1 ? "" : "s"}`,
       `Instructions: ${medicine.instructions}`,
-    );
-  }
+    ].join("\n"),
+  );
 
   if (raw.generalNotes?.trim()) {
-    sections.push(`General notes: ${raw.generalNotes.trim()}`);
+    medicineSections.push(`General notes: ${raw.generalNotes.trim()}`);
   }
 
-  return sections.join("\n");
+  return medicineSections.join("\n\n");
 }
