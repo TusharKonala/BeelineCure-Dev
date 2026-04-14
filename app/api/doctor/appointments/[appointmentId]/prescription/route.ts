@@ -7,6 +7,8 @@ import {
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { inngest } from "@/inngest/client";
+import { prescriptionReminderTsFromSavedAt } from "@/lib/reminder-time";
 
 type MedicinePayload = {
   name: string;
@@ -138,6 +140,7 @@ export async function PUT(
     select: {
       id: true,
       status: true,
+      patientTimezone: true,
     },
   });
 
@@ -187,6 +190,38 @@ export async function PUT(
       },
     });
   });
+
+  const courseDays = Math.max(...medicines.map((medicine) => medicine.durationDays));
+  try {
+    const { halfwayTs, completedTs } = prescriptionReminderTsFromSavedAt(
+      new Date(),
+      appointment.patientTimezone,
+      courseDays,
+    );
+
+    if (halfwayTs !== null) {
+      await inngest.send({
+        name: "prescription/reminder.scheduled",
+        data: {
+          appointmentId: appointment.id,
+          reminderType: "HALFWAY",
+        },
+        ts: halfwayTs,
+      });
+    }
+    if (completedTs !== null) {
+      await inngest.send({
+        name: "prescription/reminder.scheduled",
+        data: {
+          appointmentId: appointment.id,
+          reminderType: "COMPLETED",
+        },
+        ts: completedTs,
+      });
+    }
+  } catch (err) {
+    console.error("[doctor-prescription] Failed to schedule reminders:", err);
+  }
 
   return NextResponse.json({ ok: true });
 }

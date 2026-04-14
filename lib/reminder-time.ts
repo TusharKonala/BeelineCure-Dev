@@ -1,4 +1,4 @@
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /** 24h before appointment start in UTC ms, using doctor-local date/time + IANA timezone. */
 export function reminderAtMsFromPatientLocal(
@@ -10,4 +10,77 @@ export function reminderAtMsFromPatientLocal(
   const target = utcDate.getTime() - 24 * 60 * 60 * 1000;
   if (target <= Date.now()) return null;
   return target;
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function timestampFromLocalParts(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+  timezone: string,
+): number | null {
+  const localIso = `${year}-${pad2(month)}-${pad2(day)}T${pad2(hour)}:${pad2(minute)}:${pad2(
+    second,
+  )}`;
+  const utcDate = fromZonedTime(localIso, timezone);
+  const ts = utcDate.getTime();
+  return ts > Date.now() ? ts : null;
+}
+
+/**
+ * Computes delayed reminder timestamps using patient-local date/time clock captured at save-time.
+ * Halfway uses floor(courseDays / 2), with minimum 1 only when courseDays > 1.
+ */
+export function prescriptionReminderTsFromSavedAt(
+  savedAt: Date,
+  patientTimezone: string,
+  courseDays: number,
+): { halfwayTs: number | null; completedTs: number | null } {
+  if (!Number.isInteger(courseDays) || courseDays <= 0) {
+    return { halfwayTs: null, completedTs: null };
+  }
+
+  const patientNow = toZonedTime(savedAt, patientTimezone);
+  const year = patientNow.getFullYear();
+  const month = patientNow.getMonth() + 1;
+  const day = patientNow.getDate();
+  const hour = patientNow.getHours();
+  const minute = patientNow.getMinutes();
+  const second = patientNow.getSeconds();
+
+  const halfwayOffsetDays =
+    courseDays > 1 ? Math.max(1, Math.floor(courseDays / 2)) : Math.floor(courseDays / 2);
+  const completedOffsetDays = courseDays;
+
+  const halfwayLocal = new Date(Date.UTC(year, month - 1, day + halfwayOffsetDays, hour, minute, second));
+  const completedLocal = new Date(
+    Date.UTC(year, month - 1, day + completedOffsetDays, hour, minute, second),
+  );
+
+  const halfwayTs = timestampFromLocalParts(
+    halfwayLocal.getUTCFullYear(),
+    halfwayLocal.getUTCMonth() + 1,
+    halfwayLocal.getUTCDate(),
+    hour,
+    minute,
+    second,
+    patientTimezone,
+  );
+  const completedTs = timestampFromLocalParts(
+    completedLocal.getUTCFullYear(),
+    completedLocal.getUTCMonth() + 1,
+    completedLocal.getUTCDate(),
+    hour,
+    minute,
+    second,
+    patientTimezone,
+  );
+
+  return { halfwayTs, completedTs };
 }
