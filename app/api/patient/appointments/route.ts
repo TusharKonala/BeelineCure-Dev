@@ -101,7 +101,12 @@ export async function GET(request: NextRequest) {
         time: true,
         timezone: true,
         consultationType: true,
-        prescription: true,
+        prescription: {
+          select: {
+            medicines: true,
+            generalNotes: true,
+          },
+        },
         status: true,
         doctor: {
           select: {
@@ -164,7 +169,12 @@ export async function GET(request: NextRequest) {
     time: a.time,
     timezone: a.timezone,
     consultationType: a.consultationType,
-    prescription: a.prescription,
+    prescription: a.prescription
+      ? {
+          medicines: a.prescription.medicines,
+          generalNotes: a.prescription.generalNotes,
+        }
+      : null,
     status: a.status,
     doctor: {
       name: a.doctor.name,

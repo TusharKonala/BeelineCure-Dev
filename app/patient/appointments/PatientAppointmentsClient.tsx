@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
-import { prescriptionToPlainTextForPdf } from "@/lib/prescription-pdf-text";
+import {
+  prescriptionToPlainTextForPdf,
+  type StructuredPrescription,
+} from "@/lib/prescription-pdf-text";
 import {
   formatTimeInPatientTz,
   formatDateInPatientTz,
@@ -24,7 +27,7 @@ export type PatientAppointmentItem = {
   time: string; // HH:mm in doctor's timezone
   timezone: string; // Doctor's IANA timezone
   consultationType: ConsultationType;
-  prescription: string | null;
+  prescription: StructuredPrescription | null;
   status: AppointmentStatus;
   doctor: {
     name: string;

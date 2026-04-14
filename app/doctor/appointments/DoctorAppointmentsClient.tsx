@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 
@@ -53,6 +54,7 @@ function badgeClass(kind: "consultation" | "status", value: string) {
 }
 
 export default function DoctorAppointmentsClient() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<DoctorAppointmentItem[]>([]);
   const [tab, setTab] = useState<TabKey>("upcoming");
   const [search, setSearch] = useState("");
@@ -305,9 +307,9 @@ export default function DoctorAppointmentsClient() {
                       type="button"
                       className="cursor-pointer rounded-xl font-montserrat"
                       size="sm"
-                      onClick={() => undefined}
+                      onClick={() => router.push(`/doctor/appointments/${a.id}/prescription`)}
                     >
-                      Mark as Completed
+                      Add Prescription
                     </Button>
                     <Button
                       type="button"

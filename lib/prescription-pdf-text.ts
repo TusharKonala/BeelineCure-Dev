@@ -1,9 +1,17 @@
-/**
- * Normalizes stored prescription content for PDF output.
- * Plain text is returned as-is; HTML from a future rich-text editor is converted
- * to readable plain text (structure preserved via line breaks).
- */
-export function prescriptionToPlainTextForPdf(raw: string): string {
+export type PrescriptionMedicine = {
+  name: string;
+  dosage: string;
+  frequency: string;
+  durationDays: number;
+  instructions: string;
+};
+
+export type StructuredPrescription = {
+  medicines: PrescriptionMedicine[];
+  generalNotes?: string | null;
+};
+
+function normalizeRichText(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
 
@@ -41,4 +49,33 @@ export function prescriptionToPlainTextForPdf(raw: string): string {
     .replace(/&gt;/g, ">")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+/**
+ * Converts prescription content into PDF-friendly plain text.
+ * Supports both legacy text prescriptions and structured medicines JSON.
+ */
+export function prescriptionToPlainTextForPdf(raw: string | StructuredPrescription): string {
+  if (typeof raw === "string") {
+    return normalizeRichText(raw);
+  }
+
+  if (!Array.isArray(raw.medicines) || raw.medicines.length === 0) return "";
+  const sections: string[] = [];
+
+  for (const [index, medicine] of raw.medicines.entries()) {
+    sections.push(
+      `${index + 1}. ${medicine.name}`,
+      `Dosage: ${medicine.dosage}`,
+      `Frequency: ${medicine.frequency}`,
+      `Duration: ${medicine.durationDays} day${medicine.durationDays === 1 ? "" : "s"}`,
+      `Instructions: ${medicine.instructions}`,
+    );
+  }
+
+  if (raw.generalNotes?.trim()) {
+    sections.push(`General notes: ${raw.generalNotes.trim()}`);
+  }
+
+  return sections.join("\n");
 }
