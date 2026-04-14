@@ -168,8 +168,7 @@ model Appointment {
   date             DateTime          @db.Date
   time             String
   notes            String?
-  /// Plain text or HTML from doctor (e.g. rich-text editor); PDF export normalizes to readable text.
-  prescription     String?
+  prescription     Prescription?
   consultationType ConsultationType
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
@@ -177,6 +176,13 @@ model Appointment {
   cancelToken      String?
   rescheduleToken  String?
   createdAt        DateTime          @default(now())
+}
+
+model Prescription {
+  appointmentId String      @id
+  appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  medicines     Json
+  generalNotes  String?     @db.Text
 }
 
 model BookingSession {
