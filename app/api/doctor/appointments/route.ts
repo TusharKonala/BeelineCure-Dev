@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
   }
 
   const tab = normalizeTab(request.nextUrl.searchParams.get("tab"));
-  const patientName = (request.nextUrl.searchParams.get("patientName") ?? "").trim();
+  const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
   const dateFilter = normalizeDateFilter(request.nextUrl.searchParams.get("dateFilter"));
   const statuses =
     tab === "completed"
@@ -120,37 +120,34 @@ export async function GET(request: NextRequest) {
     baseWhere.date = { gte: ymdToDate(start), lte: ymdToDate(end) };
   }
 
-  const selectedWhere = patientName ? { ...baseWhere, patientName } : baseWhere;
+  const selectedWhere: Prisma.AppointmentWhereInput = search
+    ? {
+        ...baseWhere,
+        OR: [
+          { patientName: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search, mode: "insensitive" } },
+        ],
+      }
+    : baseWhere;
   const sortDesc = dateFilter !== "asc";
 
-  const [appointments, optionSourceAppointments] = await Promise.all([
-    prisma.appointment.findMany({
-      where: selectedWhere,
-      orderBy: [{ date: sortDesc ? "desc" : "asc" }, { time: sortDesc ? "desc" : "asc" }],
-      select: {
-        id: true,
-        patientName: true,
-        email: true,
-        phone: true,
-        date: true,
-        time: true,
-        timezone: true,
-        consultationType: true,
-        status: true,
-        notes: true,
-      },
-    }),
-    prisma.appointment.findMany({
-      where: baseWhere,
-      select: {
-        patientName: true,
-      },
-    }),
-  ]);
-
-  const patientOptions = Array.from(
-    new Set(optionSourceAppointments.map((appointment) => appointment.patientName)),
-  ).sort((a, b) => a.localeCompare(b));
+  const appointments = await prisma.appointment.findMany({
+    where: selectedWhere,
+    orderBy: [{ date: sortDesc ? "desc" : "asc" }, { time: sortDesc ? "desc" : "asc" }],
+    select: {
+      id: true,
+      patientName: true,
+      email: true,
+      phone: true,
+      date: true,
+      time: true,
+      timezone: true,
+      consultationType: true,
+      status: true,
+      notes: true,
+    },
+  });
 
   return NextResponse.json({
     items: appointments.map((a) => ({
@@ -165,6 +162,5 @@ export async function GET(request: NextRequest) {
       status: a.status,
       notes: a.notes,
     })),
-    patientOptions,
   });
 }

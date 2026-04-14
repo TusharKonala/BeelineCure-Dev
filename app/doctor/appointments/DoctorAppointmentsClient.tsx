@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 
 type ConsultationType = "CLINIC" | "ONLINE";
@@ -52,17 +52,11 @@ function badgeClass(kind: "consultation" | "status", value: string) {
 
 export default function DoctorAppointmentsClient() {
   const [appointments, setAppointments] = useState<DoctorAppointmentItem[]>([]);
-  const [patientOptions, setPatientOptions] = useState<string[]>([]);
   const [tab, setTab] = useState<TabKey>("upcoming");
-  const [patientName, setPatientName] = useState("");
+  const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const effectivePatientName = useMemo(
-    () => (patientOptions.includes(patientName) ? patientName : ""),
-    [patientName, patientOptions],
-  );
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +68,7 @@ export default function DoctorAppointmentsClient() {
           tab,
           dateFilter,
         });
-        if (effectivePatientName) params.set("patientName", effectivePatientName);
+        if (search.trim()) params.set("search", search.trim());
         const res = await fetch(`/api/doctor/appointments?${params.toString()}`, {
           cache: "no-store",
         });
@@ -82,13 +76,9 @@ export default function DoctorAppointmentsClient() {
           if (!cancelled) setError("Failed to load appointments.");
           return;
         }
-        const data = (await res.json()) as {
-          items?: DoctorAppointmentItem[];
-          patientOptions?: string[];
-        };
+        const data = (await res.json()) as { items?: DoctorAppointmentItem[] };
         if (!cancelled) {
           setAppointments(Array.isArray(data.items) ? data.items : []);
-          setPatientOptions(Array.isArray(data.patientOptions) ? data.patientOptions : []);
         }
       } catch {
         if (!cancelled) setError("Failed to load appointments.");
@@ -101,7 +91,7 @@ export default function DoctorAppointmentsClient() {
     return () => {
       cancelled = true;
     };
-  }, [dateFilter, effectivePatientName, tab]);
+  }, [dateFilter, search, tab]);
 
   return (
     <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
@@ -169,29 +159,22 @@ export default function DoctorAppointmentsClient() {
       </div>
 
       <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
-        {patientOptions.length > 0 && (
-          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
-            <label
-              htmlFor="doctor-appointments-patient-filter"
-              className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
-            >
-              Patient
-            </label>
-            <select
-              id="doctor-appointments-patient-filter"
-              value={effectivePatientName}
-              onChange={(e) => setPatientName(e.target.value)}
-              className={`w-full min-w-0 cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
-            >
-              <option value="">All patients</option>
-              {patientOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
+          <label
+            htmlFor="doctor-appointments-search"
+            className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
+          >
+            Patient
+          </label>
+          <input
+            id="doctor-appointments-search"
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, or phone"
+            className="w-full min-w-0 rounded-xl border border-[#e5e5e5] bg-white py-2 px-3 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+          />
+        </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
           <label
             htmlFor="doctor-appointments-date-filter"
