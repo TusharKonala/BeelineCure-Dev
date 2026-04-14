@@ -164,3 +164,57 @@ export async function GET(request: NextRequest) {
     })),
   });
 }
+
+export async function PATCH(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== UserRole.DOCTOR) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true },
+  });
+  if (!doctor) {
+    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+  }
+
+  const body = (await request.json().catch(() => null)) as { appointmentId?: string } | null;
+  const appointmentId = body?.appointmentId?.trim();
+  if (!appointmentId) {
+    return NextResponse.json({ error: "appointmentId is required" }, { status: 400 });
+  }
+
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      id: appointmentId,
+      doctorId: doctor.id,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+  if (!appointment) {
+    return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+  }
+  if (appointment.status === AppointmentStatus.CANCELLED) {
+    return NextResponse.json({ error: "Appointment already cancelled" }, { status: 409 });
+  }
+  if (appointment.status === AppointmentStatus.COMPLETED) {
+    return NextResponse.json(
+      { error: "Completed appointments cannot be cancelled" },
+      { status: 409 },
+    );
+  }
+
+  await prisma.appointment.update({
+    where: { id: appointment.id },
+    data: { status: AppointmentStatus.CANCELLED },
+  });
+
+  return NextResponse.json({ ok: true });
+}

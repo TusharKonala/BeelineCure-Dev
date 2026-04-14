@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { Button } from "@/components/ui/button";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 
 type ConsultationType = "CLINIC" | "ONLINE";
@@ -56,42 +58,65 @@ export default function DoctorAppointmentsClient() {
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<DoctorAppointmentItem | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    const loadAppointments = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams({
-          tab,
-          dateFilter,
-        });
-        if (search.trim()) params.set("search", search.trim());
-        const res = await fetch(`/api/doctor/appointments?${params.toString()}`, {
-          cache: "no-store",
-        });
-        if (!res.ok) {
-          if (!cancelled) setError("Failed to load appointments.");
-          return;
-        }
-        const data = (await res.json()) as { items?: DoctorAppointmentItem[] };
-        if (!cancelled) {
-          setAppointments(Array.isArray(data.items) ? data.items : []);
-        }
-      } catch {
-        if (!cancelled) setError("Failed to load appointments.");
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    };
+    setMounted(true);
+  }, []);
 
-    void loadAppointments();
-    return () => {
-      cancelled = true;
-    };
+  const loadAppointments = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        tab,
+        dateFilter,
+      });
+      if (search.trim()) params.set("search", search.trim());
+      const res = await fetch(`/api/doctor/appointments?${params.toString()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        setError("Failed to load appointments.");
+        return;
+      }
+      const data = (await res.json()) as { items?: DoctorAppointmentItem[] };
+      setAppointments(Array.isArray(data.items) ? data.items : []);
+    } catch {
+      setError("Failed to load appointments.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [dateFilter, search, tab]);
+
+  useEffect(() => {
+    void loadAppointments();
+  }, [loadAppointments]);
+
+  async function confirmCancelAppointment() {
+    if (!cancelTarget) return;
+    setIsCanceling(true);
+    try {
+      const res = await fetch("/api/doctor/appointments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appointmentId: cancelTarget.id }),
+      });
+      if (!res.ok) {
+        setError("Failed to cancel appointment.");
+        return;
+      }
+      setCancelTarget(null);
+      await loadAppointments();
+    } catch {
+      setError("Failed to cancel appointment.");
+    } finally {
+      setIsCanceling(false);
+    }
+  }
 
   return (
     <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
@@ -274,6 +299,28 @@ export default function DoctorAppointmentsClient() {
                   </div>
                 </div>
 
+                {tab === "upcoming" && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      className="cursor-pointer rounded-xl font-montserrat"
+                      size="sm"
+                      onClick={() => undefined}
+                    >
+                      Mark as Completed
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="cursor-pointer rounded-xl font-montserrat"
+                      size="sm"
+                      onClick={() => setCancelTarget(a)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+
                 {a.notes && (
                   <p className="mt-3 whitespace-pre-wrap font-montserrat text-sm text-[#333333]">
                     <span className="font-medium">Notes:</span> {a.notes}
@@ -284,6 +331,59 @@ export default function DoctorAppointmentsClient() {
           })}
         </div>
       )}
+      {mounted &&
+        cancelTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-100 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="doctor-cancel-appointment-title"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default bg-black/40"
+              aria-label="Close dialog"
+              onClick={() => {
+                if (!isCanceling) setCancelTarget(null);
+              }}
+            />
+            <div
+              className="relative z-1 w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-lg"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2
+                id="doctor-cancel-appointment-title"
+                className="font-montaga text-xl font-semibold text-[#333333]"
+              >
+                Cancel appointment?
+              </h2>
+              <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                This will cancel the appointment for{" "}
+                <span className="font-medium text-[#333333]">{cancelTarget.patientName}</span>.
+              </p>
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => setCancelTarget(null)}
+                  disabled={isCanceling}
+                >
+                  Keep appointment
+                </button>
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void confirmCancelAppointment()}
+                  disabled={isCanceling}
+                >
+                  {isCanceling ? "Cancelling..." : "Confirm cancel"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
