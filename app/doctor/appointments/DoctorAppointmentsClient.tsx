@@ -9,7 +9,7 @@ import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-displ
 
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
-type TabKey = "upcoming" | "completed" | "cancelled";
+type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
 type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
 
 type DoctorAppointmentItem = {
@@ -138,13 +138,19 @@ export default function DoctorAppointmentsClient() {
           value={tab}
           onChange={(e) => {
             const v = e.target.value;
-            if (v === "upcoming" || v === "completed" || v === "cancelled") {
+            if (
+              v === "upcoming" ||
+              v === "pending-review" ||
+              v === "completed" ||
+              v === "cancelled"
+            ) {
               setTab(v);
             }
           }}
           className={`w-full cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm font-medium text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
         >
           <option value="upcoming">Upcoming</option>
+          <option value="pending-review">Pending Review</option>
           <option value="completed">Completed</option>
           <option value="cancelled">Cancelled</option>
         </select>
@@ -161,6 +167,17 @@ export default function DoctorAppointmentsClient() {
           }`}
         >
           Upcoming
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("pending-review")}
+          className={`cursor-pointer rounded-xl px-4 py-2 font-montserrat text-sm font-medium transition-colors ${
+            tab === "pending-review"
+              ? "bg-[#2555F3] text-white"
+              : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+          }`}
+        >
+          Pending Review
         </button>
         <button
           type="button"
@@ -243,6 +260,8 @@ export default function DoctorAppointmentsClient() {
           <p className="font-montserrat text-sm font-medium text-[#333333]">
             {tab === "upcoming"
               ? "No upcoming appointments."
+              : tab === "pending-review"
+                ? "No appointments pending review."
               : tab === "completed"
                 ? "No completed appointments yet."
                 : "No cancelled appointments."}
@@ -306,20 +325,24 @@ export default function DoctorAppointmentsClient() {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      className="cursor-pointer rounded-xl font-montserrat"
-                      size="sm"
-                      onClick={() => router.push(`/doctor/appointments/${a.id}/prescription`)}
-                    >
-                      Add Prescription
-                    </Button>
-                    <Button
-                      type="button"
                       variant="outline"
                       className="cursor-pointer rounded-xl font-montserrat"
                       size="sm"
                       onClick={() => setCancelTarget(a)}
                     >
                       Cancel
+                    </Button>
+                  </div>
+                )}
+                {tab === "pending-review" && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      className="cursor-pointer rounded-xl font-montserrat"
+                      size="sm"
+                      onClick={() => router.push(`/doctor/appointments/${a.id}/prescription`)}
+                    >
+                      Add Prescription
                     </Button>
                   </div>
                 )}

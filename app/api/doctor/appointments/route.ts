@@ -3,11 +3,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus, type Prisma, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { isDoctorTimeInPast } from "@/lib/timezone-display";
 
-type TabKey = "upcoming" | "completed" | "cancelled";
+type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
 type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
 
 function normalizeTab(raw: string | null): TabKey {
+  if (raw === "pending-review") return "pending-review";
   if (raw === "completed") return "completed";
   if (raw === "cancelled") return "cancelled";
   return "upcoming";
@@ -149,8 +151,23 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  const filteredAppointments =
+    tab === "pending-review"
+      ? appointments.filter(
+          (a) =>
+            a.status === AppointmentStatus.CONFIRMED &&
+            isDoctorTimeInPast(a.date.toISOString().slice(0, 10), a.time, a.timezone),
+        )
+      : tab === "upcoming"
+        ? appointments.filter((a) => {
+            if (a.status === AppointmentStatus.PENDING) return true;
+            if (a.status !== AppointmentStatus.CONFIRMED) return false;
+            return !isDoctorTimeInPast(a.date.toISOString().slice(0, 10), a.time, a.timezone);
+          })
+        : appointments;
+
   return NextResponse.json({
-    items: appointments.map((a) => ({
+    items: filteredAppointments.map((a) => ({
       id: a.id,
       patientName: a.patientName,
       email: a.email,
