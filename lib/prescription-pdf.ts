@@ -18,12 +18,26 @@ export type PrescriptionPdfInput = {
   prescription: StructuredPrescription;
 };
 
-export async function downloadPrescriptionPdf(input: PrescriptionPdfInput) {
+function getPrescriptionPdfFileName(input: PrescriptionPdfInput): string {
+  const fileDoctorName = input.doctorName.replace(/[^a-z0-9]+/gi, "-");
+  return `prescription-${fileDoctorName || "doctor"}-${input.date}.pdf`;
+}
+
+function getPrescriptionPdfTitle(input: PrescriptionPdfInput): string {
+  return `Prescription - ${input.doctorName} - ${input.date}`;
+}
+
+async function createPrescriptionPdfDoc(input: PrescriptionPdfInput) {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF();
   const dateLabel = formatDateInPatientTz(input.date, input.time, input.timezone);
-  const fileDoctorName = input.doctorName.replace(/[^a-z0-9]+/gi, "-");
   const body = prescriptionToPlainTextForPdf(input.prescription);
+  doc.setProperties({
+    title: getPrescriptionPdfTitle(input),
+    subject: "Patient prescription",
+    author: input.doctorName,
+    creator: "Clinivo",
+  });
 
   let y = 20;
   doc.setFontSize(18);
@@ -63,5 +77,16 @@ export async function downloadPrescriptionPdf(input: PrescriptionPdfInput) {
     y += 4;
   }
 
-  doc.save(`prescription-${fileDoctorName || "doctor"}-${input.date}.pdf`);
+  return doc;
+}
+
+export async function createPrescriptionPdfBlobUrl(input: PrescriptionPdfInput): Promise<string> {
+  const doc = await createPrescriptionPdfDoc(input);
+  const blob = doc.output("blob");
+  return URL.createObjectURL(blob);
+}
+
+export async function downloadPrescriptionPdf(input: PrescriptionPdfInput) {
+  const doc = await createPrescriptionPdfDoc(input);
+  doc.save(getPrescriptionPdfFileName(input));
 }
