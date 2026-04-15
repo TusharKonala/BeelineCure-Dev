@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 
 type ConsultationType = "CLINIC" | "ONLINE";
@@ -259,7 +260,7 @@ export default function DoctorAppointmentsClient() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="font-montaga text-lg font-semibold text-[#333333]">
-                      {a.patientName}
+                      <MontagaCapitalN text={a.patientName} />
                     </p>
                     <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">{a.email}</p>
                     <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">{a.phone}</p>

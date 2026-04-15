@@ -10,12 +10,13 @@ type PageProps = {
 };
 
 export default async function PatientPrescriptionDownloadPage({ params }: PageProps) {
+  const { appointmentId } = await params;
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
-    redirect("/auth/signin?callbackUrl=/patient/appointments");
+    const callbackUrl = `/patient/appointments/${encodeURIComponent(appointmentId)}/prescription`;
+    redirect(`/auth/signin?callbackUrl=${encodeURIComponent(callbackUrl)}`);
   }
 
-  const { appointmentId } = await params;
   const appointment = await prisma.appointment.findFirst({
     where: {
       id: appointmentId,

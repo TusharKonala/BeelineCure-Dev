@@ -1,4 +1,5 @@
 import { EmailTemplate } from "@/components/email-template";
+import { MedicineReminderEmailTemplate } from "@/components/medicine-reminder-email-template";
 import { prisma } from "@/lib/db";
 import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { Resend } from "resend";
@@ -13,6 +14,10 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 type PrescriptionReminderType = "HALFWAY" | "COMPLETED";
+
+function formatDaysValue(days: number): string {
+  return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(1)));
+}
 
 function extractMedicineSummary(
   medicines: unknown,
@@ -202,9 +207,13 @@ export const sendPrescriptionReminder = inngest.createFunction(
       return { skipped: true, reason: "invalid_medicines_payload" };
     }
 
-    const dateStr = appointment.date.toISOString().slice(0, 10);
-    const courseDaysText = `${medicineSummary.maxDurationDays} day${
-      medicineSummary.maxDurationDays === 1 ? "" : "s"
+    const maxDurationDays = medicineSummary.maxDurationDays;
+    const halfwayDays = maxDurationDays / 2;
+    const courseDaysText = `${formatDaysValue(maxDurationDays)} day${
+      maxDurationDays === 1 ? "" : "s"
+    }`;
+    const halfwayDaysText = `${formatDaysValue(halfwayDays)} day${
+      halfwayDays === 1 ? "" : "s"
     }`;
     const subject =
       reminderType === "HALFWAY"
@@ -214,7 +223,7 @@ export const sendPrescriptionReminder = inngest.createFunction(
       reminderType === "HALFWAY" ? "Medication Progress Check-in" : "Medication Course Completed";
     const message =
       reminderType === "HALFWAY"
-        ? `You are halfway through your medication course (${courseDaysText}). Please continue your prescribed medicines as advised by your doctor.`
+        ? `You are halfway through your medication course (${halfwayDaysText}). Please continue your prescribed medicines as advised by your doctor.`
         : `You have completed your medication course (${courseDaysText}). If needed, you can book a follow-up consultation with the same doctor.`;
     const origin =
       process.env.NEXT_PUBLIC_APP_URL ??
@@ -229,33 +238,18 @@ export const sendPrescriptionReminder = inngest.createFunction(
       from: "Clinic Appointments <onboarding@resend.dev>",
       to: appointment.email,
       subject,
-      react: EmailTemplate({
+      react: MedicineReminderEmailTemplate({
         heading,
         message,
-        showActionLinks: true,
         doctorName: appointment.doctor.name,
-        appointmentDate: formatDateInPatientTz(
-          dateStr,
-          appointment.time,
-          appointment.timezone,
-          appointment.patientTimezone,
-        ),
-        appointmentTime: formatTimeInPatientTz(
-          dateStr,
-          appointment.time,
-          appointment.timezone,
-          appointment.patientTimezone,
-        ),
         patientName: appointment.patientName,
-        consultationType: appointment.consultationType,
-        cancelUrl: viewPrescriptionUrl,
-        rescheduleUrl: followUpUrl,
         primaryActionLabel:
           reminderType === "HALFWAY" ? "View prescription" : "Book a follow-up if needed",
         primaryActionUrl:
           reminderType === "HALFWAY" ? viewPrescriptionUrl : followUpUrl,
-        secondaryActionLabel: "",
-        secondaryActionUrl: "",
+        secondaryActionLabel:
+          reminderType === "HALFWAY" ? "Book a follow-up if needed" : undefined,
+        secondaryActionUrl: reminderType === "HALFWAY" ? followUpUrl : undefined,
       }),
     });
 

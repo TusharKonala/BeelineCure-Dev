@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
+import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { type StructuredPrescription } from "@/lib/prescription-pdf-text";
 import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import {
@@ -318,7 +319,7 @@ export default function PatientAppointmentsClient() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="font-montaga text-lg font-semibold text-[#333333]">
-                      {a.doctor.name}
+                      <MontagaCapitalN text={a.doctor.name} />
                     </p>
                     {a.doctor.specialization && (
                       <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
