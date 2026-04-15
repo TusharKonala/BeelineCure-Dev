@@ -5,8 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
-import { type StructuredPrescription } from "@/lib/prescription-pdf-text";
-import { downloadPrescriptionPdf } from "@/lib/prescription-pdf";
 import {
   formatTimeInPatientTz,
   formatDateInPatientTz,
@@ -26,7 +24,7 @@ export type PatientAppointmentItem = {
   time: string; // HH:mm in doctor's timezone
   timezone: string; // Doctor's IANA timezone
   consultationType: ConsultationType;
-  prescription: StructuredPrescription | null;
+  prescription: { medicines: unknown; generalNotes: string | null } | null;
   status: AppointmentStatus;
   doctor: {
     name: string;
@@ -45,18 +43,6 @@ const SELECT_CHEVRON =
 
 function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
-}
-
-async function downloadPrescriptionPdfFromAppointment(appointment: PatientAppointmentItem) {
-  if (!appointment.prescription) return;
-  await downloadPrescriptionPdf({
-    doctorName: appointment.doctor.name,
-    patientName: appointment.patientName,
-    date: appointment.date,
-    time: appointment.time,
-    timezone: appointment.timezone,
-    prescription: appointment.prescription,
-  });
 }
 
 function badgeClass(kind: "consultation" | "status", value: string) {
@@ -409,13 +395,14 @@ export default function PatientAppointmentsClient() {
                 {a.status === "COMPLETED" && a.prescription && (
                   <div className="mt-3">
                     <Button
-                      type="button"
+                      asChild
                       variant="outline"
                       size="sm"
                       className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
-                      onClick={() => void downloadPrescriptionPdfFromAppointment(a)}
                     >
-                      Download Prescription
+                      <Link href={`/patient/appointments/${a.id}/prescription`}>
+                        View prescription
+                      </Link>
                     </Button>
                   </div>
                 )}
