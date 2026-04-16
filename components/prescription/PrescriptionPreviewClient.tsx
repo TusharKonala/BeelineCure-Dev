@@ -66,10 +66,17 @@ export function PrescriptionPreviewClient({
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [iframeLoaded, setIframeLoaded] = useState(false);
+  const [isMobilePreviewFallback, setIsMobilePreviewFallback] = useState(false);
   const normalizedPrescription = useMemo(
     () => normalizePrescription(prescription),
     [prescription],
   );
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    const ua = navigator.userAgent || "";
+    setIsMobilePreviewFallback(/Android|iPhone|iPad|iPod|Mobile/i.test(ua));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,17 +158,71 @@ export function PrescriptionPreviewClient({
         ) : previewError ? (
           <div className="p-4 font-montserrat text-sm text-red-600">{previewError}</div>
         ) : previewUrl ? (
-          <iframe
-            title="Prescription PDF preview"
-            src={previewUrl}
-            className="h-[70vh] w-full bg-white"
-            onLoad={() => {
-              setIframeLoaded(true);
-              // #region agent log
-              fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P2',location:'components/prescription/PrescriptionPreviewClient.tsx:152',message:'Prescription preview iframe loaded',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',srcPrefix:previewUrl.slice(0,12)},timestamp:Date.now()})}).catch(()=>{});
-              // #endregion
-            }}
-          />
+          isMobilePreviewFallback ? (
+            <div className="space-y-4 bg-white p-4">
+              <div className="rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4">
+                <p className="font-montserrat text-sm font-semibold text-[#333333]">
+                  Mobile preview
+                </p>
+                <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                  Your browser does not reliably render the inline PDF preview on mobile, so
+                  showing the prescription details directly here instead.
+                </p>
+              </div>
+              <div className="space-y-2 font-montserrat text-sm text-[#333333]">
+                <p>
+                  <span className="font-semibold">Doctor:</span> {doctorName}
+                </p>
+                <p>
+                  <span className="font-semibold">Patient:</span> {patientName}
+                </p>
+                <p>
+                  <span className="font-semibold">Date:</span> {date}
+                </p>
+              </div>
+              <div className="space-y-3">
+                {normalizedPrescription.medicines.map((medicine, index) => (
+                  <div
+                    key={`${medicine.name}-${index}`}
+                    className="rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4"
+                  >
+                    <p className="font-montserrat text-sm font-semibold text-[#333333]">
+                      {medicine.name}
+                    </p>
+                    <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                      {medicine.dosage} | {medicine.frequency} | {medicine.durationDays} day
+                      {medicine.durationDays === 1 ? "" : "s"}
+                    </p>
+                    <p className="mt-2 font-montserrat text-sm text-[#333333]">
+                      {medicine.instructions}
+                    </p>
+                  </div>
+                ))}
+                {normalizedPrescription.generalNotes && (
+                  <div className="rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4">
+                    <p className="font-montserrat text-sm font-semibold text-[#333333]">
+                      General notes
+                    </p>
+                    <p className="mt-2 whitespace-pre-wrap font-montserrat text-sm text-[#333333]">
+                      {normalizedPrescription.generalNotes}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <iframe
+              title="Prescription PDF preview"
+              src={previewUrl}
+              className="h-[70vh] w-full bg-white"
+              onLoad={() => {
+                setIframeLoaded(true);
+                // #region agent log
+                fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P2',location:'components/prescription/PrescriptionPreviewClient.tsx:152',message:'Prescription preview iframe loaded',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',srcPrefix:previewUrl.slice(0,12)},timestamp:Date.now()})}).catch(()=>{});
+                // #endregion
+              }}
+            />
+          )
         ) : (
           <div className="p-4 font-montserrat text-sm text-[#5E5E5E]">
             No preview available.
@@ -185,6 +246,16 @@ export function PrescriptionPreviewClient({
         >
           {isDownloading ? "Preparing PDF..." : "Download prescription PDF"}
         </Button>
+        {previewUrl && isMobilePreviewFallback && (
+          <Button
+            type="button"
+            variant="outline"
+            className="cursor-pointer rounded-xl font-montserrat"
+            onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}
+          >
+            Open PDF
+          </Button>
+        )}
         <Button
           type="button"
           className="cursor-pointer rounded-xl font-montserrat"
