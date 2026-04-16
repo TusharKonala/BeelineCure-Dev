@@ -76,6 +76,9 @@ export const sendAppointmentReminder = inngest.createFunction(
     if (appointment.status === AppointmentStatus.CANCELLED) {
       return { skipped: true, reason: "cancelled" };
     }
+    if (appointment.status === AppointmentStatus.COMPLETED) {
+      return { skipped: true, reason: "completed" };
+    }
     if (!appointment.cancelToken || !appointment.rescheduleToken) {
       return { skipped: true, reason: "missing_tokens" };
     }
