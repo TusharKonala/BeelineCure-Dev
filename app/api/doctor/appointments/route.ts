@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import {
   AppointmentStatus,
+  NotificationType,
   type Prisma,
   UserRole,
 } from "@/generated/prisma/client";
@@ -13,7 +14,18 @@ import {
   normalizeDoctorDateFilter,
 } from "@/lib/doctor-appointment-filters";
 import { prisma } from "@/lib/db";
+import { EmailTemplate } from "@/components/email-template";
+import { inngest } from "@/inngest/client";
 import { isDoctorTimeInPast } from "@/lib/timezone-display";
+import { Resend } from "resend";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
 
@@ -182,6 +194,14 @@ export async function PATCH(request: NextRequest) {
     select: {
       id: true,
       status: true,
+      email: true,
+      patientName: true,
+      date: true,
+      time: true,
+      timezone: true,
+      patientTimezone: true,
+      consultationType: true,
+      doctorId: true,
     },
   });
   if (!appointment) {
@@ -207,6 +227,94 @@ export async function PATCH(request: NextRequest) {
     where: { id: appointment.id },
     data: { status: AppointmentStatus.CANCELLED },
   });
+
+  try {
+    await inngest.send({
+      name: "appointment/reminder.cancelled",
+      data: {
+        appointmentId: appointment.id,
+      },
+    });
+  } catch (err) {
+    console.error("[doctor-appointments] Failed to cancel reminder:", err);
+  }
+
+  try {
+    const doctorProfile = await prisma.doctor.findUnique({
+      where: { id: appointment.doctorId },
+      select: { name: true },
+    });
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: appointment.email,
+      subject: "Appointment Cancelled",
+      react: EmailTemplate({
+        heading: "Appointment Cancelled",
+        message:
+          "Your doctor has cancelled this appointment. If needed, please book a new appointment from our website.",
+        showActionLinks: false,
+        doctorName: doctorProfile?.name ?? "Your Doctor",
+        appointmentDate: formatDateInPatientTz(
+          appointmentDate,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        appointmentTime: formatTimeInPatientTz(
+          appointmentDate,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        patientName: appointment.patientName,
+        consultationType: appointment.consultationType,
+        cancelUrl: "",
+        rescheduleUrl: "",
+      }),
+    });
+
+    if (error) {
+      console.error("[doctor-appointments] Cancellation email failed:", error);
+    }
+  } catch (err) {
+    console.error("[doctor-appointments] Cancellation email failed:", err);
+  }
+
+  try {
+    const doctorProfile = await prisma.doctor.findUnique({
+      where: { id: appointment.doctorId },
+      select: { name: true },
+    });
+    const doctorDisplayName = doctorProfile?.name
+      ? formatDoctorDisplayName(doctorProfile.name)
+      : null;
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const formattedDate = formatDateInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+
+    await createAppointmentNotificationForEmail({
+      patientEmail: appointment.email,
+      type: NotificationType.APPOINTMENT_CANCELLED,
+      title: "Appointment cancelled",
+      message: `Your appointment${
+        doctorDisplayName ? ` with ${doctorDisplayName}` : ""
+      } on ${formattedDate} at ${formattedTime} was cancelled by your doctor.`,
+    });
+  } catch (err) {
+    console.error("[doctor-appointments] Failed to create notification:", err);
+  }
 
   return NextResponse.json({ ok: true });
 }
