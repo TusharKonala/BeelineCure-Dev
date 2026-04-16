@@ -141,6 +141,11 @@ export async function PUT(
       id: true,
       status: true,
       patientTimezone: true,
+      prescription: {
+        select: {
+          appointmentId: true,
+        },
+      },
     },
   });
 
@@ -168,6 +173,7 @@ export async function PUT(
 
   const generalNotes =
     typeof body?.generalNotes === "string" ? body.generalNotes.trim() : "";
+  const notificationKind = appointment.prescription ? "UPDATED" : "READY";
 
   await prisma.$transaction(async (tx) => {
     await tx.prescription.upsert({
@@ -221,6 +227,18 @@ export async function PUT(
     }
   } catch (err) {
     console.error("[doctor-prescription] Failed to schedule reminders:", err);
+  }
+
+  try {
+    await inngest.send({
+      name: "prescription/patient-notification",
+      data: {
+        appointmentId: appointment.id,
+        kind: notificationKind,
+      },
+    });
+  } catch (err) {
+    console.error("[doctor-prescription] Failed to send patient notification event:", err);
   }
 
   return NextResponse.json({ ok: true });

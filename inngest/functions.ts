@@ -14,6 +14,7 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 type PrescriptionReminderType = "HALFWAY" | "COMPLETED";
+type PrescriptionPatientNotificationKind = "READY" | "UPDATED";
 
 function formatDaysValue(days: number): string {
   return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(1)));
@@ -260,5 +261,125 @@ export const sendPrescriptionReminder = inngest.createFunction(
     }
 
     return { sent: true, appointmentId, reminderType };
+  },
+);
+
+export const sendPrescriptionPatientNotification = inngest.createFunction(
+  {
+    id: "send-prescription-patient-notification",
+    retries: 2,
+    triggers: [{ event: "prescription/patient-notification" }],
+  },
+  async ({ event }) => {
+    const { appointmentId, kind } = event.data as {
+      appointmentId: string;
+      kind: PrescriptionPatientNotificationKind;
+    };
+
+    if (kind !== "READY" && kind !== "UPDATED") {
+      return { skipped: true, reason: "invalid_kind" };
+    }
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: {
+        id: true,
+        email: true,
+        patientName: true,
+        date: true,
+        time: true,
+        timezone: true,
+        patientTimezone: true,
+        consultationType: true,
+        status: true,
+        doctor: {
+          select: {
+            name: true,
+          },
+        },
+        prescription: {
+          select: {
+            appointmentId: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) return { skipped: true, reason: "not_found" };
+    if (appointment.status === AppointmentStatus.CANCELLED) {
+      return { skipped: true, reason: "cancelled" };
+    }
+    if (!appointment.prescription) {
+      return { skipped: true, reason: "missing_prescription" };
+    }
+
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    const viewPrescriptionUrl = `${origin}/patient/appointments/${encodeURIComponent(
+      appointment.id,
+    )}/prescription`;
+    const subject =
+      kind === "READY" ? "Your prescription is ready" : "Your prescription has been updated";
+    const heading =
+      kind === "READY" ? "Prescription Ready" : "Prescription Updated";
+    const dateStr = appointment.date.toISOString().slice(0, 10);
+    const doctorDisplayName = formatDoctorDisplayName(appointment.doctor.name);
+    const formattedDate = formatDateInPatientTz(
+      dateStr,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      dateStr,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const message =
+      kind === "READY"
+        ? `Your prescription from ${doctorDisplayName} is now ready. You can review it online from your appointments.`
+        : `Your prescription from ${doctorDisplayName} has been updated. Please review the latest version in your appointments.`;
+    const notificationTitle =
+      kind === "READY" ? "Prescription ready" : "Prescription updated";
+    const notificationMessage =
+      kind === "READY"
+        ? `Your prescription from ${doctorDisplayName} is ready for your appointment on ${formattedDate} at ${formattedTime}.`
+        : `Your prescription from ${doctorDisplayName} was updated for your appointment on ${formattedDate} at ${formattedTime}.`;
+
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: appointment.email,
+      subject,
+      react: MedicineReminderEmailTemplate({
+        heading,
+        message,
+        doctorName: appointment.doctor.name,
+        patientName: appointment.patientName,
+        primaryActionLabel: "View prescription",
+        primaryActionUrl: viewPrescriptionUrl,
+      }),
+    });
+
+    try {
+      await createAppointmentNotificationForEmail({
+        patientEmail: appointment.email,
+        type: NotificationType.APPOINTMENT_REMINDER,
+        title: notificationTitle,
+        message: notificationMessage,
+      });
+    } catch (err) {
+      console.error("[prescription-notification] Failed to create notification:", err);
+    }
+
+    if (error) {
+      throw new Error(
+        `[prescription-notification] Email failed: ${JSON.stringify(error)}`,
+      );
+    }
+
+    return { sent: true, appointmentId, kind };
   },
 );
