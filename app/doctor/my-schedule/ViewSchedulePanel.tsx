@@ -9,6 +9,7 @@ import {
   type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -153,6 +154,9 @@ export function ViewSchedulePanel({
   listRefreshVersion,
 }: ViewSchedulePanelProps) {
   const [days, setDays] = useState<ListDay[] | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isListLoading, setIsListLoading] = useState(false);
   const [todayFromApi, setTodayFromApi] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clearingDate, setClearingDate] = useState<string | null>(null);
@@ -168,6 +172,7 @@ export function ViewSchedulePanel({
   );
 
   const quickCheckInputRef = useRef<HTMLInputElement>(null);
+  const latestListRequestIdRef = useRef(0);
   const [quickCheckDate, setQuickCheckDate] = useState("");
   const [quickCheckSlots, setQuickCheckSlots] = useState<string[] | null>(null);
   const [quickCheckLoading, setQuickCheckLoading] = useState(false);
@@ -218,29 +223,44 @@ export function ViewSchedulePanel({
     };
   }, [quickCheckDate]);
 
-  const loadList = useCallback(async () => {
-    const res = await fetch("/api/doctor/availability?view=list", {
-      cache: "no-store",
-    });
+  const loadList = useCallback(async (nextPage: number, append: boolean) => {
+    const requestId = ++latestListRequestIdRef.current;
+    setIsListLoading(true);
+    const res = await fetch(
+      `/api/doctor/availability?view=list&page=${nextPage}&limit=10`,
+      {
+        cache: "no-store",
+      },
+    );
     if (!res.ok) {
+      if (latestListRequestIdRef.current !== requestId) return;
+      setIsListLoading(false);
       const data = (await res.json()) as { error?: string };
       throw new Error(data.error ?? "Failed to load schedule");
     }
     const data = (await res.json()) as {
       days: ListDay[];
       today: string;
+      hasMore?: boolean;
+      page?: number;
     };
+    if (latestListRequestIdRef.current !== requestId) return;
     const nextDays = Array.isArray(data.days) ? data.days : [];
     setTodayFromApi(data.today);
-    setDays(nextDays);
+    setDays((current) =>
+      append ? [...(current ?? []), ...nextDays] : nextDays,
+    );
+    setHasMore(Boolean(data.hasMore));
+    setPage(typeof data.page === "number" ? data.page : nextPage);
     setError(null);
+    setIsListLoading(false);
   }, []);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        await loadList();
+        await loadList(1, false);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load");
@@ -251,6 +271,14 @@ export function ViewSchedulePanel({
       cancelled = true;
     };
   }, [loadList, listRefreshVersion]);
+
+  const [sentryRef] = useInfiniteScroll({
+    loading: isListLoading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadList(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
 
   useEffect(() => {
     if (!days?.length || !todayFromApi) {
@@ -277,7 +305,8 @@ export function ViewSchedulePanel({
 
   const dateOptionsInMonth = useMemo(() => {
     if (!days?.length || !selectedMonth) return [];
-    if (selectedMonth === ALL_MONTHS_VALUE) return [...days.map((d) => d.date)].sort();
+    if (selectedMonth === ALL_MONTHS_VALUE)
+      return [...days.map((d) => d.date)].sort();
     return sortedDatesInMonth(days, selectedMonth);
   }, [days, selectedMonth]);
 
@@ -325,7 +354,7 @@ export function ViewSchedulePanel({
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Could not update");
       }
-      await loadList();
+      await loadList(1, false);
     } catch (e) {
       setHolidayError(
         e instanceof Error ? e.message : "Could not mark holiday",
@@ -396,7 +425,11 @@ export function ViewSchedulePanel({
 
   if (days === null) {
     return (
-      <div className="mt-6 space-y-4" aria-busy="true" aria-label="Loading schedule">
+      <div
+        className="mt-6 space-y-4"
+        aria-busy="true"
+        aria-label="Loading schedule"
+      >
         <div className="space-y-2">
           <Skeleton className="h-3 w-full max-w-md" />
           <Skeleton className="h-3 w-full max-w-lg" />
@@ -465,7 +498,11 @@ export function ViewSchedulePanel({
 
   if (selectedMonth === null) {
     return (
-      <div className="mt-6 space-y-4" aria-busy="true" aria-label="Loading schedule">
+      <div
+        className="mt-6 space-y-4"
+        aria-busy="true"
+        aria-label="Loading schedule"
+      >
         <div className="space-y-2">
           <Skeleton className="h-3 w-full max-w-md" />
           <Skeleton className="h-3 w-full max-w-lg" />
@@ -640,6 +677,14 @@ export function ViewSchedulePanel({
             </li>
           ))}
         </ul>
+      )}
+      {(hasMore || isListLoading) && (
+        <div
+          ref={sentryRef}
+          className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
+        >
+          {isListLoading ? "Loading..." : "Scroll for more"}
+        </div>
       )}
       {holidayModal}
     </div>

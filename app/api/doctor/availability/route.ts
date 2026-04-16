@@ -72,7 +72,10 @@ export async function GET(request: NextRequest) {
     select: { id: true, timezone: true, slotDurationMinutes: true },
   });
   if (!doctor) {
-    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
   }
 
   const tz = doctor.timezone;
@@ -83,6 +86,17 @@ export async function GET(request: NextRequest) {
 
   const view = request.nextUrl.searchParams.get("view");
   if (view === "list") {
+    const page = Math.max(
+      1,
+      Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
+    );
+    const limit = Math.min(
+      20,
+      Math.max(
+        1,
+        Number(request.nextUrl.searchParams.get("limit") ?? "10") || 10,
+      ),
+    );
     const rows = await prisma.doctorAvailability.findMany({
       where: {
         doctorId: doctor.id,
@@ -107,12 +121,17 @@ export async function GET(request: NextRequest) {
       days.push({ date: dateStr, slotStarts });
     }
     days.sort((a, b) => a.date.localeCompare(b.date));
+    const start = (page - 1) * limit;
+    const paginatedDays = days.slice(start, start + limit);
 
     return NextResponse.json({
       timezone: tz,
       today,
       slotDurationMinutes: fallbackDuration,
-      days,
+      days: paginatedDays,
+      hasMore: start + limit < days.length,
+      total: days.length,
+      page,
     });
   }
 
@@ -176,7 +195,10 @@ export async function PATCH(request: Request) {
     select: { id: true },
   });
   if (!doctor) {
-    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
   }
 
   await prisma.doctor.update({
@@ -184,7 +206,10 @@ export async function PATCH(request: Request) {
     data: { slotDurationMinutes: parsed.slotDurationMinutes },
   });
 
-  return NextResponse.json({ ok: true, slotDurationMinutes: parsed.slotDurationMinutes });
+  return NextResponse.json({
+    ok: true,
+    slotDurationMinutes: parsed.slotDurationMinutes,
+  });
 }
 
 export async function PUT(request: Request) {
@@ -201,7 +226,10 @@ export async function PUT(request: Request) {
     select: { id: true, timezone: true, slotDurationMinutes: true },
   });
   if (!doctor) {
-    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
   }
 
   let parsed: z.infer<typeof putBodySchema>;
