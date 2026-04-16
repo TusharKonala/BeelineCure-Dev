@@ -2,13 +2,22 @@ import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import {
   AppointmentStatus,
+  NotificationType,
   type Prisma,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
+import { MedicineReminderEmailTemplate } from "@/components/medicine-reminder-email-template";
 import { prisma } from "@/lib/db";
 import { inngest } from "@/inngest/client";
+import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { prescriptionReminderTsFromSavedAt } from "@/lib/reminder-time";
+import {
+  formatDateInPatientTz,
+  formatTimeInPatientTz,
+} from "@/lib/timezone-display";
+import { Resend } from "resend";
 
 type MedicinePayload = {
   name: string;
@@ -17,6 +26,8 @@ type MedicinePayload = {
   durationDays: number;
   instructions: string;
 };
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 function sanitizeMedicines(input: unknown): MedicinePayload[] | null {
   if (!Array.isArray(input) || input.length === 0) return null;
@@ -140,7 +151,18 @@ export async function PUT(
     select: {
       id: true,
       status: true,
+      email: true,
+      patientName: true,
+      date: true,
+      time: true,
+      timezone: true,
       patientTimezone: true,
+      consultationType: true,
+      doctor: {
+        select: {
+          name: true,
+        },
+      },
       prescription: {
         select: {
           appointmentId: true,
@@ -236,20 +258,84 @@ export async function PUT(
   }
 
   try {
-    await inngest.send({
-      name: "prescription/patient-notification",
-      data: {
-        appointmentId: appointment.id,
-        kind: notificationKind,
-      },
+    const dateStr = appointment.date.toISOString().slice(0, 10);
+    const doctorDisplayName = formatDoctorDisplayName(appointment.doctor.name);
+    const subject =
+      notificationKind === "READY"
+        ? "Your prescription is ready"
+        : "Your prescription has been updated";
+    const heading =
+      notificationKind === "READY" ? "Prescription Ready" : "Prescription Updated";
+    const message =
+      notificationKind === "READY"
+        ? `Your prescription from ${doctorDisplayName} is now ready. You can review it online from your appointments.`
+        : `Your prescription from ${doctorDisplayName} has been updated. Please review the latest version in your appointments.`;
+    const notificationTitle =
+      notificationKind === "READY" ? "Prescription ready" : "Prescription updated";
+    const notificationMessage =
+      notificationKind === "READY"
+        ? `Your prescription from ${doctorDisplayName} is ready for your appointment on ${formatDateInPatientTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+            appointment.patientTimezone,
+          )} at ${formatTimeInPatientTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+            appointment.patientTimezone,
+          )}.`
+        : `Your prescription from ${doctorDisplayName} was updated for your appointment on ${formatDateInPatientTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+            appointment.patientTimezone,
+          )} at ${formatTimeInPatientTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+            appointment.patientTimezone,
+          )}.`;
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    const viewPrescriptionUrl = `${origin}/patient/appointments/${encodeURIComponent(
+      appointment.id,
+    )}/prescription`;
+
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: appointment.email,
+      subject,
+      react: MedicineReminderEmailTemplate({
+        heading,
+        message,
+        doctorName: appointment.doctor.name,
+        patientName: appointment.patientName,
+        primaryActionLabel: "View prescription",
+        primaryActionUrl: viewPrescriptionUrl,
+      }),
     });
-    console.info("[prescription-debug] route sent patient notification event", {
+    if (error) {
+      console.error("[doctor-prescription] Prescription email failed:", error);
+    }
+
+    await createAppointmentNotificationForEmail({
+      patientEmail: appointment.email,
+      type: NotificationType.APPOINTMENT_REMINDER,
+      title: notificationTitle,
+      message: notificationMessage,
+    });
+
+    console.info("[prescription-debug] route delivered patient notification directly", {
       appointmentId: appointment.id,
       notificationKind,
+      emailDelivered: !error,
     });
   } catch (err) {
-    console.error("[doctor-prescription] Failed to send patient notification event:", err);
-    console.error("[prescription-debug] route failed patient notification event", {
+    console.error("[doctor-prescription] Failed direct patient notification delivery:", err);
+    console.error("[prescription-debug] route direct patient notification failed", {
       appointmentId: appointment.id,
       notificationKind,
       error: err instanceof Error ? err.message : String(err),
