@@ -65,7 +65,6 @@ export function PrescriptionPreviewClient({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [iframeLoaded, setIframeLoaded] = useState(false);
   const [isMobilePreviewFallback, setIsMobilePreviewFallback] = useState(false);
   const normalizedPrescription = useMemo(
     () => normalizePrescription(prescription),
@@ -85,10 +84,6 @@ export function PrescriptionPreviewClient({
     async function preparePreview() {
       setIsPreparingPreview(true);
       setPreviewError(null);
-      setIframeLoaded(false);
-      // #region agent log
-      fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:81',message:'Preparing prescription preview',data:{hasWindow:typeof window!=='undefined',userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',medicineCount:normalizedPrescription.medicines.length,hasNotes:Boolean(normalizedPrescription.generalNotes)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       try {
         const url = await createPrescriptionPdfBlobUrl({
           doctorName,
@@ -104,16 +99,10 @@ export function PrescriptionPreviewClient({
         }
         objectUrl = url;
         setPreviewUrl(url);
-        // #region agent log
-        fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:98',message:'Prescription preview blob URL created',data:{urlPrefix:url.slice(0,12),isBlobUrl:url.startsWith('blob:'),userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown'},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
       } catch {
         if (!cancelled) {
           setPreviewError("Could not render PDF preview.");
           setPreviewUrl(null);
-          // #region agent log
-          fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:104',message:'Prescription preview generation failed',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown'},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         }
       } finally {
         if (!cancelled) {
@@ -159,17 +148,17 @@ export function PrescriptionPreviewClient({
           <div className="p-4 font-montserrat text-sm text-red-600">{previewError}</div>
         ) : previewUrl ? (
           isMobilePreviewFallback ? (
-            <div className="space-y-4 bg-white p-4">
+            <div className="space-y-4 bg-white p-4 sm:p-6">
               <div className="rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4">
-                <p className="font-montserrat text-sm font-semibold text-[#333333]">
-                  Mobile preview
+                <p className="font-montaga text-lg font-semibold text-[#333333]">
+                  Prescription Preview
                 </p>
                 <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                  Your browser does not reliably render the inline PDF preview on mobile, so
-                  showing the prescription details directly here instead.
+                  Review your prescription details below. You can still download the PDF any
+                  time.
                 </p>
               </div>
-              <div className="space-y-2 font-montserrat text-sm text-[#333333]">
+              <div className="space-y-2 rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4 font-montserrat text-sm text-[#333333]">
                 <p>
                   <span className="font-semibold">Doctor:</span> {doctorName}
                 </p>
@@ -215,12 +204,6 @@ export function PrescriptionPreviewClient({
               title="Prescription PDF preview"
               src={previewUrl}
               className="h-[70vh] w-full bg-white"
-              onLoad={() => {
-                setIframeLoaded(true);
-                // #region agent log
-                fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P2',location:'components/prescription/PrescriptionPreviewClient.tsx:152',message:'Prescription preview iframe loaded',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',srcPrefix:previewUrl.slice(0,12)},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
-              }}
             />
           )
         ) : (
@@ -228,13 +211,6 @@ export function PrescriptionPreviewClient({
             No preview available.
           </div>
         )}
-      </div>
-      <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-[#fcfcfc] p-3 font-montserrat text-xs text-[#5E5E5E]">
-        <p>Preview debug:</p>
-        <p>{isPreparingPreview ? "Generating PDF..." : "PDF generation finished."}</p>
-        <p>{previewError ? `Error: ${previewError}` : "No generation error."}</p>
-        <p>{previewUrl ? "Blob preview URL created." : "No blob preview URL."}</p>
-        <p>{iframeLoaded ? "Preview frame loaded." : "Preview frame not loaded yet."}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -246,16 +222,6 @@ export function PrescriptionPreviewClient({
         >
           {isDownloading ? "Preparing PDF..." : "Download prescription PDF"}
         </Button>
-        {previewUrl && isMobilePreviewFallback && (
-          <Button
-            type="button"
-            variant="outline"
-            className="cursor-pointer rounded-xl font-montserrat"
-            onClick={() => window.open(previewUrl, "_blank", "noopener,noreferrer")}
-          >
-            Open PDF
-          </Button>
-        )}
         <Button
           type="button"
           className="cursor-pointer rounded-xl font-montserrat"
