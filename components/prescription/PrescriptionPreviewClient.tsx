@@ -65,6 +65,7 @@ export function PrescriptionPreviewClient({
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isPreparingPreview, setIsPreparingPreview] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [iframeLoaded, setIframeLoaded] = useState(false);
   const normalizedPrescription = useMemo(
     () => normalizePrescription(prescription),
     [prescription],
@@ -77,6 +78,7 @@ export function PrescriptionPreviewClient({
     async function preparePreview() {
       setIsPreparingPreview(true);
       setPreviewError(null);
+      setIframeLoaded(false);
       // #region agent log
       fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:81',message:'Preparing prescription preview',data:{hasWindow:typeof window!=='undefined',userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',medicineCount:normalizedPrescription.medicines.length,hasNotes:Boolean(normalizedPrescription.generalNotes)},timestamp:Date.now()})}).catch(()=>{});
       // #endregion
@@ -154,6 +156,7 @@ export function PrescriptionPreviewClient({
             src={previewUrl}
             className="h-[70vh] w-full bg-white"
             onLoad={() => {
+              setIframeLoaded(true);
               // #region agent log
               fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P2',location:'components/prescription/PrescriptionPreviewClient.tsx:152',message:'Prescription preview iframe loaded',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',srcPrefix:previewUrl.slice(0,12)},timestamp:Date.now()})}).catch(()=>{});
               // #endregion
@@ -164,6 +167,13 @@ export function PrescriptionPreviewClient({
             No preview available.
           </div>
         )}
+      </div>
+      <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-[#fcfcfc] p-3 font-montserrat text-xs text-[#5E5E5E]">
+        <p>Preview debug:</p>
+        <p>{isPreparingPreview ? "Generating PDF..." : "PDF generation finished."}</p>
+        <p>{previewError ? `Error: ${previewError}` : "No generation error."}</p>
+        <p>{previewUrl ? "Blob preview URL created." : "No blob preview URL."}</p>
+        <p>{iframeLoaded ? "Preview frame loaded." : "Preview frame not loaded yet."}</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button
