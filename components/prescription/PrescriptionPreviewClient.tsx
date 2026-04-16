@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { type StructuredPrescription } from "@/lib/prescription-pdf-text";
 import { createPrescriptionPdfBlobUrl, downloadPrescriptionPdf } from "@/lib/prescription-pdf";
+import { type StructuredPrescription } from "@/lib/prescription-pdf-text";
 
-type PrescriptionDownloadClientProps = {
-  appointmentId: string;
+type PrescriptionPreviewClientProps = {
   doctorName: string;
   patientName: string;
   date: string;
@@ -17,6 +16,8 @@ type PrescriptionDownloadClientProps = {
     medicines: unknown;
     generalNotes: string | null;
   };
+  backHref: string;
+  backLabel?: string;
 };
 
 function normalizePrescription(raw: {
@@ -49,15 +50,16 @@ function normalizePrescription(raw: {
   };
 }
 
-export function PrescriptionDownloadClient({
-  appointmentId,
+export function PrescriptionPreviewClient({
   doctorName,
   patientName,
   date,
   time,
   timezone,
   prescription,
-}: PrescriptionDownloadClientProps) {
+  backHref,
+  backLabel = "Back to appointments",
+}: PrescriptionPreviewClientProps) {
   const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -110,7 +112,7 @@ export function PrescriptionDownloadClient({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [appointmentId, doctorName, patientName, date, time, timezone, normalizedPrescription]);
+  }, [doctorName, patientName, date, time, timezone, normalizedPrescription]);
 
   async function downloadPdf() {
     setIsDownloading(true);
@@ -162,9 +164,9 @@ export function PrescriptionDownloadClient({
         <Button
           type="button"
           className="cursor-pointer rounded-xl font-montserrat"
-          onClick={() => router.push("/patient/appointments")}
+          onClick={() => router.push(backHref)}
         >
-          Back to appointments
+          {backLabel}
         </Button>
       </div>
     </div>

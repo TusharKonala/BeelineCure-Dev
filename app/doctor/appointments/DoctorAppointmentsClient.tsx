@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
@@ -343,6 +344,29 @@ export default function DoctorAppointmentsClient() {
                       onClick={() => router.push(`/doctor/appointments/${a.id}/prescription`)}
                     >
                       Add Prescription
+                    </Button>
+                  </div>
+                )}
+                {tab === "completed" && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      asChild
+                      variant="outline"
+                      size="sm"
+                      className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
+                    >
+                      <Link href={`/doctor/prescriptions/${a.id}/view?from=appointments`}>
+                        View prescription
+                      </Link>
+                    </Button>
+                    <Button
+                      asChild
+                      size="sm"
+                      className="w-fit cursor-pointer rounded-xl font-montserrat"
+                    >
+                      <Link href={`/doctor/appointments/${a.id}/prescription`}>
+                        Edit prescription
+                      </Link>
                     </Button>
                   </div>
                 )}

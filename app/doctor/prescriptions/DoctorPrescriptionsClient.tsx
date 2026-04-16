@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
 
@@ -24,7 +26,6 @@ type DoctorPrescriptionItem = {
   timezone: string;
   consultationType: ConsultationType;
   medicines: PrescriptionMedicine[];
-  generalNotes: string | null;
 };
 
 function consultationLabel(type: ConsultationType) {
@@ -206,11 +207,20 @@ export default function DoctorPrescriptionsClient() {
                   </ul>
                 </div>
 
-                {item.generalNotes && (
-                  <p className="mt-3 whitespace-pre-wrap font-montserrat text-sm text-[#333333]">
-                    <span className="font-medium">Notes:</span> {item.generalNotes}
-                  </p>
-                )}
+                <div className="mt-3">
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
+                  >
+                    <Link
+                      href={`/doctor/prescriptions/${item.appointmentId}/view?from=prescriptions`}
+                    >
+                      View prescription
+                    </Link>
+                  </Button>
+                </div>
               </article>
             );
           })}
