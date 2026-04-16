@@ -278,49 +278,17 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
       appointmentId: string;
       kind: PrescriptionPatientNotificationKind;
     };
-    const debugRunId = `prescription-handler-${Date.now()}`;
-    // #region agent log
-    fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "33e6e6",
-      },
-      body: JSON.stringify({
-        sessionId: "33e6e6",
-        runId: debugRunId,
-        hypothesisId: "H2",
-        location: "inngest/functions.ts:281",
-        message: "Prescription patient notification handler invoked",
-        data: {
-          eventName: event.name,
-          appointmentId,
-          kind,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    console.info("[prescription-debug] handler invoked", {
+      eventName: event.name,
+      appointmentId,
+      kind,
+    });
 
     if (kind !== "READY" && kind !== "UPDATED") {
-      // #region agent log
-      fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "33e6e6",
-        },
-        body: JSON.stringify({
-          sessionId: "33e6e6",
-          runId: debugRunId,
-          hypothesisId: "H3",
-          location: "inngest/functions.ts:298",
-          message: "Prescription notification rejected invalid kind",
-          data: { appointmentId, kind },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
+      console.warn("[prescription-debug] handler invalid kind", {
+        appointmentId,
+        kind,
+      });
       return { skipped: true, reason: "invalid_kind" };
     }
 
@@ -350,66 +318,26 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
     });
 
     if (!appointment) {
-      // #region agent log
-      fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "33e6e6",
-        },
-        body: JSON.stringify({
-          sessionId: "33e6e6",
-          runId: debugRunId,
-          hypothesisId: "H3",
-          location: "inngest/functions.ts:333",
-          message: "Prescription notification missing appointment",
-          data: { appointmentId, kind },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
+      console.warn("[prescription-debug] handler missing appointment", {
+        appointmentId,
+        kind,
+      });
       return { skipped: true, reason: "not_found" };
     }
     if (appointment.status === AppointmentStatus.CANCELLED) {
-      // #region agent log
-      fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "33e6e6",
-        },
-        body: JSON.stringify({
-          sessionId: "33e6e6",
-          runId: debugRunId,
-          hypothesisId: "H3",
-          location: "inngest/functions.ts:349",
-          message: "Prescription notification skipped cancelled appointment",
-          data: { appointmentId, status: appointment.status, kind },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
+      console.warn("[prescription-debug] handler appointment cancelled", {
+        appointmentId,
+        kind,
+        status: appointment.status,
+      });
       return { skipped: true, reason: "cancelled" };
     }
     if (!appointment.prescription) {
-      // #region agent log
-      fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "33e6e6",
-        },
-        body: JSON.stringify({
-          sessionId: "33e6e6",
-          runId: debugRunId,
-          hypothesisId: "H3",
-          location: "inngest/functions.ts:365",
-          message: "Prescription notification missing prescription",
-          data: { appointmentId, status: appointment.status, kind },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
+      console.warn("[prescription-debug] handler missing prescription", {
+        appointmentId,
+        kind,
+        status: appointment.status,
+      });
       return { skipped: true, reason: "missing_prescription" };
     }
 
@@ -448,29 +376,12 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
       kind === "READY"
         ? `Your prescription from ${doctorDisplayName} is ready for your appointment on ${formattedDate} at ${formattedTime}.`
         : `Your prescription from ${doctorDisplayName} was updated for your appointment on ${formattedDate} at ${formattedTime}.`;
-    // #region agent log
-    fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "33e6e6",
-      },
-      body: JSON.stringify({
-        sessionId: "33e6e6",
-        runId: debugRunId,
-        hypothesisId: "H4",
-        location: "inngest/functions.ts:412",
-        message: "Prescription notification reached delivery step",
-        data: {
-          appointmentId,
-          kind,
-          appointmentStatus: appointment.status,
-          hasPrescription: Boolean(appointment.prescription),
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    console.info("[prescription-debug] handler reached delivery step", {
+      appointmentId,
+      kind,
+      appointmentStatus: appointment.status,
+      hasPrescription: Boolean(appointment.prescription),
+    });
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -502,29 +413,11 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
         `[prescription-notification] Email failed: ${JSON.stringify(error)}`,
       );
     }
-
-    // #region agent log
-    fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "33e6e6",
-      },
-      body: JSON.stringify({
-        sessionId: "33e6e6",
-        runId: debugRunId,
-        hypothesisId: "H4",
-        location: "inngest/functions.ts:478",
-        message: "Prescription notification handler completed",
-        data: {
-          appointmentId,
-          kind,
-          emailDelivered: true,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    console.info("[prescription-debug] handler completed", {
+      appointmentId,
+      kind,
+      emailDelivered: true,
+    });
 
     return { sent: true, appointmentId, kind };
   },

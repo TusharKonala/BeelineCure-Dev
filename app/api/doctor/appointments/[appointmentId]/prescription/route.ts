@@ -132,7 +132,6 @@ export async function PUT(
   if ("error" in doctorResult) return doctorResult.error;
 
   const { appointmentId } = await context.params;
-  const debugRunId = `prescription-route-${Date.now()}`;
   const appointment = await prisma.appointment.findFirst({
     where: {
       id: appointmentId,
@@ -175,29 +174,12 @@ export async function PUT(
   const generalNotes =
     typeof body?.generalNotes === "string" ? body.generalNotes.trim() : "";
   const notificationKind = appointment.prescription ? "UPDATED" : "READY";
-  // #region agent log
-  fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Debug-Session-Id": "33e6e6",
-    },
-    body: JSON.stringify({
-      sessionId: "33e6e6",
-      runId: debugRunId,
-      hypothesisId: "H1",
-      location: "app/api/doctor/appointments/[appointmentId]/prescription/route.ts:177",
-      message: "Prescription route prepared notification event",
-      data: {
-        appointmentId: appointment.id,
-        notificationKind,
-        hadExistingPrescription: Boolean(appointment.prescription),
-        medicineCount: medicines.length,
-      },
-      timestamp: Date.now(),
-    }),
-  }).catch(() => {});
-  // #endregion
+  console.info("[prescription-debug] route prepared patient notification event", {
+    appointmentId: appointment.id,
+    notificationKind,
+    hadExistingPrescription: Boolean(appointment.prescription),
+    medicineCount: medicines.length,
+  });
 
   await prisma.$transaction(async (tx) => {
     await tx.prescription.upsert({
@@ -261,52 +243,17 @@ export async function PUT(
         kind: notificationKind,
       },
     });
-    // #region agent log
-    fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "33e6e6",
-      },
-      body: JSON.stringify({
-        sessionId: "33e6e6",
-        runId: debugRunId,
-        hypothesisId: "H1",
-        location: "app/api/doctor/appointments/[appointmentId]/prescription/route.ts:241",
-        message: "Prescription route sent patient notification event",
-        data: {
-          appointmentId: appointment.id,
-          notificationKind,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    console.info("[prescription-debug] route sent patient notification event", {
+      appointmentId: appointment.id,
+      notificationKind,
+    });
   } catch (err) {
     console.error("[doctor-prescription] Failed to send patient notification event:", err);
-    // #region agent log
-    fetch("http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "33e6e6",
-      },
-      body: JSON.stringify({
-        sessionId: "33e6e6",
-        runId: debugRunId,
-        hypothesisId: "H1",
-        location: "app/api/doctor/appointments/[appointmentId]/prescription/route.ts:255",
-        message: "Prescription route failed sending patient notification event",
-        data: {
-          appointmentId: appointment.id,
-          notificationKind,
-          error:
-            err instanceof Error ? { name: err.name, message: err.message } : { value: String(err) },
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
+    console.error("[prescription-debug] route failed patient notification event", {
+      appointmentId: appointment.id,
+      notificationKind,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   return NextResponse.json({ ok: true });
