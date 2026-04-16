@@ -77,6 +77,9 @@ export function PrescriptionPreviewClient({
     async function preparePreview() {
       setIsPreparingPreview(true);
       setPreviewError(null);
+      // #region agent log
+      fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:81',message:'Preparing prescription preview',data:{hasWindow:typeof window!=='undefined',userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',medicineCount:normalizedPrescription.medicines.length,hasNotes:Boolean(normalizedPrescription.generalNotes)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       try {
         const url = await createPrescriptionPdfBlobUrl({
           doctorName,
@@ -92,10 +95,16 @@ export function PrescriptionPreviewClient({
         }
         objectUrl = url;
         setPreviewUrl(url);
+        // #region agent log
+        fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:98',message:'Prescription preview blob URL created',data:{urlPrefix:url.slice(0,12),isBlobUrl:url.startsWith('blob:'),userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown'},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
       } catch {
         if (!cancelled) {
           setPreviewError("Could not render PDF preview.");
           setPreviewUrl(null);
+          // #region agent log
+          fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P1',location:'components/prescription/PrescriptionPreviewClient.tsx:104',message:'Prescription preview generation failed',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown'},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
         }
       } finally {
         if (!cancelled) {
@@ -144,6 +153,11 @@ export function PrescriptionPreviewClient({
             title="Prescription PDF preview"
             src={previewUrl}
             className="h-[70vh] w-full bg-white"
+            onLoad={() => {
+              // #region agent log
+              fetch('http://127.0.0.1:7526/ingest/93fa37b6-8a67-48a3-993f-4c2ad777ca28',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'33e6e6'},body:JSON.stringify({sessionId:'33e6e6',runId:`preview-${Date.now()}`,hypothesisId:'P2',location:'components/prescription/PrescriptionPreviewClient.tsx:152',message:'Prescription preview iframe loaded',data:{userAgent:typeof navigator!=='undefined'?navigator.userAgent:'unknown',srcPrefix:previewUrl.slice(0,12)},timestamp:Date.now()})}).catch(()=>{});
+              // #endregion
+            }}
           />
         ) : (
           <div className="p-4 font-montserrat text-sm text-[#5E5E5E]">
