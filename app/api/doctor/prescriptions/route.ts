@@ -54,6 +54,8 @@ export async function GET(request: NextRequest) {
 
   const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
   const dateFilter = normalizeDoctorDateFilter(request.nextUrl.searchParams.get("dateFilter"));
+  const page = Math.max(1, Number(request.nextUrl.searchParams.get("page") ?? "1") || 1);
+  const limit = Math.min(20, Math.max(5, Number(request.nextUrl.searchParams.get("limit") ?? "5") || 5));
 
   const baseWhere: Prisma.AppointmentWhereInput = {
     doctorId: doctor.id,
@@ -113,6 +115,13 @@ export async function GET(request: NextRequest) {
       };
     })
     .filter((item): item is NonNullable<typeof item> => item !== null);
+  const start = (page - 1) * limit;
+  const paginatedItems = items.slice(start, start + limit);
 
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items: paginatedItems,
+    hasMore: start + limit < items.length,
+    total: items.length,
+    page,
+  });
 }

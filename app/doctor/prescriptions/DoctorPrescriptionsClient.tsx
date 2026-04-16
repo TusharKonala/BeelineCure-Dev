@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
@@ -40,36 +41,63 @@ const SELECT_CHEVRON =
 
 export default function DoctorPrescriptionsClient() {
   const [items, setItems] = useState<DoctorPrescriptionItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestRequestIdRef = useRef(0);
 
-  const loadPrescriptions = useCallback(async () => {
+  const loadPrescriptions = useCallback(async (nextPage: number, append: boolean) => {
+    const requestId = ++latestRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ dateFilter });
+      const params = new URLSearchParams({
+        dateFilter,
+        page: String(nextPage),
+        limit: "5",
+      });
       if (search.trim()) params.set("search", search.trim());
       const res = await fetch(`/api/doctor/prescriptions?${params.toString()}`, {
         cache: "no-store",
       });
       if (!res.ok) {
+        if (latestRequestIdRef.current !== requestId) return;
         setError("Failed to load prescriptions.");
         return;
       }
-      const data = (await res.json()) as { items?: DoctorPrescriptionItem[] };
-      setItems(Array.isArray(data.items) ? data.items : []);
+      const data = (await res.json()) as {
+        items?: DoctorPrescriptionItem[];
+        hasMore?: boolean;
+        page?: number;
+      };
+      if (latestRequestIdRef.current !== requestId) return;
+      const nextItems = Array.isArray(data.items) ? data.items : [];
+      setItems((current) => (append ? [...current, ...nextItems] : nextItems));
+      setHasMore(Boolean(data.hasMore));
+      setPage(typeof data.page === "number" ? data.page : nextPage);
     } catch {
+      if (latestRequestIdRef.current !== requestId) return;
       setError("Failed to load prescriptions.");
     } finally {
+      if (latestRequestIdRef.current !== requestId) return;
       setIsLoading(false);
     }
   }, [dateFilter, search]);
 
   useEffect(() => {
-    void loadPrescriptions();
+    void loadPrescriptions(1, false);
   }, [loadPrescriptions]);
+
+  const [sentryRef] = useInfiniteScroll({
+    loading: isLoading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadPrescriptions(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
 
   return (
     <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
@@ -130,11 +158,7 @@ export default function DoctorPrescriptionsClient() {
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">{error}</p>
         </div>
-      ) : isLoading ? (
-        <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
-          <p className="font-montserrat text-sm font-medium text-[#333333]">Loading...</p>
-        </div>
-      ) : items.length === 0 ? (
+      ) : !isLoading && items.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">
             No prescriptions found for completed appointments.
@@ -224,6 +248,14 @@ export default function DoctorPrescriptionsClient() {
               </article>
             );
           })}
+          {(hasMore || isLoading) && (
+            <div
+              ref={sentryRef}
+              className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
+            >
+              {isLoading ? "Loading..." : "Scroll for more"}
+            </div>
+          )}
         </div>
       )}
     </div>
