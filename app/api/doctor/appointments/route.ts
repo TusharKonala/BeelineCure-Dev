@@ -1,6 +1,10 @@
 import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
-import { AppointmentStatus, type Prisma, UserRole } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  type Prisma,
+  UserRole,
+} from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   doctorAppointmentDateTimeOrderBy,
@@ -34,12 +38,28 @@ export async function GET(request: NextRequest) {
     select: { id: true, timezone: true },
   });
   if (!doctor) {
-    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
   }
 
   const tab = normalizeTab(request.nextUrl.searchParams.get("tab"));
   const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
-  const dateFilter = normalizeDoctorDateFilter(request.nextUrl.searchParams.get("dateFilter"));
+  const dateFilter = normalizeDoctorDateFilter(
+    request.nextUrl.searchParams.get("dateFilter"),
+  );
+  const page = Math.max(
+    1,
+    Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
+  );
+  const limit = Math.min(
+    20,
+    Math.max(
+      5,
+      Number(request.nextUrl.searchParams.get("limit") ?? "5") || 5,
+    ),
+  );
   const statuses =
     tab === "completed"
       ? [AppointmentStatus.COMPLETED]
@@ -81,18 +101,31 @@ export async function GET(request: NextRequest) {
       ? appointments.filter(
           (a) =>
             a.status === AppointmentStatus.CONFIRMED &&
-            isDoctorTimeInPast(a.date.toISOString().slice(0, 10), a.time, a.timezone),
+            isDoctorTimeInPast(
+              a.date.toISOString().slice(0, 10),
+              a.time,
+              a.timezone,
+            ),
         )
       : tab === "upcoming"
         ? appointments.filter((a) => {
             if (a.status === AppointmentStatus.PENDING) return true;
             if (a.status !== AppointmentStatus.CONFIRMED) return false;
-            return !isDoctorTimeInPast(a.date.toISOString().slice(0, 10), a.time, a.timezone);
+            return !isDoctorTimeInPast(
+              a.date.toISOString().slice(0, 10),
+              a.time,
+              a.timezone,
+            );
           })
         : appointments;
+  const start = (page - 1) * limit;
+  const paginatedAppointments = filteredAppointments.slice(
+    start,
+    start + limit,
+  );
 
   return NextResponse.json({
-    items: filteredAppointments.map((a) => ({
+    items: paginatedAppointments.map((a) => ({
       id: a.id,
       patientName: a.patientName,
       email: a.email,
@@ -104,6 +137,9 @@ export async function GET(request: NextRequest) {
       status: a.status,
       notes: a.notes,
     })),
+    hasMore: start + limit < filteredAppointments.length,
+    total: filteredAppointments.length,
+    page,
   });
 }
 
@@ -121,13 +157,21 @@ export async function PATCH(request: NextRequest) {
     select: { id: true },
   });
   if (!doctor) {
-    return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
   }
 
-  const body = (await request.json().catch(() => null)) as { appointmentId?: string } | null;
+  const body = (await request.json().catch(() => null)) as {
+    appointmentId?: string;
+  } | null;
   const appointmentId = body?.appointmentId?.trim();
   if (!appointmentId) {
-    return NextResponse.json({ error: "appointmentId is required" }, { status: 400 });
+    return NextResponse.json(
+      { error: "appointmentId is required" },
+      { status: 400 },
+    );
   }
 
   const appointment = await prisma.appointment.findFirst({
@@ -141,10 +185,16 @@ export async function PATCH(request: NextRequest) {
     },
   });
   if (!appointment) {
-    return NextResponse.json({ error: "Appointment not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Appointment not found" },
+      { status: 404 },
+    );
   }
   if (appointment.status === AppointmentStatus.CANCELLED) {
-    return NextResponse.json({ error: "Appointment already cancelled" }, { status: 409 });
+    return NextResponse.json(
+      { error: "Appointment already cancelled" },
+      { status: 409 },
+    );
   }
   if (appointment.status === AppointmentStatus.COMPLETED) {
     return NextResponse.json(

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
@@ -67,6 +68,8 @@ export default function DoctorAppointmentsClient() {
   const searchParams = useSearchParams();
   const initialTab = tabFromParam(searchParams.get("tab"));
   const [appointments, setAppointments] = useState<DoctorAppointmentItem[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
@@ -85,7 +88,7 @@ export default function DoctorAppointmentsClient() {
     setTab(tabFromParam(searchParams.get("tab")));
   }, [searchParams]);
 
-  const loadAppointments = useCallback(async () => {
+  const loadAppointments = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
     setIsLoading(true);
     setError(null);
@@ -93,6 +96,8 @@ export default function DoctorAppointmentsClient() {
       const params = new URLSearchParams({
         tab,
         dateFilter,
+        page: String(nextPage),
+        limit: "5",
       });
       if (search.trim()) params.set("search", search.trim());
       const res = await fetch(`/api/doctor/appointments?${params.toString()}`, {
@@ -103,9 +108,16 @@ export default function DoctorAppointmentsClient() {
         setError("Failed to load appointments.");
         return;
       }
-      const data = (await res.json()) as { items?: DoctorAppointmentItem[] };
+      const data = (await res.json()) as {
+        items?: DoctorAppointmentItem[];
+        hasMore?: boolean;
+        page?: number;
+      };
       if (latestRequestIdRef.current !== requestId) return;
-      setAppointments(Array.isArray(data.items) ? data.items : []);
+      const nextItems = Array.isArray(data.items) ? data.items : [];
+      setAppointments((current) => (append ? [...current, ...nextItems] : nextItems));
+      setHasMore(Boolean(data.hasMore));
+      setPage(typeof data.page === "number" ? data.page : nextPage);
     } catch {
       if (latestRequestIdRef.current !== requestId) return;
       setError("Failed to load appointments.");
@@ -116,8 +128,16 @@ export default function DoctorAppointmentsClient() {
   }, [dateFilter, search, tab]);
 
   useEffect(() => {
-    void loadAppointments();
+    void loadAppointments(1, false);
   }, [loadAppointments]);
+
+  const [sentryRef] = useInfiniteScroll({
+    loading: isLoading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadAppointments(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
 
   async function confirmCancelAppointment() {
     if (!cancelTarget) return;
@@ -133,7 +153,7 @@ export default function DoctorAppointmentsClient() {
         return;
       }
       setCancelTarget(null);
-      await loadAppointments();
+      await loadAppointments(1, false);
     } catch {
       setError("Failed to cancel appointment.");
     } finally {
@@ -271,11 +291,7 @@ export default function DoctorAppointmentsClient() {
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">{error}</p>
         </div>
-      ) : isLoading ? (
-        <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
-          <p className="font-montserrat text-sm font-medium text-[#333333]">Loading...</p>
-        </div>
-      ) : appointments.length === 0 ? (
+      ) : !isLoading && appointments.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">
             {tab === "upcoming"
@@ -398,6 +414,14 @@ export default function DoctorAppointmentsClient() {
               </div>
             );
           })}
+          {(hasMore || isLoading) && (
+            <div
+              ref={sentryRef}
+              className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
+            >
+              {isLoading ? "Loading..." : "Scroll for more"}
+            </div>
+          )}
         </div>
       )}
       {mounted &&
