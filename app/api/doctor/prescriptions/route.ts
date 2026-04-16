@@ -1,7 +1,17 @@
 import { getServerSession } from "next-auth/next";
-import { NextResponse } from "next/server";
-import { AppointmentStatus, UserRole } from "@/generated/prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import {
+  AppointmentStatus,
+  type Prisma,
+  UserRole,
+} from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
+import {
+  doctorAppointmentDateTimeOrderBy,
+  doctorAppointmentDateWhere,
+  mergeDoctorPatientSearch,
+  normalizeDoctorDateFilter,
+} from "@/lib/doctor-appointment-filters";
 import { prisma } from "@/lib/db";
 
 type PrescriptionMedicine = {
@@ -25,7 +35,7 @@ function isPrescriptionMedicine(value: unknown): value is PrescriptionMedicine {
   );
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -36,22 +46,36 @@ export async function GET() {
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId: session.user.id },
-    select: { id: true },
+    select: { id: true, timezone: true },
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
   }
 
+  const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
+  const dateFilter = normalizeDoctorDateFilter(request.nextUrl.searchParams.get("dateFilter"));
+
+  const baseWhere: Prisma.AppointmentWhereInput = {
+    doctorId: doctor.id,
+    status: AppointmentStatus.COMPLETED,
+    prescription: { isNot: null },
+  };
+
+  const dateWhere = doctorAppointmentDateWhere(dateFilter, doctor.timezone);
+  if (dateWhere) {
+    baseWhere.date = dateWhere;
+  }
+
+  const selectedWhere = mergeDoctorPatientSearch(baseWhere, search);
+
   const appointments = await prisma.appointment.findMany({
-    where: {
-      doctorId: doctor.id,
-      status: AppointmentStatus.COMPLETED,
-      prescription: { isNot: null },
-    },
-    orderBy: [{ date: "desc" }, { time: "desc" }],
+    where: selectedWhere,
+    orderBy: doctorAppointmentDateTimeOrderBy(dateFilter),
     select: {
       id: true,
       patientName: true,
+      email: true,
+      phone: true,
       date: true,
       time: true,
       timezone: true,
@@ -78,6 +102,8 @@ export async function GET() {
       return {
         appointmentId: appointment.id,
         patientName: appointment.patientName,
+        email: appointment.email,
+        phone: appointment.phone,
         date: appointment.date.toISOString().slice(0, 10),
         time: appointment.time,
         timezone: appointment.timezone,

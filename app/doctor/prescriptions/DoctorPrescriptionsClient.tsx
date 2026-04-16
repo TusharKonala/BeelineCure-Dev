@@ -17,6 +17,8 @@ type PrescriptionMedicine = {
 type DoctorPrescriptionItem = {
   appointmentId: string;
   patientName: string;
+  email: string;
+  phone: string;
   date: string;
   time: string;
   timezone: string;
@@ -29,8 +31,16 @@ function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
 }
 
+type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
+
+/** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` text inset. */
+const SELECT_CHEVRON =
+  'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
+
 export default function DoctorPrescriptionsClient() {
   const [items, setItems] = useState<DoctorPrescriptionItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,7 +48,11 @@ export default function DoctorPrescriptionsClient() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/doctor/prescriptions", { cache: "no-store" });
+      const params = new URLSearchParams({ dateFilter });
+      if (search.trim()) params.set("search", search.trim());
+      const res = await fetch(`/api/doctor/prescriptions?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) {
         setError("Failed to load prescriptions.");
         return;
@@ -50,7 +64,7 @@ export default function DoctorPrescriptionsClient() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [dateFilter, search]);
 
   useEffect(() => {
     void loadPrescriptions();
@@ -65,6 +79,50 @@ export default function DoctorPrescriptionsClient() {
         <p className="font-montserrat text-sm text-[#5E5E5E]">
           View all prescriptions from your completed appointments.
         </p>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
+          <label
+            htmlFor="doctor-prescriptions-search"
+            className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
+          >
+            Patient
+          </label>
+          <input
+            id="doctor-prescriptions-search"
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, or phone"
+            className="w-full min-w-0 rounded-xl border border-[#e5e5e5] bg-white py-2 px-3 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+          />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xs">
+          <label
+            htmlFor="doctor-prescriptions-date-filter"
+            className="shrink-0 font-montserrat text-sm font-medium text-[#333333]"
+          >
+            Date
+          </label>
+          <select
+            id="doctor-prescriptions-date-filter"
+            value={dateFilter}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "asc" || v === "desc" || v === "today" || v === "week" || v === "month") {
+                setDateFilter(v);
+              }
+            }}
+            className={`w-full min-w-0 cursor-pointer rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
+          >
+            <option value="desc">Latest first</option>
+            <option value="asc">Earliest first</option>
+            <option value="today">Today</option>
+            <option value="week">This week</option>
+            <option value="month">This month</option>
+          </select>
+        </div>
       </div>
 
       {error ? (
@@ -95,6 +153,8 @@ export default function DoctorPrescriptionsClient() {
                     <p className="font-montaga text-lg font-semibold text-[#333333]">
                       <MontagaCapitalN text={item.patientName} />
                     </p>
+                    <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">{item.email}</p>
+                    <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">{item.phone}</p>
                     <div className="mt-2 flex flex-col gap-1 font-montserrat text-sm text-[#333333] min-[400px]:flex-row min-[400px]:flex-wrap min-[400px]:items-center">
                       <span>
                         <span className="font-medium">Date:</span>{" "}
