@@ -176,13 +176,24 @@ export function PrescriptionPreviewClient({
                     className="rounded-lg border border-[#e5e5e5] bg-[#fcfcfc] p-4"
                   >
                     <p className="font-montserrat text-sm font-semibold text-[#333333]">
-                      {medicine.name}
+                      {index + 1}. {medicine.name}
                     </p>
-                    <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                      {medicine.dosage} | {medicine.frequency} | {medicine.durationDays} day
-                      {medicine.durationDays === 1 ? "" : "s"}
-                    </p>
-                    <p className="mt-2 font-montserrat text-sm text-[#333333]">
+                    <div className="mt-2 space-y-1 font-montserrat text-sm text-[#5E5E5E]">
+                      <p>
+                        <span className="font-semibold text-[#333333]">Dosage:</span>{" "}
+                        {medicine.dosage}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#333333]">Frequency:</span>{" "}
+                        {medicine.frequency}
+                      </p>
+                      <p>
+                        <span className="font-semibold text-[#333333]">Duration:</span>{" "}
+                        {medicine.durationDays} day{medicine.durationDays === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <p className="mt-3 font-montserrat text-sm text-[#333333]">
+                      <span className="font-semibold">Instructions:</span>{" "}
                       {medicine.instructions}
                     </p>
                   </div>
