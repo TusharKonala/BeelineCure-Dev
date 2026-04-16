@@ -196,12 +196,6 @@ export async function PUT(
   const generalNotes =
     typeof body?.generalNotes === "string" ? body.generalNotes.trim() : "";
   const notificationKind = appointment.prescription ? "UPDATED" : "READY";
-  console.info("[prescription-debug] route prepared patient notification event", {
-    appointmentId: appointment.id,
-    notificationKind,
-    hadExistingPrescription: Boolean(appointment.prescription),
-    medicineCount: medicines.length,
-  });
 
   await prisma.$transaction(async (tx) => {
     await tx.prescription.upsert({
@@ -327,19 +321,8 @@ export async function PUT(
       title: notificationTitle,
       message: notificationMessage,
     });
-
-    console.info("[prescription-debug] route delivered patient notification directly", {
-      appointmentId: appointment.id,
-      notificationKind,
-      emailDelivered: !error,
-    });
   } catch (err) {
     console.error("[doctor-prescription] Failed direct patient notification delivery:", err);
-    console.error("[prescription-debug] route direct patient notification failed", {
-      appointmentId: appointment.id,
-      notificationKind,
-      error: err instanceof Error ? err.message : String(err),
-    });
   }
 
   return NextResponse.json({ ok: true });

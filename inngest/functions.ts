@@ -278,17 +278,8 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
       appointmentId: string;
       kind: PrescriptionPatientNotificationKind;
     };
-    console.info("[prescription-debug] handler invoked", {
-      eventName: event.name,
-      appointmentId,
-      kind,
-    });
 
     if (kind !== "READY" && kind !== "UPDATED") {
-      console.warn("[prescription-debug] handler invalid kind", {
-        appointmentId,
-        kind,
-      });
       return { skipped: true, reason: "invalid_kind" };
     }
 
@@ -318,26 +309,12 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
     });
 
     if (!appointment) {
-      console.warn("[prescription-debug] handler missing appointment", {
-        appointmentId,
-        kind,
-      });
       return { skipped: true, reason: "not_found" };
     }
     if (appointment.status === AppointmentStatus.CANCELLED) {
-      console.warn("[prescription-debug] handler appointment cancelled", {
-        appointmentId,
-        kind,
-        status: appointment.status,
-      });
       return { skipped: true, reason: "cancelled" };
     }
     if (!appointment.prescription) {
-      console.warn("[prescription-debug] handler missing prescription", {
-        appointmentId,
-        kind,
-        status: appointment.status,
-      });
       return { skipped: true, reason: "missing_prescription" };
     }
 
@@ -376,12 +353,6 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
       kind === "READY"
         ? `Your prescription from ${doctorDisplayName} is ready for your appointment on ${formattedDate} at ${formattedTime}.`
         : `Your prescription from ${doctorDisplayName} was updated for your appointment on ${formattedDate} at ${formattedTime}.`;
-    console.info("[prescription-debug] handler reached delivery step", {
-      appointmentId,
-      kind,
-      appointmentStatus: appointment.status,
-      hasPrescription: Boolean(appointment.prescription),
-    });
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -413,11 +384,6 @@ export const sendPrescriptionPatientNotification = inngest.createFunction(
         `[prescription-notification] Email failed: ${JSON.stringify(error)}`,
       );
     }
-    console.info("[prescription-debug] handler completed", {
-      appointmentId,
-      kind,
-      emailDelivered: true,
-    });
 
     return { sent: true, appointmentId, kind };
   },
