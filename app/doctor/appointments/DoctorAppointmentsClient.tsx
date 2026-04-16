@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
@@ -55,10 +55,19 @@ function badgeClass(kind: "consultation" | "status", value: string) {
   }
 }
 
+function tabFromParam(raw: string | null): TabKey {
+  if (raw === "pending-review") return "pending-review";
+  if (raw === "completed") return "completed";
+  if (raw === "cancelled") return "cancelled";
+  return "upcoming";
+}
+
 export default function DoctorAppointmentsClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = tabFromParam(searchParams.get("tab"));
   const [appointments, setAppointments] = useState<DoctorAppointmentItem[]>([]);
-  const [tab, setTab] = useState<TabKey>("upcoming");
+  const [tab, setTab] = useState<TabKey>(initialTab);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
@@ -66,12 +75,18 @@ export default function DoctorAppointmentsClient() {
   const [cancelTarget, setCancelTarget] = useState<DoctorAppointmentItem | null>(null);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const latestRequestIdRef = useRef(0);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    setTab(tabFromParam(searchParams.get("tab")));
+  }, [searchParams]);
+
   const loadAppointments = useCallback(async () => {
+    const requestId = ++latestRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -84,14 +99,18 @@ export default function DoctorAppointmentsClient() {
         cache: "no-store",
       });
       if (!res.ok) {
+        if (latestRequestIdRef.current !== requestId) return;
         setError("Failed to load appointments.");
         return;
       }
       const data = (await res.json()) as { items?: DoctorAppointmentItem[] };
+      if (latestRequestIdRef.current !== requestId) return;
       setAppointments(Array.isArray(data.items) ? data.items : []);
     } catch {
+      if (latestRequestIdRef.current !== requestId) return;
       setError("Failed to load appointments.");
     } finally {
+      if (latestRequestIdRef.current !== requestId) return;
       setIsLoading(false);
     }
   }, [dateFilter, search, tab]);

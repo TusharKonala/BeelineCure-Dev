@@ -42,6 +42,7 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
   const router = useRouter();
   const [medicines, setMedicines] = useState<MedicineInput[]>([emptyMedicine()]);
   const [generalNotes, setGeneralNotes] = useState("");
+  const [isEditingExistingPrescription, setIsEditingExistingPrescription] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
           prescription?: { medicines?: PrescriptionApiMedicine[]; generalNotes?: string | null } | null;
         };
         if (cancelled) return;
+        setIsEditingExistingPrescription(Boolean(data.prescription));
         const existingMedicines = data.prescription?.medicines;
         const rows = Array.isArray(existingMedicines)
           ? existingMedicines.map(mapApiMedicineToInput)
@@ -143,7 +145,7 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
         setError(data?.error ?? "Failed to save prescription");
         return;
       }
-      router.push("/doctor/appointments");
+      router.push("/doctor/appointments?tab=completed");
       router.refresh();
     } catch {
       setError("Failed to save prescription");
@@ -249,13 +251,17 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
           onClick={() => void handleSubmit()}
           disabled={isSaving}
         >
-          {isSaving ? "Saving..." : "Save Prescription & Complete"}
+          {isSaving
+            ? "Saving..."
+            : isEditingExistingPrescription
+              ? "Save changes"
+              : "Save and complete"}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="cursor-pointer rounded-xl font-montserrat"
-          onClick={() => router.push("/doctor/appointments")}
+          onClick={() => router.push("/doctor/appointments?tab=completed")}
           disabled={isSaving}
         >
           Cancel
