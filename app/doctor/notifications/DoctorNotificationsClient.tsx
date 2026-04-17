@@ -3,6 +3,7 @@
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
+import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 
 type NotificationItem = {
   id: string;
@@ -106,7 +107,7 @@ export default function DoctorNotificationsClient() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-            Notifications
+            <MontagaCapitalN text="Notifications" />
           </h1>
           <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
             Stay up to date on overdue appointments and follow-up actions.
