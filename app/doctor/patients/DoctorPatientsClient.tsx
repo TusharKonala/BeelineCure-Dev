@@ -7,6 +7,7 @@ import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import {
   formatDateInDoctorTz,
   formatTimeInDoctorTz,
+  isDoctorTimeInPast,
 } from "@/lib/timezone-display";
 
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -23,6 +24,27 @@ type DoctorPatientListItem = {
   lastAppointmentTimezone: string;
   lastAppointmentStatus: AppointmentStatus;
 };
+
+function appointmentStatusBadgeClass(status: AppointmentStatus): string {
+  if (status === "PENDING")
+    return "border-amber-500/30 bg-amber-500/10 text-amber-800";
+  if (status === "CONFIRMED")
+    return "border-[#2555F3]/30 bg-[#2555F3]/10 text-[#2555F3]";
+  if (status === "COMPLETED")
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-800";
+  return "border-red-500/30 bg-red-500/10 text-red-800";
+}
+
+function appointmentHistoryLabel(item: DoctorPatientListItem): string {
+  const isFuture = !isDoctorTimeInPast(
+    item.lastAppointmentDate,
+    item.lastAppointmentTime,
+    item.lastAppointmentTimezone,
+  );
+  if (!isFuture) return "Last appointment";
+  if (item.lastAppointmentStatus === "CANCELLED") return "Upcoming (Cancelled)";
+  return "Upcoming appointment";
+}
 
 export default function DoctorPatientsClient() {
   const [items, setItems] = useState<DoctorPatientListItem[]>([]);
@@ -163,7 +185,7 @@ export default function DoctorPatientsClient() {
                   History
                 </p>
                 <p className="mt-1 font-montserrat text-sm text-[#333333]">
-                  Last appointment:{" "}
+                  {appointmentHistoryLabel(item)}:{" "}
                   {formatDateInDoctorTz(
                     item.lastAppointmentDate,
                     item.lastAppointmentTime,
@@ -176,10 +198,19 @@ export default function DoctorPatientsClient() {
                     item.lastAppointmentTimezone,
                   )}
                 </p>
-                <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                  {item.prescriptionCount} prescription
-                  {item.prescriptionCount === 1 ? "" : "s"} issued
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full border px-2.5 py-1 font-montserrat text-xs font-medium ${appointmentStatusBadgeClass(
+                      item.lastAppointmentStatus,
+                    )}`}
+                  >
+                    {item.lastAppointmentStatus}
+                  </span>
+                  <span className="font-montserrat text-sm text-[#5E5E5E]">
+                    {item.prescriptionCount} prescription
+                    {item.prescriptionCount === 1 ? "" : "s"} issued
+                  </span>
+                </div>
               </div>
             </Link>
           ))}

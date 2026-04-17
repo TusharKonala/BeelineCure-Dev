@@ -5,7 +5,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { computeAgeYears } from "@/lib/health-profile-metrics";
-import { formatDateInDoctorTz, formatTimeInDoctorTz } from "@/lib/timezone-display";
+import {
+  formatDateInDoctorTz,
+  formatTimeInDoctorTz,
+  isDoctorTimeInPast,
+} from "@/lib/timezone-display";
 
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -56,6 +60,7 @@ type LastPrescription = {
   timezone: string;
   consultationType: ConsultationType;
   medicinesCount: number;
+  medicinesSummary: string | null;
   generalNotes: string | null;
 };
 
@@ -95,15 +100,29 @@ function statusLabel(status: AppointmentStatus): string {
   return "Cancelled";
 }
 
-function SummaryRow({ label, value }: { label: string; value: string }) {
+function SummaryRow({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="border-b border-[#f0f0f0] py-3 last:border-b-0">
+    <div className={`rounded-lg border border-[#ececec] bg-white px-4 py-3 ${className ?? ""}`}>
       <p className="font-montserrat text-xs font-medium uppercase tracking-wide text-[#5E5E5E]">
         {label}
       </p>
-      <p className="mt-1 whitespace-pre-wrap font-montserrat text-sm text-[#333333]">{value}</p>
+      <p className="mt-1 whitespace-pre-wrap font-montserrat text-sm leading-relaxed text-[#333333]">
+        {value}
+      </p>
     </div>
   );
+}
+
+function appointmentCardHeading(lastAppointment: LastAppointment | null): string {
+  if (!lastAppointment) return "Last appointment";
+  const isFuture = !isDoctorTimeInPast(
+    lastAppointment.date,
+    lastAppointment.time,
+    lastAppointment.timezone,
+  );
+  if (!isFuture) return "Last appointment";
+  if (lastAppointment.status === "CANCELLED") return "Next appointment (Cancelled)";
+  return "Upcoming appointment";
 }
 
 export default function DoctorPatientDetailClient({ patientEmail }: Props) {
@@ -211,7 +230,7 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
       <div className="mt-6 rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-5">
         <h2 className="font-montserrat text-sm font-semibold text-[#333333]">Health profile</h2>
         {profile ? (
-          <div className="mt-2">
+          <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
             <SummaryRow label="Blood group" value={valueOrDash(profile.bloodGroup)} />
             <SummaryRow
               label="Height / weight"
@@ -232,13 +251,6 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
             />
             <SummaryRow label="Age" value={age ?? "—"} />
             <SummaryRow label="Gender" value={valueOrDash(profile.gender)} />
-            <SummaryRow label="Allergies" value={valueOrDash(profile.allergies)} />
-            <SummaryRow label="Chronic conditions" value={valueOrDash(profile.conditions)} />
-            <SummaryRow
-              label="Current medications"
-              value={valueOrDash(profile.currentMedications)}
-            />
-            <SummaryRow label="Past surgeries" value={valueOrDash(profile.pastSurgeries)} />
             <SummaryRow label="Smoking status" value={valueOrDash(profile.smokingStatus)} />
             <SummaryRow label="Alcohol use" value={valueOrDash(profile.alcoholUse)} />
             <SummaryRow label="Activity level" value={valueOrDash(profile.activityLevel)} />
@@ -258,6 +270,26 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
                 profile.emergencyContact2Phone,
               )}
             />
+            <SummaryRow
+              label="Allergies"
+              value={valueOrDash(profile.allergies)}
+              className="md:col-span-2"
+            />
+            <SummaryRow
+              label="Chronic conditions"
+              value={valueOrDash(profile.conditions)}
+              className="md:col-span-2"
+            />
+            <SummaryRow
+              label="Current medications"
+              value={valueOrDash(profile.currentMedications)}
+              className="md:col-span-2"
+            />
+            <SummaryRow
+              label="Past surgeries"
+              value={valueOrDash(profile.pastSurgeries)}
+              className="md:col-span-2"
+            />
           </div>
         ) : (
           <div className="mt-3 rounded-xl border border-dashed border-[#e5e5e5] bg-white p-4">
@@ -270,7 +302,9 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
 
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-5">
-          <h3 className="font-montserrat text-sm font-semibold text-[#333333]">Last appointment</h3>
+          <h3 className="font-montserrat text-sm font-semibold text-[#333333]">
+            {appointmentCardHeading(data.lastAppointment)}
+          </h3>
           {data.lastAppointment ? (
             <>
               <div className="mt-2 space-y-1 font-montserrat text-sm text-[#333333]">
@@ -297,8 +331,8 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
                 <p>
                   <span className="font-medium">Status:</span> {statusLabel(data.lastAppointment.status)}
                 </p>
-                <p className="whitespace-pre-wrap text-[#5E5E5E]">
-                  <span className="font-medium text-[#333333]">Notes:</span>{" "}
+                <p className="whitespace-pre-wrap leading-relaxed text-[#333333]">
+                  <span className="font-medium">Notes:</span>{" "}
                   {valueOrDash(data.lastAppointment.notes)}
                 </p>
               </div>
@@ -343,8 +377,12 @@ export default function DoctorPatientDetailClient({ patientEmail }: Props) {
                 <p>
                   <span className="font-medium">Medicines:</span> {data.lastPrescription.medicinesCount}
                 </p>
-                <p className="whitespace-pre-wrap text-[#5E5E5E]">
-                  <span className="font-medium text-[#333333]">Notes:</span>{" "}
+                <p className="whitespace-pre-wrap leading-relaxed text-[#333333]">
+                  <span className="font-medium">Medicine summary:</span>{" "}
+                  {valueOrDash(data.lastPrescription.medicinesSummary)}
+                </p>
+                <p className="whitespace-pre-wrap leading-relaxed text-[#333333]">
+                  <span className="font-medium">Notes:</span>{" "}
                   {valueOrDash(data.lastPrescription.generalNotes)}
                 </p>
               </div>

@@ -25,6 +25,21 @@ function isPrescriptionMedicine(value: unknown): value is PrescriptionMedicine {
   );
 }
 
+function medicineNamesSummary(medicines: PrescriptionMedicine[]): string | null {
+  if (medicines.length === 0) return null;
+  const uniqueNames = Array.from(
+    new Set(
+      medicines
+        .map((medicine) => medicine.name.trim())
+        .filter((name) => name.length > 0),
+    ),
+  );
+  if (uniqueNames.length === 0) return null;
+  const preview = uniqueNames.slice(0, 3).join(", ");
+  if (uniqueNames.length <= 3) return preview;
+  return `${preview}, +${uniqueNames.length - 3} more`;
+}
+
 type RouteContext = {
   params: Promise<{ email: string }>;
 };
@@ -127,6 +142,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
     timezone: string;
     consultationType: string;
     medicinesCount: number;
+    medicinesSummary: string | null;
     generalNotes: string | null;
   } | null = null;
 
@@ -141,6 +157,7 @@ export async function GET(_request: NextRequest, context: RouteContext) {
         timezone: prescriptionAppointment.timezone,
         consultationType: prescriptionAppointment.consultationType,
         medicinesCount: medicines.length,
+        medicinesSummary: medicineNamesSummary(medicines),
         generalNotes: prescriptionAppointment.prescription.generalNotes,
       };
     }
