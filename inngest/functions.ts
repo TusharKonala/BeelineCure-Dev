@@ -5,15 +5,23 @@ import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { Resend } from "resend";
 import { inngest } from "./client";
 import {
+  doctorLocalToUtc,
+  formatDateInDoctorTz,
+  formatTimeInDoctorTz,
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import {
+  createAppointmentNotificationForEmail,
+  createDoctorNotificationForDoctorId,
+} from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 type PrescriptionReminderType = "HALFWAY" | "COMPLETED";
+const OVERDUE_IN_APP_MS = 24 * 60 * 60 * 1000;
+const OVERDUE_EMAIL_MS = 48 * 60 * 60 * 1000;
 
 function formatDaysValue(days: number): string {
   return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(1)));
@@ -263,6 +271,164 @@ export const sendPrescriptionReminder = inngest.createFunction(
     }
 
     return { sent: true, appointmentId, reminderType };
+  },
+);
+
+export const processDoctorOverdueAppointments = inngest.createFunction(
+  {
+    id: "process-doctor-overdue-appointments",
+    retries: 1,
+    triggers: [{ cron: "0 * * * *" }],
+  },
+  async () => {
+    const now = new Date();
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        status: AppointmentStatus.CONFIRMED,
+        OR: [{ overdueInAppNotifiedAt: null }, { overdueEmailNotifiedAt: null }],
+      },
+      select: {
+        id: true,
+        date: true,
+        time: true,
+        timezone: true,
+        patientName: true,
+        consultationType: true,
+        overdueInAppNotifiedAt: true,
+        overdueEmailNotifiedAt: true,
+        doctor: {
+          select: {
+            id: true,
+            name: true,
+            lastSeenAt: true,
+            user: {
+              select: {
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    let inAppCreated = 0;
+    let emailSent = 0;
+
+    for (const appointment of appointments) {
+      const dateStr = appointment.date.toISOString().slice(0, 10);
+      const appointmentStartAt = doctorLocalToUtc(
+        dateStr,
+        appointment.time,
+        appointment.timezone,
+      );
+      const overdueMs = now.getTime() - appointmentStartAt.getTime();
+      if (overdueMs < OVERDUE_IN_APP_MS) continue;
+
+      if (!appointment.overdueInAppNotifiedAt) {
+        const claimed = await prisma.appointment.updateMany({
+          where: {
+            id: appointment.id,
+            status: AppointmentStatus.CONFIRMED,
+            overdueInAppNotifiedAt: null,
+          },
+          data: { overdueInAppNotifiedAt: now },
+        });
+        if (claimed.count > 0) {
+          try {
+            await createDoctorNotificationForDoctorId({
+              doctorId: appointment.doctor.id,
+              type: NotificationType.APPOINTMENT_REMINDER,
+              title: "Overdue appointment needs action",
+              message: `Appointment with ${appointment.patientName} (${appointment.consultationType === "ONLINE" ? "Online consultation" : "Clinic visit"}) on ${formatDateInDoctorTz(
+                dateStr,
+                appointment.time,
+                appointment.timezone,
+              )} at ${formatTimeInDoctorTz(
+                dateStr,
+                appointment.time,
+                appointment.timezone,
+              )} is still marked confirmed. Please complete or cancel it.`,
+            });
+            inAppCreated += 1;
+          } catch (err) {
+            await prisma.appointment.update({
+              where: { id: appointment.id },
+              data: { overdueInAppNotifiedAt: null },
+            });
+            console.error("[doctor-overdue] Failed to create in-app notification:", err);
+          }
+        }
+      }
+
+      if (overdueMs < OVERDUE_EMAIL_MS || appointment.overdueEmailNotifiedAt) {
+        continue;
+      }
+      const doctorSeenAt = appointment.doctor.lastSeenAt;
+      const shouldFallbackToEmail =
+        !doctorSeenAt ||
+        doctorSeenAt.getTime() < appointmentStartAt.getTime() + OVERDUE_EMAIL_MS;
+      const doctorEmail = appointment.doctor.user?.email?.trim();
+      if (!shouldFallbackToEmail || !doctorEmail) {
+        continue;
+      }
+
+      const claimTime = new Date();
+      const claimed = await prisma.appointment.updateMany({
+        where: {
+          id: appointment.id,
+          status: AppointmentStatus.CONFIRMED,
+          overdueEmailNotifiedAt: null,
+        },
+        data: { overdueEmailNotifiedAt: claimTime },
+      });
+      if (claimed.count === 0) continue;
+
+      const { error } = await resend.emails.send({
+        from: "Clinic Appointments <onboarding@resend.dev>",
+        to: doctorEmail,
+        subject: "Action needed: overdue appointment",
+        react: EmailTemplate({
+          heading: "Overdue appointment",
+          message: `Appointment with ${appointment.patientName} is overdue by more than 48 hours and is still marked as confirmed. Please update it to Completed or Cancelled.`,
+          showActionLinks: false,
+          doctorName: appointment.doctor.name,
+          appointmentDate: formatDateInDoctorTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+          ),
+          appointmentTime: formatTimeInDoctorTz(
+            dateStr,
+            appointment.time,
+            appointment.timezone,
+          ),
+          patientName: appointment.patientName,
+          consultationType: appointment.consultationType,
+          cancelUrl: "",
+          rescheduleUrl: "",
+        }),
+      });
+
+      if (error) {
+        await prisma.appointment.updateMany({
+          where: {
+            id: appointment.id,
+            overdueEmailNotifiedAt: claimTime,
+          },
+          data: { overdueEmailNotifiedAt: null },
+        });
+        console.error("[doctor-overdue] Fallback email failed:", error);
+        continue;
+      }
+
+      emailSent += 1;
+    }
+
+    return {
+      scanned: appointments.length,
+      inAppCreated,
+      emailSent,
+    };
   },
 );
 

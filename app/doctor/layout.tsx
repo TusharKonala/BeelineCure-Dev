@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -54,6 +54,7 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const lastActivityPingAtRef = useRef(0);
   const doctorName = session?.user?.name?.trim() || "Doctor";
   const initials =
     doctorName
@@ -62,6 +63,50 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
       .slice(0, 2)
       .map((part) => part[0]?.toUpperCase() ?? "")
       .join("") || "D";
+
+  useEffect(() => {
+    if (!session?.user?.id || session.user.role !== "DOCTOR") return;
+
+    const minPingIntervalMs = 5 * 60 * 1000;
+    const pingActivity = async (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastActivityPingAtRef.current < minPingIntervalMs) {
+        return;
+      }
+      lastActivityPingAtRef.current = now;
+      try {
+        await fetch("/api/doctor/activity", {
+          method: "POST",
+          cache: "no-store",
+        });
+      } catch {
+        // Intentionally ignore activity heartbeat network errors.
+      }
+    };
+
+    void pingActivity(true);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void pingActivity();
+      }
+    };
+    const onWindowFocus = () => {
+      void pingActivity();
+    };
+    const interval = window.setInterval(() => {
+      void pingActivity();
+    }, minPingIntervalMs);
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onWindowFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onWindowFocus);
+    };
+  }, [session?.user?.id, session?.user?.role]);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
