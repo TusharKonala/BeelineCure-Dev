@@ -63,15 +63,20 @@ function tabFromParam(raw: string | null): TabKey {
   return "upcoming";
 }
 
+function searchFromParam(raw: string | null): string {
+  return (raw ?? "").trim();
+}
+
 export default function DoctorAppointmentsClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialTab = tabFromParam(searchParams.get("tab"));
+  const initialSearch = searchFromParam(searchParams.get("search"));
   const [appointments, setAppointments] = useState<DoctorAppointmentItem[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [tab, setTab] = useState<TabKey>(initialTab);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
@@ -86,6 +91,7 @@ export default function DoctorAppointmentsClient() {
 
   useEffect(() => {
     setTab(tabFromParam(searchParams.get("tab")));
+    setSearch(searchFromParam(searchParams.get("search")));
   }, [searchParams]);
 
   const loadAppointments = useCallback(async (nextPage: number, append: boolean) => {

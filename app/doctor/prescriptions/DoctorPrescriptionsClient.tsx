@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
@@ -39,11 +40,17 @@ type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
 const SELECT_CHEVRON =
   'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
 
+function searchFromParam(raw: string | null): string {
+  return (raw ?? "").trim();
+}
+
 export default function DoctorPrescriptionsClient() {
+  const searchParams = useSearchParams();
+  const initialSearch = searchFromParam(searchParams.get("search"));
   const [items, setItems] = useState<DoctorPrescriptionItem[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch);
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +97,10 @@ export default function DoctorPrescriptionsClient() {
   useEffect(() => {
     void loadPrescriptions(1, false);
   }, [loadPrescriptions]);
+
+  useEffect(() => {
+    setSearch(searchFromParam(searchParams.get("search")));
+  }, [searchParams]);
 
   const [sentryRef] = useInfiniteScroll({
     loading: isLoading,
