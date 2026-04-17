@@ -338,7 +338,7 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
             await createDoctorNotificationForDoctorId({
               doctorId: appointment.doctor.id,
               type: NotificationType.APPOINTMENT_REMINDER,
-              title: "Overdue appointment needs action",
+              title: "Overdue appointment pending review",
               message: `Appointment with ${appointment.patientName} (${appointment.consultationType === "ONLINE" ? "Online consultation" : "Clinic visit"}) on ${formatDateInDoctorTz(
                 dateStr,
                 appointment.time,
@@ -347,7 +347,7 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
                 dateStr,
                 appointment.time,
                 appointment.timezone,
-              )} is still marked confirmed. Please complete or cancel it.`,
+              )} is still marked as confirmed. Please mark it as Completed or Cancelled.`,
             });
             inAppCreated += 1;
           } catch (err) {
@@ -386,10 +386,10 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
       const { error } = await resend.emails.send({
         from: "Clinic Appointments <onboarding@resend.dev>",
         to: doctorEmail,
-        subject: "Action needed: overdue appointment",
+        subject: "Action needed: appointment pending review",
         react: EmailTemplate({
-          heading: "Overdue appointment",
-          message: `Appointment with ${appointment.patientName} is overdue by more than 48 hours and is still marked as confirmed. Please update it to Completed or Cancelled.`,
+          heading: "Appointment pending review",
+          message: `Appointment with ${appointment.patientName} is overdue by more than 48 hours and is still marked as confirmed. Please mark it as Completed or Cancelled.`,
           showActionLinks: false,
           doctorName: appointment.doctor.name,
           appointmentDate: formatDateInDoctorTz(

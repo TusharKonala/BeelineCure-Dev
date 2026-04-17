@@ -28,6 +28,7 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
+type CancelReason = "patient_no_show" | "doctor_unavailable";
 
 function normalizeTab(raw: string | null): TabKey {
   if (raw === "pending-review") return "pending-review";
@@ -177,8 +178,14 @@ export async function PATCH(request: NextRequest) {
 
   const body = (await request.json().catch(() => null)) as {
     appointmentId?: string;
+    reason?: unknown;
   } | null;
   const appointmentId = body?.appointmentId?.trim();
+  const reasonValue = body?.reason;
+  const reason: CancelReason | null =
+    reasonValue === "patient_no_show" || reasonValue === "doctor_unavailable"
+      ? reasonValue
+      : null;
   if (!appointmentId) {
     return NextResponse.json(
       { error: "appointmentId is required" },
@@ -251,15 +258,32 @@ export async function PATCH(request: NextRequest) {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
       "http://localhost:3000";
     const bookAppointmentUrl = `${origin}/book-appointment/${encodeURIComponent(appointment.doctorId)}`;
+    const emailSubject =
+      reason === "patient_no_show"
+        ? "Missed Appointment"
+        : reason === "doctor_unavailable"
+          ? "Appointment Update"
+          : "Appointment Cancelled";
+    const emailHeading =
+      reason === "patient_no_show"
+        ? "Missed Appointment"
+        : reason === "doctor_unavailable"
+          ? "Doctor Was Unavailable"
+          : "Appointment Cancelled";
+    const emailMessage =
+      reason === "patient_no_show"
+        ? "You missed this appointment because you did not show up. If needed, please book a new appointment from our website."
+        : reason === "doctor_unavailable"
+          ? "Your doctor was unavailable for this appointment. We apologize for the inconvenience. Please book another appointment from our website."
+          : "Your doctor has cancelled this appointment. If needed, please book a new appointment from our website.";
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
       to: appointment.email,
-      subject: "Appointment Cancelled",
+      subject: emailSubject,
       react: EmailTemplate({
-        heading: "Appointment Cancelled",
-        message:
-          "Your doctor has cancelled this appointment. If needed, please book a new appointment from our website.",
+        heading: emailHeading,
+        message: emailMessage,
         showActionLinks: true,
         primaryActionLabel: "Book appointment",
         primaryActionUrl: bookAppointmentUrl,

@@ -13,6 +13,7 @@ type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
 type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
 type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
+type CancelReason = "patient_no_show" | "doctor_unavailable";
 
 type DoctorAppointmentItem = {
   id: string;
@@ -81,6 +82,7 @@ export default function DoctorAppointmentsClient() {
   const [isLoading, setIsLoading] = useState(false);
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DoctorAppointmentItem | null>(null);
+  const [cancelReason, setCancelReason] = useState<CancelReason | null>(null);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestRequestIdRef = useRef(0);
@@ -152,13 +154,17 @@ export default function DoctorAppointmentsClient() {
       const res = await fetch("/api/doctor/appointments", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ appointmentId: cancelTarget.id }),
+        body: JSON.stringify({
+          appointmentId: cancelTarget.id,
+          reason: cancelReason ?? undefined,
+        }),
       });
       if (!res.ok) {
         setError("Failed to cancel appointment.");
         return;
       }
       setCancelTarget(null);
+      setCancelReason(null);
       await loadAppointments(1, false);
     } catch {
       setError("Failed to cancel appointment.");
@@ -370,7 +376,10 @@ export default function DoctorAppointmentsClient() {
                       variant="outline"
                       className="cursor-pointer rounded-xl font-montserrat"
                       size="sm"
-                      onClick={() => setCancelTarget(a)}
+                      onClick={() => {
+                        setCancelTarget(a);
+                        setCancelReason(null);
+                      }}
                     >
                       Cancel
                     </Button>
@@ -385,6 +394,30 @@ export default function DoctorAppointmentsClient() {
                       onClick={() => router.push(`/doctor/appointments/${a.id}/prescription`)}
                     >
                       Add Prescription
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="cursor-pointer rounded-xl font-montserrat"
+                      size="sm"
+                      onClick={() => {
+                        setCancelTarget(a);
+                        setCancelReason("patient_no_show");
+                      }}
+                    >
+                      Patient did not show up
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="cursor-pointer rounded-xl font-montserrat"
+                      size="sm"
+                      onClick={() => {
+                        setCancelTarget(a);
+                        setCancelReason("doctor_unavailable");
+                      }}
+                    >
+                      Doctor was unavailable
                     </Button>
                   </div>
                 )}
@@ -444,7 +477,10 @@ export default function DoctorAppointmentsClient() {
               className="absolute inset-0 cursor-default bg-black/40"
               aria-label="Close dialog"
               onClick={() => {
-                if (!isCanceling) setCancelTarget(null);
+                if (!isCanceling) {
+                  setCancelTarget(null);
+                  setCancelReason(null);
+                }
               }}
             />
             <div
@@ -465,7 +501,10 @@ export default function DoctorAppointmentsClient() {
                 <button
                   type="button"
                   className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => setCancelTarget(null)}
+                  onClick={() => {
+                    setCancelTarget(null);
+                    setCancelReason(null);
+                  }}
                   disabled={isCanceling}
                 >
                   Keep appointment
