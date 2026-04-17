@@ -245,6 +245,12 @@ export async function PATCH(request: NextRequest) {
       select: { name: true },
     });
     const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const origin =
+      request.nextUrl.origin ||
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+      "http://localhost:3000";
+    const bookAppointmentUrl = `${origin}/book-appointment/${encodeURIComponent(appointment.doctorId)}`;
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -254,7 +260,11 @@ export async function PATCH(request: NextRequest) {
         heading: "Appointment Cancelled",
         message:
           "Your doctor has cancelled this appointment. If needed, please book a new appointment from our website.",
-        showActionLinks: false,
+        showActionLinks: true,
+        primaryActionLabel: "Book appointment",
+        primaryActionUrl: bookAppointmentUrl,
+        secondaryActionLabel: undefined,
+        secondaryActionUrl: undefined,
         doctorName: doctorProfile?.name ?? "Your Doctor",
         appointmentDate: formatDateInPatientTz(
           appointmentDate,

@@ -115,21 +115,23 @@ export default function DoctorNotificationsClient() {
       </div>
 
       {newNotificationsCount > 0 && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-[#2555F3]/25 bg-[#2555F3]/8 px-3 py-2">
-          <p className="font-montserrat text-xs font-medium text-[#2555F3] sm:text-sm">
-            {newNotificationsCount} new notification
-            {newNotificationsCount === 1 ? "" : "s"} received
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              window.scrollTo({ top: 0, behavior: "smooth" });
-              setNewNotificationsCount(0);
-            }}
-            className="cursor-pointer font-montserrat text-xs font-semibold text-[#2555F3] hover:underline"
-          >
-            View latest
-          </button>
+        <div className="fixed bottom-4 right-4 z-100 w-[min(28rem,calc(100vw-2rem))] rounded-xl border border-[#2555F3]/25 bg-white px-3 py-2 shadow-lg">
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-montserrat text-xs font-medium text-[#2555F3] sm:text-sm">
+              {newNotificationsCount} new notification
+              {newNotificationsCount === 1 ? "" : "s"} received
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+                setNewNotificationsCount(0);
+              }}
+              className="cursor-pointer font-montserrat text-xs font-semibold text-[#2555F3] hover:underline"
+            >
+              View latest
+            </button>
+          </div>
         </div>
       )}
 
