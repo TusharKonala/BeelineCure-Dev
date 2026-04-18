@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/db";
-import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  ConsultationType,
+  NotificationType,
+  PaymentStatus,
+} from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { inngest } from "@/inngest/client";
 import { NextRequest, NextResponse } from "next/server";
@@ -13,6 +18,7 @@ import {
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -107,6 +113,36 @@ export async function POST(request: NextRequest) {
     data: { status: AppointmentStatus.CANCELLED },
   });
 
+  // Refund logic: online + paid appointments get a full refund if cancelled
+  // 24+ hours before start, a 50% refund otherwise. Clinic appointments and
+  // unpaid appointments are never refunded.
+  let refundSentence: string | null = null;
+  let refundFailed = false;
+  if (
+    appointment.consultationType === ConsultationType.ONLINE &&
+    appointment.paymentStatus === PaymentStatus.PAID
+  ) {
+    const hoursUntilStart =
+      (appointmentStartMs - Date.now()) / (60 * 60 * 1000);
+    const percentage: 100 | 50 = hoursUntilStart >= 24 ? 100 : 50;
+    const result = await initiateRefund({
+      appointment: {
+        id: appointment.id,
+        consultationType: appointment.consultationType,
+        paymentStatus: appointment.paymentStatus,
+        stripePaymentId: appointment.stripePaymentId,
+        stripePaymentIntentId: appointment.stripePaymentIntentId,
+        refundStatus: appointment.refundStatus,
+      },
+      percentage,
+    });
+    if (result.ok) {
+      refundSentence = refundEmailSentence(result);
+    } else if (result.reason === "stripe_error") {
+      refundFailed = true;
+    }
+  }
+
   try {
     await inngest.send({
       name: "appointment/reminder.cancelled",
@@ -126,19 +162,46 @@ export async function POST(request: NextRequest) {
       where: { id: appointment.doctorId },
     });
 
+    const isOnline =
+      appointment.consultationType === ConsultationType.ONLINE;
+    const isPaid = appointment.paymentStatus === PaymentStatus.PAID;
+    // Build the cancellation message body. Online+paid cancellations append a
+    // refund sentence (full or 50%) or a "no refund applies" sentence per the
+    // cancellation policy when within 24 hours and no refund was initiated.
+    const baseMessage = React.createElement(
+      React.Fragment,
+      null,
+      "Your appointment has been cancelled. If you would like to book again, please visit ",
+      React.createElement("a", { href: websiteUrl }, "our website"),
+      ".",
+    );
+    let refundNode: React.ReactNode = null;
+    if (isOnline && isPaid) {
+      if (refundSentence) {
+        refundNode = React.createElement(
+          "span",
+          { style: { display: "block", marginTop: "0.75rem" } },
+          refundSentence,
+        );
+      } else if (refundFailed) {
+        refundNode = React.createElement(
+          "span",
+          { style: { display: "block", marginTop: "0.75rem" } },
+          "We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it.",
+        );
+      }
+    }
+    const messageNode = refundNode
+      ? React.createElement(React.Fragment, null, baseMessage, refundNode)
+      : baseMessage;
+
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
       to: appointment.email,
       subject: "Appointment Cancelled",
       react: EmailTemplate({
         heading: "Appointment Cancelled",
-        message: React.createElement(
-          React.Fragment,
-          null,
-          "Your appointment has been cancelled. If you would like to book again, please visit ",
-          React.createElement("a", { href: websiteUrl }, "our website"),
-          ".",
-        ),
+        message: messageNode,
         showActionLinks: false,
         doctorName: doctor?.name ?? "Your Doctor",
         appointmentDate: formatDateInPatientTz(

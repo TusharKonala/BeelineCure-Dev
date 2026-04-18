@@ -54,6 +54,13 @@ enum NotificationType {
   APPOINTMENT_RESCHEDULED
   APPOINTMENT_CANCELLED
   APPOINTMENT_REMINDER
+  REFUND_FAILED
+}
+
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
 }
 
 model User {
@@ -173,7 +180,16 @@ model Appointment {
   consultationType ConsultationType
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
-  stripePaymentId  String?
+  stripePaymentId       String?
+  /// Stripe PaymentIntent id resolved from the checkout session once needed for a refund.
+  /// Cached on the appointment to avoid re-fetching the session for future refund-related calls.
+  stripePaymentIntentId String?
+  /// Id of the Stripe refund most recently created for this appointment.
+  stripeRefundId        String?
+  /// Refund lifecycle state mirrored from Stripe refund webhook events.
+  refundStatus          RefundStatus?
+  /// Amount refunded in cents (full or 50% of the charge).
+  refundAmountCents     Int?
   cancelToken      String?
   rescheduleToken  String?
   overdueInAppNotifiedAt DateTime?

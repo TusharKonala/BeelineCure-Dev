@@ -2,7 +2,9 @@ import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import {
   AppointmentStatus,
+  ConsultationType,
   NotificationType,
+  PaymentStatus,
   type Prisma,
   UserRole,
 } from "@/generated/prisma/client";
@@ -24,6 +26,7 @@ import {
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -209,6 +212,10 @@ export async function PATCH(request: NextRequest) {
       patientTimezone: true,
       consultationType: true,
       doctorId: true,
+      paymentStatus: true,
+      stripePaymentId: true,
+      stripePaymentIntentId: true,
+      refundStatus: true,
     },
   });
   if (!appointment) {
@@ -234,6 +241,35 @@ export async function PATCH(request: NextRequest) {
     where: { id: appointment.id },
     data: { status: AppointmentStatus.CANCELLED },
   });
+
+  // Refund logic (online + paid only):
+  //   - reason === null (doctor cancels before start) → full refund
+  //   - reason === "doctor_unavailable" (doctor missed start) → full refund
+  //   - reason === "patient_no_show" → no refund
+  let refundSentence: string | null = null;
+  let refundFailed = false;
+  const shouldRefund =
+    appointment.consultationType === ConsultationType.ONLINE &&
+    appointment.paymentStatus === PaymentStatus.PAID &&
+    reason !== "patient_no_show";
+  if (shouldRefund) {
+    const result = await initiateRefund({
+      appointment: {
+        id: appointment.id,
+        consultationType: appointment.consultationType,
+        paymentStatus: appointment.paymentStatus,
+        stripePaymentId: appointment.stripePaymentId,
+        stripePaymentIntentId: appointment.stripePaymentIntentId,
+        refundStatus: appointment.refundStatus,
+      },
+      percentage: 100,
+    });
+    if (result.ok) {
+      refundSentence = refundEmailSentence(result);
+    } else if (result.reason === "stripe_error") {
+      refundFailed = true;
+    }
+  }
 
   try {
     await inngest.send({
@@ -270,12 +306,21 @@ export async function PATCH(request: NextRequest) {
         : reason === "doctor_unavailable"
           ? "Doctor Was Unavailable"
           : "Appointment Cancelled";
-    const emailMessage =
+    const baseEmailMessage =
       reason === "patient_no_show"
         ? "You missed this appointment because you did not show up. If needed, please book a new appointment from our website."
         : reason === "doctor_unavailable"
           ? "Your doctor was unavailable for this appointment. We apologize for the inconvenience. Please book another appointment from our website."
           : "Your doctor has cancelled this appointment. If needed, please book a new appointment from our website.";
+
+    // Append a refund sentence when a refund was initiated or failed; for
+    // patient_no_show the refund step is skipped, so this stays null.
+    const refundAppendix = refundSentence
+      ? ` ${refundSentence}`
+      : refundFailed
+        ? " We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it."
+        : "";
+    const emailMessage = `${baseEmailMessage}${refundAppendix}`;
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",

@@ -11,6 +11,7 @@ import {
   PaymentStatus,
   ConsultationType,
   NotificationType,
+  RefundStatus,
 } from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
@@ -258,5 +259,182 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (
+    event.type === "refund.created" ||
+    event.type === "refund.updated" ||
+    event.type === "refund.failed"
+  ) {
+    await handleRefundEvent(event);
+  }
+
   return new NextResponse("OK", { status: 200 });
+}
+
+async function handleRefundEvent(event: Stripe.Event) {
+  const refund = event.data.object as Stripe.Refund;
+
+  // Locate the appointment this refund belongs to. Prefer the refund id we
+  // persisted when initiating the refund; fall back to the payment intent for
+  // refunds that were created out-of-band (e.g. manually in the Stripe dashboard).
+  const paymentIntentId =
+    typeof refund.payment_intent === "string"
+      ? refund.payment_intent
+      : (refund.payment_intent?.id ?? null);
+
+  let appointment = await prisma.appointment.findFirst({
+    where: { stripeRefundId: refund.id },
+    select: {
+      id: true,
+      email: true,
+      patientName: true,
+      date: true,
+      time: true,
+      timezone: true,
+      patientTimezone: true,
+      consultationType: true,
+      doctorId: true,
+      refundStatus: true,
+    },
+  });
+
+  if (!appointment && paymentIntentId) {
+    appointment = await prisma.appointment.findFirst({
+      where: { stripePaymentIntentId: paymentIntentId },
+      select: {
+        id: true,
+        email: true,
+        patientName: true,
+        date: true,
+        time: true,
+        timezone: true,
+        patientTimezone: true,
+        consultationType: true,
+        doctorId: true,
+        refundStatus: true,
+      },
+    });
+  }
+
+  if (!appointment) {
+    console.warn(
+      "[webhooks] Refund event did not match any appointment:",
+      event.type,
+      refund.id,
+    );
+    return;
+  }
+
+  // Map the Stripe refund lifecycle (+ the dedicated refund.failed event) to
+  // our internal RefundStatus. Treat anything non-final (pending / requires
+  // action) as PENDING so the UI reflects "in progress" rather than "done".
+  const isFailedEvent = event.type === "refund.failed";
+  const nextStatus: RefundStatus = isFailedEvent
+    ? RefundStatus.FAILED
+    : refund.status === "succeeded"
+      ? RefundStatus.SUCCEEDED
+      : refund.status === "failed" || refund.status === "canceled"
+        ? RefundStatus.FAILED
+        : RefundStatus.PENDING;
+
+  // Idempotency: skip if the status is unchanged, so retried webhooks don't
+  // re-send failure emails or duplicate notifications.
+  if (appointment.refundStatus === nextStatus) {
+    return;
+  }
+
+  await prisma.appointment.update({
+    where: { id: appointment.id },
+    data: {
+      refundStatus: nextStatus,
+      stripeRefundId: refund.id,
+      ...(refund.amount ? { refundAmountCents: refund.amount } : {}),
+      ...(paymentIntentId ? { stripePaymentIntentId: paymentIntentId } : {}),
+    },
+  });
+
+  if (nextStatus !== RefundStatus.FAILED) {
+    return;
+  }
+
+  // Refund failure: notify the patient via email and in-app notification.
+  try {
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: appointment.doctorId },
+      select: { name: true },
+    });
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const formattedDate = formatDateInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: appointment.email,
+      subject: "Refund Failed",
+      react: EmailTemplate({
+        heading: "Refund Failed",
+        message:
+          "We were unable to process your refund automatically. Our support team has been alerted and will reach out to resolve this as soon as possible.",
+        showActionLinks: false,
+        doctorName: doctor?.name ?? "Your Doctor",
+        appointmentDate: formattedDate,
+        appointmentTime: formattedTime,
+        patientName: appointment.patientName,
+        consultationType: appointment.consultationType,
+        cancelUrl: "",
+        rescheduleUrl: "",
+      }),
+    });
+
+    if (error) {
+      console.error("[webhooks] Refund-failed email failed:", error);
+    }
+  } catch (err) {
+    console.error("[webhooks] Refund-failed email failed:", err);
+  }
+
+  try {
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: appointment.doctorId },
+      select: { name: true },
+    });
+    const doctorDisplayName = doctor?.name
+      ? formatDoctorDisplayName(doctor.name)
+      : null;
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const formattedDate = formatDateInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    const formattedTime = formatTimeInPatientTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+      appointment.patientTimezone,
+    );
+    await createAppointmentNotificationForEmail({
+      patientEmail: appointment.email,
+      type: NotificationType.REFUND_FAILED,
+      title: "Refund failed",
+      message: `We could not process the refund for your appointment${
+        doctorDisplayName ? ` with ${doctorDisplayName}` : ""
+      } on ${formattedDate} at ${formattedTime}. Our support team will resolve this shortly.`,
+    });
+  } catch (err) {
+    console.error(
+      "[webhooks] Failed to create refund-failed notification:",
+      err,
+    );
+  }
 }
