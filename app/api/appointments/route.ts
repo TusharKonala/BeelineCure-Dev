@@ -6,15 +6,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
-import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  ConsultationType,
+  NotificationType,
+} from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import {
+  formatDateInDoctorTz,
   formatDateInPatientTz,
+  formatTimeInDoctorTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import {
+  createAppointmentNotificationForEmail,
+  createDoctorNotificationForDoctorId,
+} from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 
@@ -248,7 +257,22 @@ export async function POST(request: NextRequest) {
       message: `Your appointment with ${formatDoctorDisplayName(doctor.name)} is confirmed for ${formattedDate} at ${formattedTime}.`,
     });
   } catch (err) {
-    console.error("[appointments] Failed to create notification:", err);
+    console.error("[appointments] Failed to create patient notification:", err);
+  }
+
+  try {
+    const doctorDateLabel = formatDateInDoctorTz(dateParam, time, doctorTimezone);
+    const doctorTimeLabel = formatTimeInDoctorTz(dateParam, time, doctorTimezone);
+    const modality =
+      consultationType === ConsultationType.ONLINE ? "online" : "in-clinic";
+    await createDoctorNotificationForDoctorId({
+      doctorId,
+      type: NotificationType.APPOINTMENT_BOOKED,
+      title: "New appointment booked",
+      message: `${patientName} booked a ${modality} appointment for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+    });
+  } catch (err) {
+    console.error("[appointments] Failed to create doctor notification:", err);
   }
 
   try {

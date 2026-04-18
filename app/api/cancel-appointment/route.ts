@@ -13,10 +13,15 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
 import {
+  formatDateInDoctorTz,
   formatDateInPatientTz,
+  formatTimeInDoctorTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import {
+  createAppointmentNotificationForEmail,
+  createDoctorNotificationForDoctorId,
+} from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
 
@@ -260,7 +265,29 @@ export async function POST(request: NextRequest) {
       } on ${formattedDate} at ${formattedTime} was cancelled.`,
     });
   } catch (err) {
-    console.error("[cancel] Failed to create notification:", err);
+    console.error("[cancel] Failed to create patient notification:", err);
+  }
+
+  try {
+    const appointmentDate = appointment.date.toISOString().slice(0, 10);
+    const doctorDateLabel = formatDateInDoctorTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+    );
+    const doctorTimeLabel = formatTimeInDoctorTz(
+      appointmentDate,
+      appointment.time,
+      appointment.timezone,
+    );
+    await createDoctorNotificationForDoctorId({
+      doctorId: appointment.doctorId,
+      type: NotificationType.APPOINTMENT_CANCELLED,
+      title: "Appointment cancelled by patient",
+      message: `${appointment.patientName} cancelled their appointment scheduled for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+    });
+  } catch (err) {
+    console.error("[cancel] Failed to create doctor notification:", err);
   }
 
   return NextResponse.json({ status: "success" as const });

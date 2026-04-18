@@ -110,7 +110,7 @@ export default function DoctorNotificationsClient() {
             <MontagaCapitalN text="Notifications" />
           </h1>
           <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-            Stay up to date on overdue appointments and follow-up actions.
+            New bookings, overdue appointments, and follow-up actions.
           </p>
         </div>
       </div>
@@ -149,7 +149,7 @@ export default function DoctorNotificationsClient() {
             No notifications yet
           </p>
           <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-            Overdue appointment reminders will appear here.
+            Appointment updates will appear here.
           </p>
         </div>
       ) : (

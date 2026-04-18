@@ -18,10 +18,15 @@ import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import {
+  formatDateInDoctorTz,
   formatDateInPatientTz,
+  formatTimeInDoctorTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import {
+  createAppointmentNotificationForEmail,
+  createDoctorNotificationForDoctorId,
+} from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 
@@ -235,7 +240,32 @@ export async function POST(request: NextRequest) {
         message: `Your appointment with ${formatDoctorDisplayName(doctor.name)} is confirmed for ${formattedDate} at ${formattedTime}.`,
       });
     } catch (err) {
-      console.error("[webhooks] Failed to create notification:", err);
+      console.error("[webhooks] Failed to create patient notification:", err);
+    }
+
+    try {
+      const doctorDateLabel = formatDateInDoctorTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+      );
+      const doctorTimeLabel = formatTimeInDoctorTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+      );
+      const modality =
+        appointment.consultationType === ConsultationType.ONLINE
+          ? "online"
+          : "in-clinic";
+      await createDoctorNotificationForDoctorId({
+        doctorId: bookingSession.doctorId,
+        type: NotificationType.APPOINTMENT_BOOKED,
+        title: "New appointment booked",
+        message: `${bookingSession.patientName} booked a ${modality} appointment for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+      });
+    } catch (err) {
+      console.error("[webhooks] Failed to create doctor notification:", err);
     }
 
     try {

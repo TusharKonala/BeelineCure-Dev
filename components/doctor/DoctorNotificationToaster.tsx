@@ -19,6 +19,8 @@ type ToastNotification = ApiNotification & {
 const POLL_INTERVAL_MS = 15_000;
 const TOAST_TTL_MS = 6_000;
 
+export const DOCTOR_UNREAD_COUNT_EVENT = "doctor-notifications:unread-count";
+
 export function DoctorNotificationToaster() {
   const { data: session, status } = useSession();
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -46,6 +48,11 @@ export function DoctorNotificationToaster() {
 
         const data = (await res.json()) as { notifications?: ApiNotification[] };
         const notifications = Array.isArray(data.notifications) ? data.notifications : [];
+        window.dispatchEvent(
+          new CustomEvent<number>(DOCTOR_UNREAD_COUNT_EVENT, {
+            detail: notifications.length,
+          }),
+        );
 
         if (!hasInitializedRef.current) {
           notifications.forEach((notification) => {

@@ -14,6 +14,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
+import { DOCTOR_UNREAD_COUNT_EVENT } from "@/components/doctor/DoctorNotificationToaster";
 
 type DoctorNavItem = {
   href: string;
@@ -54,6 +55,7 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const lastActivityPingAtRef = useRef(0);
   const doctorName = session?.user?.name?.trim() || "Doctor";
   const initials =
@@ -108,6 +110,56 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
     };
   }, [session?.user?.id, session?.user?.role]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUnreadCount() {
+      try {
+        const res = await fetch("/api/notifications/unread-count", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { count?: unknown };
+        const nextCount =
+          typeof data.count === "number" && Number.isFinite(data.count)
+            ? Math.max(0, Math.floor(data.count))
+            : 0;
+        if (!cancelled) setUnreadNotificationCount(nextCount);
+      } catch {
+        // best-effort badge fetch
+      }
+    }
+
+    void loadUnreadCount();
+    const interval = setInterval(() => void loadUnreadCount(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    function handleUnreadCountSync(event: Event) {
+      const customEvent = event as CustomEvent<number>;
+      const nextCount =
+        typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
+          ? Math.max(0, Math.floor(customEvent.detail))
+          : 0;
+      setUnreadNotificationCount(nextCount);
+    }
+
+    window.addEventListener(
+      DOCTOR_UNREAD_COUNT_EVENT,
+      handleUnreadCountSync as EventListener,
+    );
+    return () => {
+      window.removeEventListener(
+        DOCTOR_UNREAD_COUNT_EVENT,
+        handleUnreadCountSync as EventListener,
+      );
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#fafafa]">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e5e5e5] bg-white lg:block">
@@ -131,6 +183,14 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
                     <Icon className="size-4 shrink-0" />
                     <span>{item.label}</span>
                   </span>
+                  {item.href === "/doctor/notifications" &&
+                    unreadNotificationCount > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                        {unreadNotificationCount > 99
+                          ? "99+"
+                          : unreadNotificationCount}
+                      </span>
+                    )}
                 </Link>
               );
             })}
@@ -192,6 +252,14 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
                       <Icon className="size-4 shrink-0" />
                       {item.label}
                     </span>
+                    {item.href === "/doctor/notifications" &&
+                      unreadNotificationCount > 0 && (
+                        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                          {unreadNotificationCount > 99
+                            ? "99+"
+                            : unreadNotificationCount}
+                        </span>
+                      )}
                   </Link>
                 );
               })}
