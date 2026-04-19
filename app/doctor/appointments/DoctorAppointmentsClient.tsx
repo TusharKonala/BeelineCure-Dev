@@ -26,6 +26,7 @@ type DoctorAppointmentItem = {
   consultationType: ConsultationType;
   status: AppointmentStatus;
   notes: string | null;
+  googleMeetUrl: string | null;
 };
 
 /** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` text inset. */
@@ -347,6 +348,18 @@ export default function DoctorAppointmentsClient() {
                         {formatTimeInDoctorTz(a.date, a.time, a.timezone)}
                       </span>
                     </div>
+                    {a.consultationType === "ONLINE" && a.googleMeetUrl && (
+                      <p className="mt-2 font-montserrat text-sm">
+                        <a
+                          href={a.googleMeetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-[#2555F3] underline underline-offset-2 break-words"
+                        >
+                          Join Google Meet
+                        </a>
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2">

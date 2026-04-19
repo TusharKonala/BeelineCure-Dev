@@ -29,6 +29,7 @@ import {
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
+import { createMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -164,6 +165,12 @@ export async function POST(request: NextRequest) {
       return new NextResponse("OK", { status: 200 });
     }
 
+    let meetLink: string | null = null;
+    if (appointment.consultationType === ConsultationType.ONLINE) {
+      const meet = await createMeetEventForOnlineAppointment(appointment.id);
+      meetLink = meet.googleMeetUrl;
+    }
+
     const headersList = await headers();
     const origin =
       headersList.get("origin") ??
@@ -210,6 +217,7 @@ export async function POST(request: NextRequest) {
             | "ONLINE",
           cancelUrl,
           rescheduleUrl,
+          meetLink,
         }),
       });
 

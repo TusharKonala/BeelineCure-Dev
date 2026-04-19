@@ -1,5 +1,9 @@
 import { prisma } from "@/lib/db";
-import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  ConsultationType,
+  NotificationType,
+} from "@/generated/prisma/client";
 import { EmailTemplate } from "@/components/email-template";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -14,6 +18,7 @@ import {
 } from "@/lib/timezone-display";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { updateMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -200,6 +205,10 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  if (updatedAppointment.consultationType === ConsultationType.ONLINE) {
+    await updateMeetEventForOnlineAppointment(updatedAppointment.id);
+  }
+
   try {
     await inngest.send({
       name: "appointment/reminder.cancelled",
@@ -257,6 +266,11 @@ export async function POST(request: NextRequest) {
         updatedAppointment.id,
       )}&token=${encodeURIComponent(updatedAppointment.rescheduleToken)}`;
 
+      const latestMeet = await prisma.appointment.findUnique({
+        where: { id: updatedAppointment.id },
+        select: { googleMeetUrl: true },
+      });
+
       const { error } = await resend.emails.send({
         from: "Clinic Appointments <onboarding@resend.dev>",
         to: updatedAppointment.email,
@@ -284,6 +298,7 @@ export async function POST(request: NextRequest) {
           consultationType: updatedAppointment.consultationType,
           cancelUrl,
           rescheduleUrl,
+          meetLink: latestMeet?.googleMeetUrl ?? null,
         }),
       });
 

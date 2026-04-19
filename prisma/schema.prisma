@@ -83,6 +83,10 @@ model User {
   magicLinkLastSentAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
+  /// Admin Google Calendar OAuth — set only for `ADMIN_GOOGLE_EMAIL` when they sign in with Google.
+  googleCalendarAccessToken            String?   @db.Text
+  googleCalendarRefreshToken           String?   @db.Text
+  googleCalendarAccessTokenExpiresAt   DateTime?
   role      UserRole @default(PATIENT)
   profileComplete Boolean @default(true)
   createdAt DateTime @default(now())
@@ -194,6 +198,10 @@ model Appointment {
   rescheduleToken  String?
   overdueInAppNotifiedAt DateTime?
   overdueEmailNotifiedAt DateTime?
+  /// Google Meet join URL (from Calendar API when consultation is online).
+  googleMeetUrl           String?
+  /// Calendar event id for patch/delete on reschedule or cancel.
+  googleCalendarEventId   String?
   createdAt        DateTime          @default(now())
 
   @@index([status, date, time])

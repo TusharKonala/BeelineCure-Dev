@@ -11,6 +11,8 @@ export interface EmailTemplateProps {
   consultationType: "CLINIC" | "ONLINE";
   cancelUrl: string;
   rescheduleUrl: string;
+  /** Google Meet join URL for online consultations when available. */
+  meetLink?: string | null;
   primaryActionLabel?: string;
   primaryActionUrl?: string;
   secondaryActionLabel?: string;
@@ -36,6 +38,7 @@ export function EmailTemplate({
   consultationType,
   cancelUrl,
   rescheduleUrl,
+  meetLink,
   primaryActionLabel,
   primaryActionUrl,
   secondaryActionLabel,
@@ -84,7 +87,21 @@ export function EmailTemplate({
             : "Clinic Visit"}
         </p>
       </div>
-      {consultationType === "ONLINE" && showActionLinks && (
+      {consultationType === "ONLINE" && showActionLinks && meetLink && (
+        <p style={{ marginTop: "1rem", color: "#333" }}>
+          <strong>Join Google Meet:</strong>{" "}
+          <a
+            href={meetLink}
+            style={{
+              color: "#2555F3",
+              wordBreak: "break-all",
+            }}
+          >
+            {meetLink}
+          </a>
+        </p>
+      )}
+      {consultationType === "ONLINE" && showActionLinks && !meetLink && (
         <p style={{ marginTop: "1rem", color: "#333" }}>
           This is an online consultation. The doctor will contact you at the
           scheduled time.

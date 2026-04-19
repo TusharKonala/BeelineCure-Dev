@@ -101,6 +101,7 @@ export async function GET(request: NextRequest) {
         time: true,
         timezone: true,
         consultationType: true,
+        googleMeetUrl: true,
         prescription: {
           select: {
             medicines: true,
@@ -169,6 +170,7 @@ export async function GET(request: NextRequest) {
     time: a.time,
     timezone: a.timezone,
     consultationType: a.consultationType,
+    googleMeetUrl: a.googleMeetUrl,
     prescription: a.prescription
       ? {
           medicines: a.prescription.medicines,

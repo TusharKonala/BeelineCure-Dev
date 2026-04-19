@@ -24,6 +24,7 @@ import {
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
+import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -113,9 +114,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "invalid_link" as const });
   }
 
+  const calendarEventId = appointment.googleCalendarEventId;
+  if (calendarEventId) {
+    await deleteMeetCalendarEvent(calendarEventId);
+  }
+
   await prisma.appointment.update({
     where: { id: appointmentId },
-    data: { status: AppointmentStatus.CANCELLED },
+    data: {
+      status: AppointmentStatus.CANCELLED,
+      googleCalendarEventId: null,
+      googleMeetUrl: null,
+    },
   });
 
   // Refund logic: online + paid appointments get a full refund if cancelled

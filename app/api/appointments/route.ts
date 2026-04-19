@@ -6,11 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
-import {
-  AppointmentStatus,
-  ConsultationType,
-  NotificationType,
-} from "@/generated/prisma/client";
+import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
@@ -41,7 +37,8 @@ const appointmentSchema = z.object({
     .max(15, "Phone number is too long")
     .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
   notes: z.string().optional(),
-  consultationType: z.enum(["CLINIC", "ONLINE"]).default("CLINIC"),
+  /** In-clinic only; online bookings use Stripe + webhook. */
+  consultationType: z.literal("CLINIC").default("CLINIC"),
   timezone: z.string().min(1).max(128).default("UTC"),
   patientTimezone: z.string().min(1).max(128).default("UTC"),
 });
@@ -263,8 +260,7 @@ export async function POST(request: NextRequest) {
   try {
     const doctorDateLabel = formatDateInDoctorTz(dateParam, time, doctorTimezone);
     const doctorTimeLabel = formatTimeInDoctorTz(dateParam, time, doctorTimezone);
-    const modality =
-      consultationType === ConsultationType.ONLINE ? "online" : "in-clinic";
+    const modality = "in-clinic";
     await createDoctorNotificationForDoctorId({
       doctorId,
       type: NotificationType.APPOINTMENT_BOOKED,

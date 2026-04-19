@@ -24,6 +24,7 @@ export type PatientAppointmentItem = {
   time: string; // HH:mm in doctor's timezone
   timezone: string; // Doctor's IANA timezone
   consultationType: ConsultationType;
+  googleMeetUrl: string | null;
   prescription: { medicines: unknown; generalNotes: string | null } | null;
   status: AppointmentStatus;
   doctor: {
@@ -328,6 +329,18 @@ export default function PatientAppointmentsClient() {
                         {formatTimeInPatientTz(a.date, a.time, a.timezone)}
                       </span>
                     </div>
+                    {a.consultationType === "ONLINE" && a.googleMeetUrl && (
+                      <p className="mt-2 font-montserrat text-sm">
+                        <a
+                          href={a.googleMeetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-[#2555F3] underline underline-offset-2 break-words"
+                        >
+                          Join Google Meet
+                        </a>
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex shrink-0 flex-wrap items-center gap-2">

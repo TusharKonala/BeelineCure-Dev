@@ -12,6 +12,11 @@ const credentialsSchema = z.object({
   password: z.string().min(1),
 });
 
+function isAdminGoogleEmail(email: string): boolean {
+  const admin = process.env.ADMIN_GOOGLE_EMAIL?.trim().toLowerCase();
+  return Boolean(admin && email.trim().toLowerCase() === admin);
+}
+
 async function authorizeMagicLink(rawToken: string) {
   if (rawToken.length > 1024) return null;
   const tokenHash = createHash("sha256").update(rawToken).digest("hex");
@@ -70,6 +75,14 @@ export const authOptions: NextAuthOptions = {
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          scope:
+            "openid email profile https://www.googleapis.com/auth/calendar",
+        },
+      },
     }),
     CredentialsProvider({
       name: "credentials",
@@ -146,9 +159,9 @@ export const authOptions: NextAuthOptions = {
             email,
             name: user.name,
             password: null,
-            role: UserRole.PATIENT,
+            role: isAdminGoogleEmail(email) ? UserRole.ADMIN : UserRole.PATIENT,
             emailVerifiedAt: new Date(),
-            profileComplete: false,
+            profileComplete: isAdminGoogleEmail(email),
           },
           update: {
             name: user.name ?? undefined,
@@ -167,6 +180,25 @@ export const authOptions: NextAuthOptions = {
           dbUser.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
         ) {
           throw new Error("DOCTOR_NOT_APPROVED");
+        }
+
+        if (isAdminGoogleEmail(email) && account) {
+          const expiresAt =
+            typeof account.expires_at === "number"
+              ? new Date(account.expires_at * 1000)
+              : null;
+          await prisma.user.update({
+            where: { id: dbUser.id },
+            data: {
+              ...(typeof account.access_token === "string"
+                ? { googleCalendarAccessToken: account.access_token }
+                : {}),
+              ...(typeof account.refresh_token === "string"
+                ? { googleCalendarRefreshToken: account.refresh_token }
+                : {}),
+              ...(expiresAt ? { googleCalendarAccessTokenExpiresAt: expiresAt } : {}),
+            },
+          });
         }
 
         token.id = dbUser.id;

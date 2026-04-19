@@ -71,6 +71,7 @@ export const sendAppointmentReminder = inngest.createFunction(
         status: true,
         cancelToken: true,
         rescheduleToken: true,
+        googleMeetUrl: true,
         doctor: {
           select: {
             name: true,
@@ -128,6 +129,7 @@ export const sendAppointmentReminder = inngest.createFunction(
         consultationType: appointment.consultationType,
         cancelUrl,
         rescheduleUrl,
+        meetLink: appointment.googleMeetUrl,
       }),
     });
 

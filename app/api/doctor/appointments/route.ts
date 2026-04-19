@@ -27,6 +27,7 @@ import {
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
+import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -109,6 +110,7 @@ export async function GET(request: NextRequest) {
       consultationType: true,
       status: true,
       notes: true,
+      googleMeetUrl: true,
     },
   });
 
@@ -152,6 +154,7 @@ export async function GET(request: NextRequest) {
       consultationType: a.consultationType,
       status: a.status,
       notes: a.notes,
+      googleMeetUrl: a.googleMeetUrl,
     })),
     hasMore: start + limit < filteredAppointments.length,
     total: filteredAppointments.length,
@@ -216,6 +219,7 @@ export async function PATCH(request: NextRequest) {
       stripePaymentId: true,
       stripePaymentIntentId: true,
       refundStatus: true,
+      googleCalendarEventId: true,
     },
   });
   if (!appointment) {
@@ -237,9 +241,17 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  if (appointment.googleCalendarEventId) {
+    await deleteMeetCalendarEvent(appointment.googleCalendarEventId);
+  }
+
   await prisma.appointment.update({
     where: { id: appointment.id },
-    data: { status: AppointmentStatus.CANCELLED },
+    data: {
+      status: AppointmentStatus.CANCELLED,
+      googleCalendarEventId: null,
+      googleMeetUrl: null,
+    },
   });
 
   // Refund logic (online + paid only):
