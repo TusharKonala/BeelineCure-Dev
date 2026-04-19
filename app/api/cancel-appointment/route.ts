@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
 
   const calendarEventId = appointment.googleCalendarEventId;
   if (calendarEventId) {
-    await deleteMeetCalendarEvent(calendarEventId);
+    await deleteMeetCalendarEvent(appointment.doctorId, calendarEventId);
   }
 
   await prisma.appointment.update({

@@ -242,7 +242,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (appointment.googleCalendarEventId) {
-    await deleteMeetCalendarEvent(appointment.googleCalendarEventId);
+    await deleteMeetCalendarEvent(appointment.doctorId, appointment.googleCalendarEventId);
   }
 
   await prisma.appointment.update({

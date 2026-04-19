@@ -9,11 +9,6 @@ import { prisma } from "@/lib/db";
 
 const CLOCK_SKEW_MS = 120_000;
 
-function getAdminEmail(): string | null {
-  const raw = process.env.ADMIN_GOOGLE_EMAIL?.trim();
-  return raw && raw.length > 0 ? raw : null;
-}
-
 function createOAuth2Client(): InstanceType<
   typeof google.auth.OAuth2
 > | null {
@@ -24,23 +19,25 @@ function createOAuth2Client(): InstanceType<
 }
 
 /**
- * Returns a valid access token for the admin Google account, refreshing and persisting when needed.
+ * Returns a valid access token for the given doctor's Google account,
+ * refreshing and persisting when the stored token is expired.
+ *
+ * Returns null when the doctor has not connected Google Calendar or the
+ * refresh flow fails.
  */
-export async function getValidAdminAccessToken(): Promise<string | null> {
-  const adminEmail = getAdminEmail();
-  if (!adminEmail) {
-    console.error("[google-calendar] ADMIN_GOOGLE_EMAIL is not set");
-    return null;
-  }
-
+export async function getValidDoctorAccessToken(
+  doctorId: string,
+): Promise<string | null> {
   const oauth2 = createOAuth2Client();
   if (!oauth2) {
-    console.error("[google-calendar] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET missing");
+    console.error(
+      "[google-calendar] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET missing",
+    );
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: adminEmail },
+  const doctor = await prisma.doctor.findUnique({
+    where: { id: doctorId },
     select: {
       id: true,
       googleCalendarAccessToken: true,
@@ -49,24 +46,25 @@ export async function getValidAdminAccessToken(): Promise<string | null> {
     },
   });
 
-  if (!user?.googleCalendarRefreshToken) {
-    console.error(
-      "[google-calendar] No refresh token for admin; sign in with Google as the admin account.",
+  if (!doctor?.googleCalendarRefreshToken) {
+    console.warn(
+      "[google-calendar] Doctor has not connected Google Calendar; skipping Meet.",
+      { doctorId },
     );
     return null;
   }
 
   const now = Date.now();
-  const expiresAtMs = user.googleCalendarAccessTokenExpiresAt?.getTime() ?? 0;
+  const expiresAtMs = doctor.googleCalendarAccessTokenExpiresAt?.getTime() ?? 0;
   if (
-    user.googleCalendarAccessToken &&
+    doctor.googleCalendarAccessToken &&
     expiresAtMs - CLOCK_SKEW_MS > now
   ) {
-    return user.googleCalendarAccessToken;
+    return doctor.googleCalendarAccessToken;
   }
 
   oauth2.setCredentials({
-    refresh_token: user.googleCalendarRefreshToken,
+    refresh_token: doctor.googleCalendarRefreshToken,
   });
 
   try {
@@ -74,15 +72,17 @@ export async function getValidAdminAccessToken(): Promise<string | null> {
     const creds = refreshed.credentials;
     const accessToken = creds.access_token;
     if (!accessToken) {
-      console.error("[google-calendar] refreshAccessToken returned no access_token");
+      console.error(
+        "[google-calendar] refreshAccessToken returned no access_token",
+      );
       return null;
     }
     const newExpiry = creds.expiry_date
       ? new Date(creds.expiry_date)
       : new Date(now + 3600 * 1000);
 
-    await prisma.user.update({
-      where: { id: user.id },
+    await prisma.doctor.update({
+      where: { id: doctor.id },
       data: {
         googleCalendarAccessToken: accessToken,
         googleCalendarAccessTokenExpiresAt: newExpiry,
@@ -132,6 +132,7 @@ function extractMeetUrl(
 /**
  * Creates a Google Calendar event with Meet for a confirmed online appointment.
  * Idempotent if `googleCalendarEventId` is already set.
+ * Silently skips (returning null) when the doctor has not connected Google Calendar.
  */
 export async function createMeetEventForOnlineAppointment(
   appointmentId: string,
@@ -162,15 +163,6 @@ export async function createMeetEventForOnlineAppointment(
     return { googleMeetUrl: null };
   }
 
-  const accessToken = await getValidAdminAccessToken();
-  if (!accessToken) {
-    return { googleMeetUrl: null };
-  }
-
-  const oauth2 = createOAuth2Client();
-  if (!oauth2) return { googleMeetUrl: null };
-  oauth2.setCredentials({ access_token: accessToken });
-
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
     include: {
@@ -183,6 +175,15 @@ export async function createMeetEventForOnlineAppointment(
   });
 
   if (!appointment) return { googleMeetUrl: null };
+
+  const accessToken = await getValidDoctorAccessToken(appointment.doctorId);
+  if (!accessToken) {
+    return { googleMeetUrl: null };
+  }
+
+  const oauth2 = createOAuth2Client();
+  if (!oauth2) return { googleMeetUrl: null };
+  oauth2.setCredentials({ access_token: accessToken });
 
   const { start, end } = appointmentStartEnd({
     date: appointment.date,
@@ -197,11 +198,6 @@ export async function createMeetEventForOnlineAppointment(
   const doctorEmail = appointment.doctor.user?.email;
   if (doctorEmail) {
     attendees.push({ email: doctorEmail });
-  } else {
-    console.warn(
-      "[google-calendar] Doctor has no linked user email; Meet invite sent only to patient.",
-      { doctorId: appointment.doctorId },
-    );
   }
 
   const calendar = google.calendar({ version: "v3", auth: oauth2 });
@@ -224,7 +220,9 @@ export async function createMeetEventForOnlineAppointment(
         attendees,
         conferenceData: {
           createRequest: {
-            requestId: appointment.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40) || "clinivo-meet",
+            requestId:
+              appointment.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40) ||
+              "clinivo-meet",
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         },
@@ -280,7 +278,7 @@ export async function updateMeetEventForOnlineAppointment(
     return;
   }
 
-  const accessToken = await getValidAdminAccessToken();
+  const accessToken = await getValidDoctorAccessToken(appointment.doctorId);
   if (!accessToken) return;
 
   const oauth2 = createOAuth2Client();
@@ -332,11 +330,15 @@ export async function updateMeetEventForOnlineAppointment(
 
 /**
  * Deletes the Google Calendar event when an online appointment is cancelled.
+ * Uses the doctor's tokens — caller is responsible for passing the correct doctorId.
  */
-export async function deleteMeetCalendarEvent(eventId: string | null): Promise<void> {
+export async function deleteMeetCalendarEvent(
+  doctorId: string,
+  eventId: string | null,
+): Promise<void> {
   if (!eventId) return;
 
-  const accessToken = await getValidAdminAccessToken();
+  const accessToken = await getValidDoctorAccessToken(doctorId);
   if (!accessToken) return;
 
   const oauth2 = createOAuth2Client();

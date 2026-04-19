@@ -83,10 +83,6 @@ model User {
   magicLinkLastSentAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
-  /// Admin Google Calendar OAuth — set only for `ADMIN_GOOGLE_EMAIL` when they sign in with Google.
-  googleCalendarAccessToken            String?   @db.Text
-  googleCalendarRefreshToken           String?   @db.Text
-  googleCalendarAccessTokenExpiresAt   DateTime?
   role      UserRole @default(PATIENT)
   profileComplete Boolean @default(true)
   createdAt DateTime @default(now())
@@ -150,6 +146,10 @@ model Doctor {
   approvedAt       DateTime?
   approvedByUserId String?
   lastSeenAt       DateTime?
+  /// Doctor Google Calendar OAuth — set when the doctor connects Google Calendar from their dashboard.
+  googleCalendarAccessToken          String?   @db.Text
+  googleCalendarRefreshToken         String?   @db.Text
+  googleCalendarAccessTokenExpiresAt DateTime?
   createdAt        DateTime             @default(now())
   updatedAt        DateTime             @updatedAt
   availabilities   DoctorAvailability[]
