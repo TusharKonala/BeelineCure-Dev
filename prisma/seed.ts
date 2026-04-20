@@ -89,6 +89,7 @@ async function main() {
             date,
             startTime: block.startTime,
             endTime: block.endTime,
+            slotDurationMinutes: 30,
           },
         });
       }

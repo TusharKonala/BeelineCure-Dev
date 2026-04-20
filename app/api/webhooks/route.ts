@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
           doctorId: bookingSession.doctorId,
           date,
           time: bookingSession.time,
+          durationMinutes: bookingSession.durationMinutes,
           patientName: bookingSession.patientName,
           email: bookingSession.email,
           phone: bookingSession.phone,

@@ -73,22 +73,35 @@ export async function POST(request: NextRequest) {
 
     const headersList = await headers();
     const origin = headersList.get("origin");
+    const configuredPriceId = process.env.STRIPE_CONSULTATION_PRICE_ID;
+    if (!configuredPriceId) {
+      return NextResponse.json(
+        { error: "Stripe consultation price is not configured" },
+        { status: 500 },
+      );
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
         {
-          price: process.env.STRIPE_CONSULTATION_PRICE_ID!,
+          price: configuredPriceId,
           quantity: 1,
         },
       ],
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&notify=1`,
       cancel_url: `${origin}/book-appointment`,
+      custom_text: {
+        submit: {
+          message: `Appointment duration: ${bookingSession.durationMinutes} minutes.`,
+        },
+      },
       metadata: {
         bookingSessionId: bookingSession.id,
         doctorId: bookingSession.doctorId,
         date: bookingSession.date,
         time: bookingSession.time,
+        durationMinutes: String(bookingSession.durationMinutes),
         consultationType: bookingSession.consultationType,
         patientName: bookingSession.patientName,
         email: bookingSession.email,

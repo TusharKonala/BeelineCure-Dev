@@ -17,6 +17,7 @@ export interface EmailTemplateProps {
   primaryActionUrl?: string;
   secondaryActionLabel?: string;
   secondaryActionUrl?: string;
+  showOnlineContactFallback?: boolean;
 }
 
 const getConfirmationMessage = (consultationType: "CLINIC" | "ONLINE") => {
@@ -43,6 +44,7 @@ export function EmailTemplate({
   primaryActionUrl,
   secondaryActionLabel,
   secondaryActionUrl,
+  showOnlineContactFallback = true,
 }: EmailTemplateProps) {
   const firstActionLabel = primaryActionLabel ?? "Cancel Appointment";
   const firstActionUrl = primaryActionUrl ?? cancelUrl;
@@ -101,7 +103,10 @@ export function EmailTemplate({
           </a>
         </p>
       )}
-      {consultationType === "ONLINE" && showActionLinks && !meetLink && (
+      {consultationType === "ONLINE" &&
+        showActionLinks &&
+        showOnlineContactFallback &&
+        !meetLink && (
         <p style={{ marginTop: "1rem", color: "#333" }}>
           This is an online consultation. The doctor will contact you at the
           scheduled time.

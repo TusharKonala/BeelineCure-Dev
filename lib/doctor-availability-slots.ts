@@ -111,49 +111,67 @@ export function coerceAllowedSlotDurationMinutes(
 }
 
 /**
- * Infer slot length from persisted rows. After saves, each row is one block
- * `startTime`→`endTime` with length equal to the duration used at save time.
- * Returns `fallback` when there are no rows or spans are mixed / not on the allowed grid.
+ * Infer slot length from persisted rows using the stored per-row duration.
+ * Returns `fallback` when there are no rows or durations are mixed.
  */
 export function inferSlotDurationMinutesFromRows(
-  rows: { startTime: string; endTime: string }[],
+  rows: { startTime: string; endTime: string; slotDurationMinutes?: number }[],
   fallback: AllowedSlotDurationMinutes,
 ): AllowedSlotDurationMinutes {
   if (rows.length === 0) return fallback;
-  const spans = rows.map(
-    (r) => timeToMinutes(r.endTime) - timeToMinutes(r.startTime),
+  const durations = rows.map((r) =>
+    coerceAllowedSlotDurationMinutes(r.slotDurationMinutes ?? fallback),
   );
-  const first = spans[0]!;
-  if (first <= 0) return fallback;
-  if (!spans.every((s) => s === first)) return fallback;
-  if (!ALLOWED_SLOT_DURATION_MINUTES.includes(first as AllowedSlotDurationMinutes))
-    return fallback;
-  return first as AllowedSlotDurationMinutes;
+  const first = durations[0]!;
+  if (!durations.every((d) => d === first)) return fallback;
+  return first;
 }
 
 /**
- * Slot starts from persisted rows. Uses each row's `(end − start)` as the step
- * when it matches an allowed duration (one saved slot per row); otherwise falls
- * back to `fallbackIntervalMinutes` for legacy wide windows.
+ * Slot starts from persisted rows using each row's stored duration.
+ * Falls back to `fallbackIntervalMinutes` only for malformed/legacy rows.
  */
 export function expandAvailabilityRows(
-  rows: { startTime: string; endTime: string }[],
+  rows: { startTime: string; endTime: string; slotDurationMinutes?: number }[],
   fallbackIntervalMinutes: number,
 ): string[] {
   const set = new Set<string>();
   const fallback = coerceAllowedSlotDurationMinutes(fallbackIntervalMinutes);
   for (const row of rows) {
-    const span = timeToMinutes(row.endTime) - timeToMinutes(row.startTime);
-    const interval =
-      span > 0 &&
-      ALLOWED_SLOT_DURATION_MINUTES.includes(span as AllowedSlotDurationMinutes)
-        ? span
-        : fallback;
+    const interval = coerceAllowedSlotDurationMinutes(
+      row.slotDurationMinutes ?? fallback,
+    );
     for (const s of generateSlots(row.startTime, row.endTime, interval)) {
       set.add(s);
     }
   }
   return [...set].sort();
+}
+
+/**
+ * Resolves the duration for a specific slot start from persisted availability
+ * rows. Returns null when the slot is not present in availability for that date.
+ */
+export function resolveSlotDurationForStart(
+  rows: { startTime: string; endTime: string; slotDurationMinutes?: number }[],
+  slotStart: string,
+  fallbackIntervalMinutes: number,
+): AllowedSlotDurationMinutes | null {
+  const fallback = coerceAllowedSlotDurationMinutes(fallbackIntervalMinutes);
+  const matches: AllowedSlotDurationMinutes[] = [];
+
+  for (const row of rows) {
+    const interval = coerceAllowedSlotDurationMinutes(
+      row.slotDurationMinutes ?? fallback,
+    );
+    const slots = generateSlots(row.startTime, row.endTime, interval);
+    if (slots.includes(slotStart)) {
+      matches.push(interval);
+    }
+  }
+
+  if (matches.length === 0) return null;
+  return matches[0] ?? null;
 }
 
 /** End time for one bookable block starting at HH:mm. */

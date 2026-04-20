@@ -100,7 +100,7 @@ function appointmentStartEnd(params: {
   date: Date;
   time: string;
   timezone: string;
-  slotDurationMinutes: number;
+  durationMinutes: number;
 }): { start: Date; end: Date } {
   const dateStr = params.date.toISOString().slice(0, 10);
   const timeWithSeconds =
@@ -109,7 +109,7 @@ function appointmentStartEnd(params: {
     `${dateStr}T${timeWithSeconds}`,
     params.timezone,
   );
-  const end = addMinutes(start, params.slotDurationMinutes);
+  const end = addMinutes(start, params.durationMinutes);
   return { start, end };
 }
 
@@ -189,7 +189,7 @@ export async function createMeetEventForOnlineAppointment(
     date: appointment.date,
     time: appointment.time,
     timezone: appointment.timezone,
-    slotDurationMinutes: appointment.doctor.slotDurationMinutes,
+    durationMinutes: appointment.durationMinutes ?? appointment.doctor.slotDurationMinutes,
   });
 
   const attendees: { email: string }[] = [
@@ -289,7 +289,7 @@ export async function updateMeetEventForOnlineAppointment(
     date: appointment.date,
     time: appointment.time,
     timezone: appointment.timezone,
-    slotDurationMinutes: appointment.doctor.slotDurationMinutes,
+    durationMinutes: appointment.durationMinutes ?? appointment.doctor.slotDurationMinutes,
   });
 
   const attendees: { email: string }[] = [{ email: appointment.email }];

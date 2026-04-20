@@ -83,6 +83,12 @@ export default async function BookingReviewPage({ params }: PageProps) {
                 </span>
               </div>
               <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
+                <span className="font-medium text-[#111111]">Duration</span>
+                <span className="text-[#5E5E5E] sm:text-right">
+                  {bookingSession.durationMinutes} minutes
+                </span>
+              </div>
+              <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
                 <span className="font-medium text-[#111111]">
                   Consultation price
                 </span>

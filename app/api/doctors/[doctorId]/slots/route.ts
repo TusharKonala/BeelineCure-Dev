@@ -47,6 +47,7 @@ export async function GET(
     }),
     prisma.doctorAvailability.findMany({
       where: { doctorId, date },
+      select: { startTime: true, endTime: true, slotDurationMinutes: true },
     }),
     prisma.appointment.findMany({
       where: {
@@ -68,6 +69,7 @@ export async function GET(
   const rows = availabilities.map((a) => ({
     startTime: a.startTime,
     endTime: a.endTime,
+    slotDurationMinutes: a.slotDurationMinutes,
   }));
   const slots = expandAvailabilityRows(rows, fallback);
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(rows, fallback);

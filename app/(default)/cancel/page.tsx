@@ -13,11 +13,19 @@ type CancelUiState =
   | "already_cancelled"
   | "error";
 
+type RefundPolicyPreview = {
+  tier: "full_refund" | "partial_refund" | "no_refund_no_show";
+  percentage: 100 | 50 | 0;
+  title: string;
+  description: string;
+} | null;
+
 function CancelContent() {
   const searchParams = useSearchParams();
   const [state, setState] = useState<CancelUiState>("idle");
   const [isCancelling, setIsCancelling] = useState(false);
   const [hasCheckedStatus, setHasCheckedStatus] = useState(false);
+  const [refundPolicy, setRefundPolicy] = useState<RefundPolicyPreview>(null);
 
   const appointmentId = useMemo(
     () => searchParams.get("appointmentId") ?? "",
@@ -43,20 +51,27 @@ function CancelContent() {
     )
       .then(async (res) => {
         const json = (await res.json().catch(() => null)) as
-          | { status?: string }
+          | { status?: string; refundPolicy?: RefundPolicyPreview }
           | null;
 
         const nextState = json?.status;
         if (nextState === "already_cancelled" || nextState === "invalid_link") {
           setState(nextState);
+          setRefundPolicy(null);
           return;
         }
 
         if (nextState !== "valid") {
           setState("error");
+          setRefundPolicy(null);
+          return;
         }
+        setRefundPolicy(json?.refundPolicy ?? null);
       })
-      .catch(() => setState("error"))
+      .catch(() => {
+        setState("error");
+        setRefundPolicy(null);
+      })
       .finally(() => setHasCheckedStatus(true));
   }, [appointmentId, token, canSubmit]);
 
@@ -136,6 +151,17 @@ function CancelContent() {
             <p className="mt-4 font-montserrat text-sm text-[#5E5E5E] md:text-base">
               {message}
             </p>
+
+            {state === "idle" && canSubmit && hasCheckedStatus && refundPolicy && (
+              <div className="mt-6 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-4">
+                <p className="font-montserrat text-sm font-semibold text-[#111111]">
+                  Refund on cancellation: {refundPolicy.title}
+                </p>
+                <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+                  {refundPolicy.description}
+                </p>
+              </div>
+            )}
 
             {state === "idle" && canSubmit && hasCheckedStatus && (
               <div className="mt-8">

@@ -363,6 +363,7 @@ export async function PATCH(request: NextRequest) {
         consultationType: appointment.consultationType,
         cancelUrl: "",
         rescheduleUrl: "",
+        showOnlineContactFallback: false,
       }),
     });
 

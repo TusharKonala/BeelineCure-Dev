@@ -102,15 +102,22 @@ export async function GET(request: NextRequest) {
         doctorId: doctor.id,
         date: { gte: ymdToPrismaDate(today) },
       },
-      select: { date: true, startTime: true, endTime: true },
+      select: { date: true, startTime: true, endTime: true, slotDurationMinutes: true },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
 
-    const byDate = new Map<string, { startTime: string; endTime: string }[]>();
+    const byDate = new Map<
+      string,
+      { startTime: string; endTime: string; slotDurationMinutes: number }[]
+    >();
     for (const r of rows) {
       const key = r.date.toISOString().slice(0, 10);
       const list = byDate.get(key) ?? [];
-      list.push({ startTime: r.startTime, endTime: r.endTime });
+      list.push({
+        startTime: r.startTime,
+        endTime: r.endTime,
+        slotDurationMinutes: r.slotDurationMinutes,
+      });
       byDate.set(key, list);
     }
 
@@ -157,7 +164,7 @@ export async function GET(request: NextRequest) {
 
   const rows = await prisma.doctorAvailability.findMany({
     where: { doctorId: doctor.id, date: ymdToPrismaDate(dateParam) },
-    select: { startTime: true, endTime: true },
+    select: { startTime: true, endTime: true, slotDurationMinutes: true },
   });
 
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(
@@ -302,6 +309,7 @@ export async function PUT(request: Request) {
             date,
             startTime,
             endTime: slotEndFromStart(startTime, duration),
+            slotDurationMinutes: duration,
           })),
         });
       }

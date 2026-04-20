@@ -164,6 +164,8 @@ model DoctorAvailability {
   date      DateTime @db.Date
   startTime String
   endTime   String
+  /// Slot duration (minutes) used when this availability row was created.
+  slotDurationMinutes Int @default(30)
 }
 
 model Appointment {
@@ -179,6 +181,8 @@ model Appointment {
   patientTimezone  String            @default("UTC")
   date             DateTime          @db.Date
   time             String
+  /// Frozen slot duration at booking time (minutes), used for event timings and display.
+  durationMinutes  Int               @default(30)
   notes            String?
   prescription     Prescription?
   consultationType ConsultationType
@@ -227,6 +231,8 @@ model BookingSession {
   patientTimezone  String               @default("UTC")
   date             String
   time             String
+  /// Frozen slot duration at booking-session creation time (minutes).
+  durationMinutes  Int               @default(30)
   notes            String?
   consultationType String
   status           BookingSessionStatus @default(PENDING)

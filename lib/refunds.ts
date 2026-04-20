@@ -88,6 +88,56 @@ type InitiateRefundInput = {
   percentage: 100 | 50;
 };
 
+export type CancellationRefundPolicyTier =
+  | "full_refund"
+  | "partial_refund"
+  | "no_refund_no_show";
+
+export type CancellationRefundPolicy = {
+  tier: CancellationRefundPolicyTier;
+  percentage: 100 | 50 | 0;
+  title: string;
+  description: string;
+};
+
+/**
+ * Maps the time until appointment start to the cancellation refund policy.
+ */
+export function cancellationRefundPolicy(
+  appointmentStartMs: number,
+  nowMs = Date.now(),
+): CancellationRefundPolicy {
+  const hoursUntilStart = (appointmentStartMs - nowMs) / (60 * 60 * 1000);
+
+  if (hoursUntilStart >= 24) {
+    return {
+      tier: "full_refund",
+      percentage: 100,
+      title: "Full refund",
+      description:
+        "Cancel 24 or more hours before your appointment to receive a full refund.",
+    };
+  }
+
+  if (hoursUntilStart > 0) {
+    return {
+      tier: "partial_refund",
+      percentage: 50,
+      title: "50% refund",
+      description:
+        "Cancelling within 24 hours of your appointment is eligible for a 50% refund.",
+    };
+  }
+
+  return {
+    tier: "no_refund_no_show",
+    percentage: 0,
+    title: "No refund",
+    description:
+      "No-shows or cancellations after the appointment start time are not eligible for a refund.",
+  };
+}
+
 /**
  * Creates a Stripe refund for an online, paid appointment and records
  * the refund lifecycle state on the appointment row.

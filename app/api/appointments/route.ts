@@ -8,6 +8,10 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
+import {
+  coerceAllowedSlotDurationMinutes,
+  resolveSlotDurationForStart,
+} from "@/lib/doctor-availability-slots";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import {
@@ -83,7 +87,7 @@ export async function POST(request: NextRequest) {
 
   const doctor = await prisma.doctor.findFirst({
     where: publicDoctorByIdWhere(doctorId),
-    select: { id: true, name: true, timezone: true },
+    select: { id: true, name: true, timezone: true, slotDurationMinutes: true },
   });
 
   if (!doctor) {
@@ -91,6 +95,23 @@ export async function POST(request: NextRequest) {
   }
 
   const doctorTimezone = doctor.timezone;
+  const availabilityRows = await prisma.doctorAvailability.findMany({
+    where: { doctorId, date },
+  });
+  const fallbackDuration = coerceAllowedSlotDurationMinutes(
+    doctor.slotDurationMinutes,
+  );
+  const slotDurationMinutes = resolveSlotDurationForStart(
+    availabilityRows,
+    time,
+    fallbackDuration,
+  );
+  if (slotDurationMinutes === null) {
+    return NextResponse.json(
+      { error: "This time slot is no longer available" },
+      { status: 409 },
+    );
+  }
 
   const existingSameDate = await prisma.appointment.findFirst({
     where: {
@@ -181,6 +202,7 @@ export async function POST(request: NextRequest) {
         phone,
         notes,
         consultationType,
+        durationMinutes: slotDurationMinutes,
         timezone: doctorTimezone,
         patientTimezone,
         status: AppointmentStatus.CONFIRMED,

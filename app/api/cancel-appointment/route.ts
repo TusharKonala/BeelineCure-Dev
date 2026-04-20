@@ -23,7 +23,11 @@ import {
   createDoctorNotificationForDoctorId,
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
-import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
+import {
+  cancellationRefundPolicy,
+  initiateRefund,
+  refundEmailSentence,
+} from "@/lib/refunds";
 import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -57,7 +61,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ status: "invalid_link" as const });
   }
 
-  // Disallow cancelling past or completed appointments.
+  // Disallow cancelling already-cancelled or completed appointments.
   if (appointment.status === AppointmentStatus.CANCELLED) {
     return NextResponse.json({ status: "already_cancelled" as const });
   }
@@ -71,11 +75,23 @@ export async function GET(request: NextRequest) {
     `${appointmentDateParam}T${timeWithSeconds}`,
     appointment.timezone,
   ).getTime();
-  if (appointmentStartMs <= Date.now()) {
-    return NextResponse.json({ status: "invalid_link" as const });
-  }
+  const refundPolicy =
+    appointment.consultationType === ConsultationType.ONLINE &&
+    appointment.paymentStatus === PaymentStatus.PAID
+      ? cancellationRefundPolicy(appointmentStartMs)
+      : null;
 
-  return NextResponse.json({ status: "valid" as const });
+  return NextResponse.json({
+    status: "valid" as const,
+    refundPolicy: refundPolicy
+      ? {
+          tier: refundPolicy.tier,
+          percentage: refundPolicy.percentage,
+          title: refundPolicy.title,
+          description: refundPolicy.description,
+        }
+      : null,
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -96,7 +112,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "invalid_link" as const });
   }
 
-  // Disallow cancelling past or completed appointments.
+  // Disallow cancelling already-cancelled or completed appointments.
   if (appointment.status === AppointmentStatus.CANCELLED) {
     return NextResponse.json({ status: "already_cancelled" as const });
   }
@@ -110,10 +126,6 @@ export async function POST(request: NextRequest) {
     `${appointmentDateParam}T${timeWithSeconds}`,
     appointment.timezone,
   ).getTime();
-  if (appointmentStartMs <= Date.now()) {
-    return NextResponse.json({ status: "invalid_link" as const });
-  }
-
   const calendarEventId = appointment.googleCalendarEventId;
   if (calendarEventId) {
     await deleteMeetCalendarEvent(appointment.doctorId, calendarEventId);
@@ -133,30 +145,46 @@ export async function POST(request: NextRequest) {
   // unpaid appointments are never refunded.
   let refundSentence: string | null = null;
   let refundFailed = false;
+  let noRefundSentence: string | null = null;
+  const policy =
+    appointment.consultationType === ConsultationType.ONLINE &&
+    appointment.paymentStatus === PaymentStatus.PAID
+      ? cancellationRefundPolicy(appointmentStartMs)
+      : null;
   if (
     appointment.consultationType === ConsultationType.ONLINE &&
     appointment.paymentStatus === PaymentStatus.PAID
   ) {
-    const hoursUntilStart =
-      (appointmentStartMs - Date.now()) / (60 * 60 * 1000);
-    const percentage: 100 | 50 = hoursUntilStart >= 24 ? 100 : 50;
-    const result = await initiateRefund({
-      appointment: {
-        id: appointment.id,
-        consultationType: appointment.consultationType,
-        paymentStatus: appointment.paymentStatus,
-        stripePaymentId: appointment.stripePaymentId,
-        stripePaymentIntentId: appointment.stripePaymentIntentId,
-        refundStatus: appointment.refundStatus,
-      },
-      percentage,
-    });
-    if (result.ok) {
-      refundSentence = refundEmailSentence(result);
-    } else if (result.reason === "stripe_error") {
-      refundFailed = true;
+    if (policy?.percentage === 0) {
+      noRefundSentence =
+        "Per our cancellation policy, this cancellation is considered a no-show and is not eligible for a refund.";
+    } else {
+      const result = await initiateRefund({
+        appointment: {
+          id: appointment.id,
+          consultationType: appointment.consultationType,
+          paymentStatus: appointment.paymentStatus,
+          stripePaymentId: appointment.stripePaymentId,
+          stripePaymentIntentId: appointment.stripePaymentIntentId,
+          refundStatus: appointment.refundStatus,
+        },
+        percentage: policy?.percentage === 100 ? 100 : 50,
+      });
+      if (result.ok) {
+        refundSentence = refundEmailSentence(result);
+      } else if (result.reason === "stripe_error") {
+        refundFailed = true;
+      }
     }
   }
+
+  const refundAppendix = refundSentence
+    ? ` ${refundSentence}`
+    : refundFailed
+      ? " We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it."
+      : noRefundSentence
+        ? ` ${noRefundSentence}`
+        : "";
 
   try {
     await inngest.send({
@@ -180,9 +208,8 @@ export async function POST(request: NextRequest) {
     const isOnline =
       appointment.consultationType === ConsultationType.ONLINE;
     const isPaid = appointment.paymentStatus === PaymentStatus.PAID;
-    // Build the cancellation message body. Online+paid cancellations append a
-    // refund sentence (full or 50%) or a "no refund applies" sentence per the
-    // cancellation policy when within 24 hours and no refund was initiated.
+    // Build the cancellation message body. Online+paid cancellations append
+    // refund policy outcomes (full/50%/no-refund) or a refund-failure sentence.
     const baseMessage = React.createElement(
       React.Fragment,
       null,
@@ -203,6 +230,12 @@ export async function POST(request: NextRequest) {
           "span",
           { style: { display: "block", marginTop: "0.75rem" } },
           "We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it.",
+        );
+      } else if (noRefundSentence) {
+        refundNode = React.createElement(
+          "span",
+          { style: { display: "block", marginTop: "0.75rem" } },
+          noRefundSentence,
         );
       }
     }
@@ -235,6 +268,7 @@ export async function POST(request: NextRequest) {
         consultationType: appointment.consultationType,
         cancelUrl: "",
         rescheduleUrl: "",
+        showOnlineContactFallback: false,
       }),
     });
 
@@ -272,7 +306,7 @@ export async function POST(request: NextRequest) {
       title: "Appointment cancelled",
       message: `Your appointment${
         doctorDisplayName ? ` with ${doctorDisplayName}` : ""
-      } on ${formattedDate} at ${formattedTime} was cancelled.`,
+      } on ${formattedDate} at ${formattedTime} was cancelled.${refundAppendix}`,
     });
   } catch (err) {
     console.error("[cancel] Failed to create patient notification:", err);

@@ -320,6 +320,10 @@ export default function DoctorAppointmentsClient() {
         <div className="mt-6 grid w-full grid-cols-1 gap-4">
           {appointments.map((a) => {
             const consultation = consultationLabel(a.consultationType);
+            const shouldShowGoogleMeetLink =
+              (tab === "upcoming" || tab === "pending-review") &&
+              a.consultationType === "ONLINE" &&
+              Boolean(a.googleMeetUrl);
             return (
               <div
                 key={a.id}
@@ -348,13 +352,13 @@ export default function DoctorAppointmentsClient() {
                         {formatTimeInDoctorTz(a.date, a.time, a.timezone)}
                       </span>
                     </div>
-                    {a.consultationType === "ONLINE" && a.googleMeetUrl && (
+                    {shouldShowGoogleMeetLink && (
                       <p className="mt-2 font-montserrat text-sm">
                         <a
-                          href={a.googleMeetUrl}
+                          href={a.googleMeetUrl!}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-[#2555F3] underline underline-offset-2 break-words"
+                          className="font-medium text-[#2555F3] underline underline-offset-2 wrap-break-word"
                         >
                           Join Google Meet
                         </a>
