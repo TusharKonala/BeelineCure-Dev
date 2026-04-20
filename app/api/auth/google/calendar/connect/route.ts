@@ -23,11 +23,17 @@ export async function GET() {
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId: session.user.id },
-    select: { id: true },
+    select: {
+      id: true,
+      user: { select: { email: true } },
+    },
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
   }
+
+  const loginHint =
+    session.user.email?.trim() || doctor.user?.email?.trim() || "";
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   if (!clientId) {
@@ -49,6 +55,9 @@ export async function GET() {
   authUrl.searchParams.set("prompt", "consent");
   authUrl.searchParams.set("include_granted_scopes", "true");
   authUrl.searchParams.set("state", state);
+  if (loginHint) {
+    authUrl.searchParams.set("login_hint", loginHint);
+  }
 
   return NextResponse.redirect(authUrl.toString());
 }
