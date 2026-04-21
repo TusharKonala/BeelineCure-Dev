@@ -25,7 +25,9 @@ import {
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import {
   cancellationRefundPolicy,
+  getChargeAmountCents,
   initiateRefund,
+  resolvePaymentIntentId,
   refundEmailSentence,
 } from "@/lib/refunds";
 import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
@@ -80,6 +82,26 @@ export async function GET(request: NextRequest) {
     appointment.paymentStatus === PaymentStatus.PAID
       ? cancellationRefundPolicy(appointmentStartMs)
       : null;
+  let originalPaidAmountCents: number | null = null;
+  let eligibleRefundAmountCents: number | null = null;
+  if (refundPolicy) {
+    const paymentIntentId = await resolvePaymentIntentId({
+      id: appointment.id,
+      consultationType: appointment.consultationType,
+      paymentStatus: appointment.paymentStatus,
+      stripePaymentId: appointment.stripePaymentId,
+      stripePaymentIntentId: appointment.stripePaymentIntentId,
+      refundStatus: appointment.refundStatus,
+    });
+    if (paymentIntentId) {
+      originalPaidAmountCents = await getChargeAmountCents(paymentIntentId);
+      if (originalPaidAmountCents) {
+        eligibleRefundAmountCents = Math.floor(
+          (originalPaidAmountCents * refundPolicy.percentage) / 100,
+        );
+      }
+    }
+  }
 
   return NextResponse.json({
     status: "valid" as const,
@@ -89,6 +111,8 @@ export async function GET(request: NextRequest) {
           percentage: refundPolicy.percentage,
           title: refundPolicy.title,
           description: refundPolicy.description,
+          originalPaidAmountCents,
+          eligibleRefundAmountCents,
         }
       : null,
   });

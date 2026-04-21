@@ -18,6 +18,8 @@ type RefundPolicyPreview = {
   percentage: 100 | 50 | 0;
   title: string;
   description: string;
+  originalPaidAmountCents?: number | null;
+  eligibleRefundAmountCents?: number | null;
 } | null;
 
 function CancelContent() {
@@ -37,6 +39,21 @@ function CancelContent() {
   );
 
   const canSubmit = appointmentId.length > 0 && token.length > 0;
+  const refundAmountMessage = useMemo(() => {
+    if (!refundPolicy) return null;
+    if (
+      typeof refundPolicy.originalPaidAmountCents !== "number" ||
+      typeof refundPolicy.eligibleRefundAmountCents !== "number"
+    ) {
+      return null;
+    }
+    const original = (refundPolicy.originalPaidAmountCents / 100).toFixed(2);
+    const refund = (refundPolicy.eligibleRefundAmountCents / 100).toFixed(2);
+    if (refundPolicy.percentage === 100) {
+      return `You paid $${original}. You are eligible for a full refund of $${refund}.`;
+    }
+    return `You paid $${original}. Cancelling now will refund $${refund} (${refundPolicy.percentage}%).`;
+  }, [refundPolicy]);
 
   useEffect(() => {
     if (!canSubmit) {
@@ -160,6 +177,11 @@ function CancelContent() {
                 <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                   {refundPolicy.description}
                 </p>
+                {refundAmountMessage && (
+                  <p className="mt-2 font-montserrat text-sm text-[#333333]">
+                    {refundAmountMessage}
+                  </p>
+                )}
               </div>
             )}
 
