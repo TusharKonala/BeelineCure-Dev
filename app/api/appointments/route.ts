@@ -10,7 +10,7 @@ import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import {
   coerceAllowedSlotDurationMinutes,
-  resolveSlotDurationForStart,
+  resolveSlotMetaForStart,
 } from "@/lib/doctor-availability-slots";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
@@ -43,6 +43,7 @@ const appointmentSchema = z.object({
   notes: z.string().optional(),
   /** In-clinic only; online bookings use Stripe + webhook. */
   consultationType: z.literal("CLINIC").default("CLINIC"),
+  availabilityId: z.string().optional(),
   timezone: z.string().min(1).max(128).default("UTC"),
   patientTimezone: z.string().min(1).max(128).default("UTC"),
 });
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
     phone,
     notes,
     consultationType,
+    availabilityId,
     patientTimezone,
   } = parsed.data;
 
@@ -101,14 +103,29 @@ export async function POST(request: NextRequest) {
   const fallbackDuration = coerceAllowedSlotDurationMinutes(
     doctor.slotDurationMinutes,
   );
-  const slotDurationMinutes = resolveSlotDurationForStart(
+  const slotMeta = resolveSlotMetaForStart(
     availabilityRows,
     time,
     fallbackDuration,
   );
-  if (slotDurationMinutes === null) {
+  if (slotMeta === null) {
     return NextResponse.json(
       { error: "This time slot is no longer available" },
+      { status: 409 },
+    );
+  }
+  if (
+    availabilityId &&
+    slotMeta.availabilityId !== availabilityId
+  ) {
+    return NextResponse.json(
+      { error: "This slot window changed. Please select the slot again." },
+      { status: 409 },
+    );
+  }
+  if (slotMeta.consultationType === "ONLINE") {
+    return NextResponse.json(
+      { error: "This slot is only available for online consultations" },
       { status: 409 },
     );
   }
@@ -202,7 +219,7 @@ export async function POST(request: NextRequest) {
         phone,
         notes,
         consultationType,
-        durationMinutes: slotDurationMinutes,
+        durationMinutes: slotMeta.slotDurationMinutes,
         timezone: doctorTimezone,
         patientTimezone,
         status: AppointmentStatus.CONFIRMED,

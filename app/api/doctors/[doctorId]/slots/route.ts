@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import {
   coerceAllowedSlotDurationMinutes,
-  expandAvailabilityRows,
+  expandAvailabilityRowsDetailed,
   inferSlotDurationMinutesFromRows,
 } from "@/lib/doctor-availability-slots";
 import { NextRequest, NextResponse } from "next/server";
@@ -47,7 +47,13 @@ export async function GET(
     }),
     prisma.doctorAvailability.findMany({
       where: { doctorId, date },
-      select: { startTime: true, endTime: true, slotDurationMinutes: true },
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        slotDurationMinutes: true,
+        consultationType: true,
+      },
     }),
     prisma.appointment.findMany({
       where: {
@@ -67,19 +73,26 @@ export async function GET(
 
   const fallback = coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
   const rows = availabilities.map((a) => ({
+    id: a.id,
     startTime: a.startTime,
     endTime: a.endTime,
     slotDurationMinutes: a.slotDurationMinutes,
+    consultationType: a.consultationType,
   }));
-  const slots = expandAvailabilityRows(rows, fallback);
+  const slotDetails = expandAvailabilityRowsDetailed(rows, fallback);
+  const slots = slotDetails.map((slot) => slot.startTime);
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(rows, fallback);
 
   const booked = new Set(appointments.map((a) => a.time));
 
   const available = [...new Set(slots)].filter((s) => !booked.has(s)).sort();
+  const availableDetails = slotDetails.filter((detail) =>
+    available.includes(detail.startTime),
+  );
 
   return NextResponse.json({
     slots: available,
+    slotDetails: availableDetails,
     doctorTimezone: doctor.timezone,
     slotDurationMinutes,
   });

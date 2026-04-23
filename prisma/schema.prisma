@@ -18,6 +18,12 @@ enum ConsultationType {
   ONLINE
 }
 
+enum AvailabilityConsultationType {
+  CLINIC
+  ONLINE
+  BOTH
+}
+
 enum AppointmentStatus {
   PENDING
   CONFIRMED
@@ -142,6 +148,8 @@ model Doctor {
   timezone         String               @default("UTC")
   /// Length of each bookable slot (minutes). Used when generating and displaying slots.
   slotDurationMinutes Int               @default(30)
+  /// Doctor consultation fee in cents for online appointments.
+  consultationPriceCents Int            @default(3000)
   approvalStatus   DoctorApprovalStatus @default(PENDING)
   approvedAt       DateTime?
   approvedByUserId String?
@@ -166,6 +174,8 @@ model DoctorAvailability {
   endTime   String
   /// Slot duration (minutes) used when this availability row was created.
   slotDurationMinutes Int @default(30)
+  /// Consultation mode available for this availability window.
+  consultationType AvailabilityConsultationType @default(BOTH)
 }
 
 model Appointment {

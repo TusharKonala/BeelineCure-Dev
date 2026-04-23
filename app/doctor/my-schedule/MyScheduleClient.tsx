@@ -38,6 +38,10 @@ export function MyScheduleClient() {
   const [singleDate, setSingleDate] = useState("");
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [bookedSlots, setBookedSlots] = useState<Set<string>>(() => new Set());
+  const [consultationType, setConsultationType] = useState<
+    "CLINIC" | "ONLINE" | "BOTH"
+  >("BOTH");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
@@ -138,6 +142,8 @@ export function MyScheduleClient() {
       }
       const data = (await res.json()) as {
         slotStarts: string[];
+        consultationType?: "CLINIC" | "ONLINE" | "BOTH";
+        bookedSlotStarts?: string[];
         today: string;
         timezone: string;
         slotDurationMinutes?: number;
@@ -182,10 +188,21 @@ export function MyScheduleClient() {
       const allowed = new Set(
         generateSlots(windowStart, windowEnd, duration),
       );
-      setSelected(new Set(starts.filter((t) => allowed.has(t))));
+      const normalizedStarts = starts.filter((t) => allowed.has(t));
+      setSelected(new Set(normalizedStarts));
+      const normalizedBooked = (data.bookedSlotStarts ?? []).filter((slot) =>
+        allowed.has(slot),
+      );
+      setBookedSlots(new Set(normalizedBooked));
+      if (data.consultationType) {
+        setConsultationType(data.consultationType);
+      } else {
+        setConsultationType("BOTH");
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load");
       setSelected(new Set());
+      setBookedSlots(new Set());
     } finally {
       setLoadingSlots(false);
     }
@@ -270,6 +287,9 @@ export function MyScheduleClient() {
   }, [mode, rangeStart]);
 
   function toggleSlot(t: string) {
+    if (bookedSlots.has(t)) {
+      return;
+    }
     if (
       meta &&
       scheduleIncludesToday &&
@@ -311,12 +331,14 @@ export function MyScheduleClient() {
               endDate: rangeEnd,
               slotStarts,
               slotDurationMinutes,
+              consultationType,
             }
           : {
               mode: "single" as const,
               singleDate,
               slotStarts,
               slotDurationMinutes,
+              consultationType,
             };
       const res = await fetch("/api/doctor/availability", {
         method: "PUT",
@@ -411,8 +433,10 @@ export function MyScheduleClient() {
   const rangeStartMinDate = addOneDayYmd(minDate);
   const slotWindowOk =
     timeToMinutes(slotWindowEnd) > timeToMinutes(slotWindowStart);
+  const editableSelectableSlots = selectableSlots.filter((slot) => !bookedSlots.has(slot));
   const allSlotsSelected =
-    selectableSlots.length > 0 && selectableSlots.every((t) => selected.has(t));
+    editableSelectableSlots.length > 0 &&
+    editableSelectableSlots.every((t) => selected.has(t));
 
   /** Matches patient booking UI — readable, tappable, focus ring */
   const dateInputClassName =
@@ -512,6 +536,33 @@ export function MyScheduleClient() {
                 </select>
               </div>
 
+              <div className="mt-5">
+                <p className="font-montserrat text-sm font-medium text-[#333333]">
+                  Consultation mode
+                </p>
+                <div className="mt-2 grid max-w-md grid-cols-1 gap-2 sm:grid-cols-3">
+                  {(["CLINIC", "ONLINE", "BOTH"] as const).map((modeValue) => (
+                    <button
+                      key={modeValue}
+                      type="button"
+                      className={cn(
+                        "cursor-pointer rounded-xl border px-3 py-2 font-montserrat text-sm transition-colors",
+                        consultationType === modeValue
+                          ? "border-[#2555F3] bg-[#2555F3] text-white"
+                          : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f5f5]",
+                      )}
+                      onClick={() => setConsultationType(modeValue)}
+                    >
+                      {modeValue === "CLINIC"
+                        ? "Clinic only"
+                        : modeValue === "ONLINE"
+                          ? "Online only"
+                          : "Both"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
                 <div>
                   <label
@@ -606,6 +657,7 @@ export function MyScheduleClient() {
               onClick={() => {
                 setMode("range");
                 setSaveOk(null);
+                setBookedSlots(new Set());
               }}
               className={cn(
                 "cursor-pointer rounded-xl px-4 py-2 font-montserrat text-sm font-medium transition-colors",
@@ -725,14 +777,22 @@ export function MyScheduleClient() {
                 type="button"
                 disabled={
                   (mode === "single" && loadingSlots) ||
-                  selectableSlots.length === 0
+                  editableSelectableSlots.length === 0
                 }
                 onClick={() => {
                   setSaveOk(null);
                   if (allSlotsSelected) {
-                    setSelected(new Set());
+                    setSelected(
+                      new Set(
+                        [...selected].filter((slot) => bookedSlots.has(slot)),
+                      ),
+                    );
                   } else {
-                    setSelected(new Set(selectableSlots));
+                    const next = new Set(selected);
+                    for (const slot of editableSelectableSlots) {
+                      next.add(slot);
+                    }
+                    setSelected(next);
                   }
                 }}
                 className={cn(
@@ -770,6 +830,7 @@ export function MyScheduleClient() {
                 {slotWindowOk ? (
                   displaySlots.map((t) => {
                     const on = selected.has(t);
+                    const booked = bookedSlots.has(t);
                     const past =
                       scheduleIncludesToday &&
                       isDoctorTimeInPast(meta.today, t, meta.timezone);
@@ -777,12 +838,14 @@ export function MyScheduleClient() {
                       <button
                         key={t}
                         type="button"
-                        disabled={past}
-                        aria-disabled={past}
+                        disabled={past || booked}
+                        aria-disabled={past || booked}
                         onClick={() => toggleSlot(t)}
                         className={cn(
                           "min-w-[5.5rem] rounded-xl border px-3 py-2 font-montserrat text-sm transition-colors",
-                          past
+                          booked
+                            ? "cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800"
+                            : past
                             ? "cursor-not-allowed border-[#e5e5e5] bg-[#f5f5f5] text-[#9A9A9A] opacity-70"
                             : cn(
                                 "cursor-pointer",
@@ -792,7 +855,7 @@ export function MyScheduleClient() {
                               ),
                         )}
                       >
-                        {t}
+                        {booked ? `${t} (Booked)` : t}
                       </button>
                     );
                   })
@@ -808,6 +871,11 @@ export function MyScheduleClient() {
                 ? "Selected slots apply to every day in the range on save."
                 : "Changes apply only to the selected day."}
             </p>
+            {bookedSlots.size > 0 && (
+              <p className="mt-2 font-montserrat text-xs text-amber-700">
+                Booked slots are locked and cannot be edited.
+              </p>
+            )}
           </div>
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">

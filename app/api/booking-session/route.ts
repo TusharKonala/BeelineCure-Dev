@@ -3,7 +3,7 @@ import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import {
   coerceAllowedSlotDurationMinutes,
-  resolveSlotDurationForStart,
+  resolveSlotMetaForStart,
 } from "@/lib/doctor-availability-slots";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import { randomBytes } from "crypto";
@@ -14,7 +14,9 @@ const bookingSessionSchema = z.object({
   doctorId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().min(1),
-  consultationType: z.enum(["CLINIC", "ONLINE"]),
+  /** Online checkout flow only. */
+  consultationType: z.literal("ONLINE"),
+  availabilityId: z.string().optional(),
   patientName: z.string().min(1),
   email: z.string().email(),
   phone: z
@@ -53,6 +55,7 @@ export async function POST(request: NextRequest) {
     date,
     time,
     consultationType,
+    availabilityId,
     patientName,
     email,
     phone,
@@ -81,14 +84,33 @@ export async function POST(request: NextRequest) {
   const fallbackDuration = coerceAllowedSlotDurationMinutes(
     doctor.slotDurationMinutes,
   );
-  const slotDurationMinutes = resolveSlotDurationForStart(
+  const slotMeta = resolveSlotMetaForStart(
     availabilityRows,
     time,
     fallbackDuration,
   );
-  if (slotDurationMinutes === null) {
+  if (slotMeta === null) {
     return NextResponse.json(
       { error: "This time slot is no longer available" },
+      { status: 409 },
+    );
+  }
+  if (
+    availabilityId &&
+    slotMeta.availabilityId !== availabilityId
+  ) {
+    return NextResponse.json(
+      { error: "This slot window changed. Please select the slot again." },
+      { status: 409 },
+    );
+  }
+  const slotAllowsOnline =
+    slotMeta.consultationType === "ONLINE" || slotMeta.consultationType === "BOTH";
+  if (!slotAllowsOnline) {
+    return NextResponse.json(
+      {
+        error: "This slot is not available for online consultation",
+      },
       { status: 409 },
     );
   }
@@ -159,7 +181,7 @@ export async function POST(request: NextRequest) {
       phone,
       date,
       time,
-      durationMinutes: slotDurationMinutes,
+      durationMinutes: slotMeta.slotDurationMinutes,
       timezone: doctorTimezone,
       patientTimezone,
       notes: notes,

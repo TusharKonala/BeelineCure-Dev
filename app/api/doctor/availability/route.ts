@@ -1,9 +1,14 @@
-import { UserRole } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  UserRole,
+} from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
+import { cancelAppointmentByDoctor } from "@/lib/doctor-cancellations";
 import { prisma } from "@/lib/db";
 import {
   coerceAllowedSlotDurationMinutes,
   expandAvailabilityRows,
+  expandAvailabilityRowsDetailed,
   inferSlotDurationMinutesFromRows,
   isValidSlotStartForDuration,
   slotEndFromStart,
@@ -45,12 +50,14 @@ const putBodySchema = z.discriminatedUnion("mode", [
     endDate: ymd,
     slotStarts: z.array(z.string()),
     slotDurationMinutes: durationSchema.optional(),
+    consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
   }),
   z.object({
     mode: z.literal("single"),
     singleDate: ymd,
     slotStarts: z.array(z.string()),
     slotDurationMinutes: durationSchema.optional(),
+    consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
   }),
 ]);
 
@@ -102,13 +109,24 @@ export async function GET(request: NextRequest) {
         doctorId: doctor.id,
         date: { gte: ymdToPrismaDate(today) },
       },
-      select: { date: true, startTime: true, endTime: true, slotDurationMinutes: true },
+      select: {
+        date: true,
+        startTime: true,
+        endTime: true,
+        slotDurationMinutes: true,
+        consultationType: true,
+      },
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
 
     const byDate = new Map<
       string,
-      { startTime: string; endTime: string; slotDurationMinutes: number }[]
+      {
+        startTime: string;
+        endTime: string;
+        slotDurationMinutes: number;
+        consultationType: "CLINIC" | "ONLINE" | "BOTH";
+      }[]
     >();
     for (const r of rows) {
       const key = r.date.toISOString().slice(0, 10);
@@ -117,6 +135,7 @@ export async function GET(request: NextRequest) {
         startTime: r.startTime,
         endTime: r.endTime,
         slotDurationMinutes: r.slotDurationMinutes,
+        consultationType: r.consultationType,
       });
       byDate.set(key, list);
     }
@@ -164,19 +183,39 @@ export async function GET(request: NextRequest) {
 
   const rows = await prisma.doctorAvailability.findMany({
     where: { doctorId: doctor.id, date: ymdToPrismaDate(dateParam) },
-    select: { startTime: true, endTime: true, slotDurationMinutes: true },
+    select: {
+      id: true,
+      startTime: true,
+      endTime: true,
+      slotDurationMinutes: true,
+      consultationType: true,
+    },
+  });
+  const appointments = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date: ymdToPrismaDate(dateParam),
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+    },
+    select: { time: true },
   });
 
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(
     rows,
     fallbackDuration,
   );
+  const slotDetails = expandAvailabilityRowsDetailed(rows, fallbackDuration);
+  const slotStarts = slotDetails.map((slot) => slot.startTime);
+  const consultationType = rows[0]?.consultationType ?? "BOTH";
 
   return NextResponse.json({
     timezone: tz,
     today,
     slotDurationMinutes,
-    slotStarts: expandAvailabilityRows(rows, fallbackDuration),
+    slotStarts,
+    slotDetails,
+    consultationType,
+    bookedSlotStarts: appointments.map((appointment) => appointment.time).sort(),
   });
 }
 
@@ -252,6 +291,7 @@ export async function PUT(request: Request) {
   const duration =
     parsed.slotDurationMinutes ??
     coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
+  const consultationType = parsed.consultationType ?? "BOTH";
 
   const slotStarts = [...new Set(parsed.slotStarts)];
   for (const s of slotStarts) {
@@ -292,6 +332,41 @@ export async function PUT(request: Request) {
     }
   }
 
+  const affectedDates = affectedYmd.map((date) => ymdToPrismaDate(date));
+  const activeAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date: { in: affectedDates },
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+    },
+    select: { id: true, date: true, time: true },
+  });
+  const appointmentsByDate = new Map<string, { id: string; time: string }[]>();
+  for (const appointment of activeAppointments) {
+    const dateKey = appointment.date.toISOString().slice(0, 10);
+    const current = appointmentsByDate.get(dateKey) ?? [];
+    current.push({ id: appointment.id, time: appointment.time });
+    appointmentsByDate.set(dateKey, current);
+  }
+
+  if (slotStarts.length > 0) {
+    const selectedStarts = new Set(slotStarts);
+    for (const ymdStr of affectedYmd) {
+      const booked = appointmentsByDate.get(ymdStr) ?? [];
+      const removedBookedSlots = booked
+        .filter((appointment) => !selectedStarts.has(appointment.time))
+        .map((appointment) => appointment.time);
+      if (removedBookedSlots.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Cannot remove booked slots (${removedBookedSlots.join(", ")}). Booked slots are locked.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.doctor.update({
       where: { id: doctor.id },
@@ -310,14 +385,28 @@ export async function PUT(request: Request) {
             startTime,
             endTime: slotEndFromStart(startTime, duration),
             slotDurationMinutes: duration,
+            consultationType,
           })),
         });
       }
     }
   });
 
+  if (slotStarts.length === 0 && activeAppointments.length > 0) {
+    const requestOrigin = new URL(request.url).origin;
+    for (const appointment of activeAppointments) {
+      await cancelAppointmentByDoctor({
+        appointmentId: appointment.id,
+        doctorId: doctor.id,
+        reason: "doctor_holiday",
+        requestOrigin,
+      });
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     affectedDates: affectedYmd.length,
+    cancelledAppointments: slotStarts.length === 0 ? activeAppointments.length : 0,
   });
 }

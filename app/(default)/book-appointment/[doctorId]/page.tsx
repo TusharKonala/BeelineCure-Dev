@@ -74,6 +74,11 @@ async function getSlots(
   date: string,
 ): Promise<{
   slots: string[];
+  slotDetails: {
+    startTime: string;
+    consultationType: "CLINIC" | "ONLINE" | "BOTH";
+    availabilityId: string | null;
+  }[];
   doctorTimezone: string;
   slotDurationMinutes: number;
 }> {
@@ -152,6 +157,16 @@ export default function BookAppointmentDoctorPage() {
     queryFn: () => getDoctor(doctorId),
     enabled: !!doctorId,
   });
+  const consultationPriceLabel = useMemo(() => {
+    const cents =
+      typeof doctor?.consultationPriceCents === "number"
+        ? doctor.consultationPriceCents
+        : 3000;
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(cents / 100);
+  }, [doctor?.consultationPriceCents]);
 
   const dateForSlots = selectedDate;
   const {
@@ -163,6 +178,26 @@ export default function BookAppointmentDoctorPage() {
     queryFn: () => getSlots(doctorId, dateForSlots),
     enabled: !!doctorId && !!dateForSlots,
   });
+  const slotStarts: string[] = slotsData?.slots ?? [];
+  const doctorTz = slotsData?.doctorTimezone ?? "UTC";
+  const slotDurationMinutes = slotsData?.slotDurationMinutes ?? 30;
+  const slotDetailByStart = useMemo(
+    () =>
+      new Map(
+        (slotsData?.slotDetails ?? []).map((detail) => [detail.startTime, detail]),
+      ),
+    [slotsData?.slotDetails],
+  );
+  const selectedSlotDetail = selectedSlot
+    ? slotDetailByStart.get(selectedSlot) ?? null
+    : null;
+  const canBookClinic =
+    !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
+  const canBookOnline =
+    !selectedSlotDetail || selectedSlotDetail.consultationType !== "CLINIC";
+  const selectedConsultationAllowed =
+    (consultationType === "CLINIC" && canBookClinic) ||
+    (consultationType === "ONLINE" && canBookOnline);
 
   const onPatientFormSubmit = useCallback(
     async (data: PatientFormValues) => {
@@ -180,6 +215,7 @@ export default function BookAppointmentDoctorPage() {
               date: selectedDate,
               time: selectedSlot,
               consultationType,
+              availabilityId: selectedSlotDetail?.availabilityId ?? undefined,
               patientName: data.patientName,
               email: data.email,
               phone: data.phone,
@@ -226,6 +262,7 @@ export default function BookAppointmentDoctorPage() {
               date: selectedDate,
               time: selectedSlot,
               consultationType,
+              availabilityId: selectedSlotDetail?.availabilityId ?? undefined,
               patientName: data.patientName,
               email: data.email,
               phone: data.phone,
@@ -278,6 +315,7 @@ export default function BookAppointmentDoctorPage() {
       doctorId,
       selectedDate,
       selectedSlot,
+      selectedSlotDetail,
       consultationType,
       doctor?.name,
       slotsData?.doctorTimezone,
@@ -287,13 +325,18 @@ export default function BookAppointmentDoctorPage() {
     ],
   );
 
-  const slots: string[] = slotsData?.slots ?? [];
-  const doctorTz = slotsData?.doctorTimezone ?? "UTC";
-  const slotDurationMinutes = slotsData?.slotDurationMinutes ?? 30;
-
-  const filteredSlots = slots.filter(
+  const filteredSlots = slotStarts.filter(
     (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
+
+  useEffect(() => {
+    if (!selectedSlotDetail) return;
+    if (selectedSlotDetail.consultationType === "CLINIC") {
+      setConsultationType("CLINIC");
+    } else if (selectedSlotDetail.consultationType === "ONLINE") {
+      setConsultationType("ONLINE");
+    }
+  }, [selectedSlotDetail]);
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
@@ -434,6 +477,7 @@ export default function BookAppointmentDoctorPage() {
                   }
                   className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                   aria-pressed={consultationType === "CLINIC"}
+                  disabled={!canBookClinic}
                   onClick={() => setConsultationType("CLINIC")}
                 >
                   Clinic Visit
@@ -445,11 +489,26 @@ export default function BookAppointmentDoctorPage() {
                   }
                   className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                   aria-pressed={consultationType === "ONLINE"}
+                  disabled={!canBookOnline}
                   onClick={() => setConsultationType("ONLINE")}
                 >
                   Online Consultation
                 </Button>
               </div>
+              {selectedSlotDetail && (
+                <p className="mt-3 font-montserrat text-sm text-[#5E5E5E]">
+                  {selectedSlotDetail.consultationType === "CLINIC"
+                    ? "This slot is available for clinic visits only."
+                    : selectedSlotDetail.consultationType === "ONLINE"
+                      ? "This slot is available for online consultations only."
+                      : "This slot supports both clinic and online consultations."}
+                </p>
+              )}
+              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+                {consultationType === "CLINIC"
+                  ? "Pay at clinic"
+                  : `Online consultation fee: ${consultationPriceLabel}`}
+              </p>
             </section>
 
             {/* 4. Time Slot Grid */}
@@ -596,11 +655,17 @@ export default function BookAppointmentDoctorPage() {
                     </p>
                   )}
                   <Button
-                    disabled={!isValid || isSubmitting}
+                    disabled={
+                      !isValid || isSubmitting || !selectedConsultationAllowed
+                    }
                     type="submit"
                     className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
                   >
-                    {isSubmitting ? "Booking…" : "Confirm appointment"}
+                    {isSubmitting
+                      ? "Booking…"
+                      : consultationType === "ONLINE"
+                        ? "Continue to payment"
+                        : "Confirm appointment"}
                   </Button>
                 </form>
               </section>

@@ -9,6 +9,7 @@ export const SLOT_INTERVAL_MINUTES = DEFAULT_SLOT_DURATION_MINUTES;
 export const ALLOWED_SLOT_DURATION_MINUTES = [15, 30, 45, 60] as const;
 export type AllowedSlotDurationMinutes =
   (typeof ALLOWED_SLOT_DURATION_MINUTES)[number];
+export type AvailabilityConsultationType = "CLINIC" | "ONLINE" | "BOTH";
 
 /** Default window for the schedule UI (09:00–13:00 doctor-local). */
 export const DEFAULT_SLOT_WINDOW_START = "09:00";
@@ -132,20 +133,58 @@ export function inferSlotDurationMinutesFromRows(
  * Falls back to `fallbackIntervalMinutes` only for malformed/legacy rows.
  */
 export function expandAvailabilityRows(
-  rows: { startTime: string; endTime: string; slotDurationMinutes?: number }[],
+  rows: {
+    id?: string;
+    startTime: string;
+    endTime: string;
+    slotDurationMinutes?: number;
+    consultationType?: AvailabilityConsultationType;
+  }[],
   fallbackIntervalMinutes: number,
 ): string[] {
-  const set = new Set<string>();
+  return expandAvailabilityRowsDetailed(rows, fallbackIntervalMinutes).map(
+    (slot) => slot.startTime,
+  );
+}
+
+type ExpandedAvailabilitySlot = {
+  startTime: string;
+  slotDurationMinutes: AllowedSlotDurationMinutes;
+  consultationType: AvailabilityConsultationType;
+  availabilityId: string | null;
+};
+
+export function expandAvailabilityRowsDetailed(
+  rows: {
+    id?: string;
+    startTime: string;
+    endTime: string;
+    slotDurationMinutes?: number;
+    consultationType?: AvailabilityConsultationType;
+  }[],
+  fallbackIntervalMinutes: number,
+): ExpandedAvailabilitySlot[] {
   const fallback = coerceAllowedSlotDurationMinutes(fallbackIntervalMinutes);
+  const details = new Map<string, ExpandedAvailabilitySlot>();
   for (const row of rows) {
     const interval = coerceAllowedSlotDurationMinutes(
       row.slotDurationMinutes ?? fallback,
     );
-    for (const s of generateSlots(row.startTime, row.endTime, interval)) {
-      set.add(s);
-    }
+    const consultationType = row.consultationType ?? "BOTH";
+    const startTime = row.startTime;
+    // One availability row represents one slot start.
+    if (details.has(startTime)) continue;
+    details.set(startTime, {
+      startTime,
+      slotDurationMinutes: interval,
+      consultationType,
+      availabilityId: row.id ?? null,
+    });
   }
-  return [...set].sort();
+  return [...details.keys()]
+    .sort()
+    .map((startTime) => details.get(startTime))
+    .filter((slot): slot is ExpandedAvailabilitySlot => Boolean(slot));
 }
 
 /**
@@ -153,25 +192,51 @@ export function expandAvailabilityRows(
  * rows. Returns null when the slot is not present in availability for that date.
  */
 export function resolveSlotDurationForStart(
-  rows: { startTime: string; endTime: string; slotDurationMinutes?: number }[],
+  rows: {
+    id?: string;
+    startTime: string;
+    endTime: string;
+    slotDurationMinutes?: number;
+    consultationType?: AvailabilityConsultationType;
+  }[],
   slotStart: string,
   fallbackIntervalMinutes: number,
 ): AllowedSlotDurationMinutes | null {
-  const fallback = coerceAllowedSlotDurationMinutes(fallbackIntervalMinutes);
-  const matches: AllowedSlotDurationMinutes[] = [];
+  const slotMeta = resolveSlotMetaForStart(
+    rows,
+    slotStart,
+    fallbackIntervalMinutes,
+  );
+  return slotMeta?.slotDurationMinutes ?? null;
+}
 
-  for (const row of rows) {
-    const interval = coerceAllowedSlotDurationMinutes(
-      row.slotDurationMinutes ?? fallback,
-    );
-    const slots = generateSlots(row.startTime, row.endTime, interval);
-    if (slots.includes(slotStart)) {
-      matches.push(interval);
+export function resolveSlotMetaForStart(
+  rows: {
+    id?: string;
+    startTime: string;
+    endTime: string;
+    slotDurationMinutes?: number;
+    consultationType?: AvailabilityConsultationType;
+  }[],
+  slotStart: string,
+  fallbackIntervalMinutes: number,
+):
+  | {
+      slotDurationMinutes: AllowedSlotDurationMinutes;
+      consultationType: AvailabilityConsultationType;
+      availabilityId: string | null;
     }
-  }
-
-  if (matches.length === 0) return null;
-  return matches[0] ?? null;
+  | null {
+  const fallback = coerceAllowedSlotDurationMinutes(fallbackIntervalMinutes);
+  const row = rows.find((candidate) => candidate.startTime === slotStart);
+  if (!row) return null;
+  return {
+    slotDurationMinutes: coerceAllowedSlotDurationMinutes(
+      row.slotDurationMinutes ?? fallback,
+    ),
+    consultationType: row.consultationType ?? "BOTH",
+    availabilityId: row.id ?? null,
+  };
 }
 
 /** End time for one bookable block starting at HH:mm. */
