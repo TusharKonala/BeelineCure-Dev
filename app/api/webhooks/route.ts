@@ -83,6 +83,14 @@ export async function POST(request: NextRequest) {
       // Already processed or no longer valid – ignore duplicate webhooks
       return new NextResponse("OK", { status: 200 });
     }
+    if (bookingSession.consultationType !== "ONLINE") {
+      console.warn(
+        "[webhooks] Ignoring non-online booking session:",
+        bookingSession.id,
+        bookingSession.consultationType,
+      );
+      return new NextResponse("OK", { status: 200 });
+    }
 
     const date = parseDateOnly(bookingSession.date);
 
@@ -125,9 +133,7 @@ export async function POST(request: NextRequest) {
           notes: bookingSession.notes,
           status: AppointmentStatus.CONFIRMED,
           consultationType:
-            bookingSession.consultationType === "ONLINE"
-              ? ConsultationType.ONLINE
-              : ConsultationType.CLINIC,
+            ConsultationType.ONLINE,
           stripePaymentId: session.id,
           paymentStatus: PaymentStatus.PAID,
           cancelToken,

@@ -62,6 +62,12 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    if (bookingSession.consultationType !== "ONLINE") {
+      return NextResponse.json(
+        { error: "Only online booking sessions can proceed to payment" },
+        { status: 409 },
+      );
+    }
 
     const doctor = await prisma.doctor.findFirst({
       where: publicDoctorByIdWhere(bookingSession.doctorId),
@@ -73,35 +79,34 @@ export async function POST(request: NextRequest) {
 
     const headersList = await headers();
     const origin = headersList.get("origin");
-    const configuredPriceId = process.env.STRIPE_CONSULTATION_PRICE_ID;
-    if (!configuredPriceId) {
-      return NextResponse.json(
-        { error: "Stripe consultation price is not configured" },
-        { status: 500 },
-      );
-    }
+    const unitAmountCents = doctor.consultationPriceCents ?? 3000;
+    const doctorName = doctor.name?.trim() || "your doctor";
+    const description = `A secure ${bookingSession.durationMinutes} min online consultation with ${doctorName}.`;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
         {
-          price: configuredPriceId,
+          price_data: {
+            currency: "usd",
+            unit_amount: unitAmountCents,
+            product_data: {
+              name: `Online consultation with ${doctorName}`,
+              description,
+            },
+          },
           quantity: 1,
         },
       ],
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&notify=1`,
       cancel_url: `${origin}/book-appointment`,
-      custom_text: {
-        submit: {
-          message: `Appointment duration: ${bookingSession.durationMinutes} minutes.`,
-        },
-      },
       metadata: {
         bookingSessionId: bookingSession.id,
         doctorId: bookingSession.doctorId,
         date: bookingSession.date,
         time: bookingSession.time,
         durationMinutes: String(bookingSession.durationMinutes),
+        consultationPriceCents: String(unitAmountCents),
         consultationType: bookingSession.consultationType,
         patientName: bookingSession.patientName,
         email: bookingSession.email,

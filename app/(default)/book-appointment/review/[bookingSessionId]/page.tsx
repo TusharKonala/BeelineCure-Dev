@@ -29,6 +29,10 @@ export default async function BookingReviewPage({ params }: PageProps) {
   if (!doctor) {
     notFound();
   }
+  const consultationPriceLabel = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format((doctor.consultationPriceCents ?? 3000) / 100);
 
   // Time comparison is server-only; expiresAt is authoritative for checkout TTL (10 min).
   const isExpired =
@@ -92,7 +96,9 @@ export default async function BookingReviewPage({ params }: PageProps) {
                 <span className="font-medium text-[#111111]">
                   Consultation price
                 </span>
-                <span className="text-[#5E5E5E] sm:text-right">$30</span>
+                <span className="text-[#5E5E5E] sm:text-right">
+                  {consultationPriceLabel}
+                </span>
               </div>
             </div>
 
