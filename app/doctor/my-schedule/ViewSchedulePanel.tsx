@@ -395,8 +395,9 @@ export function ViewSchedulePanel({
             <span className="font-medium text-[#333333]">
               {formatScheduleDayHeading(holidayConfirmDate)}
             </span>
-            ? This day will disappear from your schedule until you add slots
-            again.
+            ? Confirmed and pending appointments for this date will be cancelled.
+            Paid online bookings will be fully refunded, and patients will be
+            notified.
           </p>
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
