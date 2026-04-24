@@ -12,6 +12,7 @@ import {
   Pill,
   Users,
   CalendarClock,
+  Settings,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { DOCTOR_UNREAD_COUNT_EVENT } from "@/components/doctor/DoctorNotificationToaster";
@@ -40,6 +41,7 @@ const navItems: DoctorNavItem[] = [
     icon: Pill,
   },
   { href: "/doctor/patients", label: "Patients", icon: Users },
+  { href: "/doctor/settings", label: "Settings", icon: Settings },
   {
     href: "/doctor/notifications",
     label: "Notifications",
