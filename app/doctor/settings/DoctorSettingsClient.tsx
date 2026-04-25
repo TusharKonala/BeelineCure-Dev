@@ -1,10 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Calendar, CheckCircle2 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
+import {
+  CURRENCY_LABELS,
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrency,
+  currencyForTimezone,
+} from "@/lib/currency";
+import {
+  type ConsultationPriceCentsByDuration,
+  DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
+} from "@/lib/doctor-pricing";
+
+const DURATION_KEYS = ["15", "30", "45", "60"] as const;
+type DurationKey = (typeof DURATION_KEYS)[number];
 
 type DoctorSettings = {
   id: string;
@@ -15,8 +28,20 @@ type DoctorSettings = {
   bio: string | null;
   profilePhotoUrl: string;
   timezone: string;
-  consultationPriceCents: number;
+  currency: SupportedCurrency;
+  consultationPriceCentsByDuration: ConsultationPriceCentsByDuration;
 };
+
+type PriceInputs = Record<DurationKey, string>;
+
+function priceMapToInputs(map: ConsultationPriceCentsByDuration): PriceInputs {
+  return {
+    "15": (map["15"] / 100).toFixed(2),
+    "30": (map["30"] / 100).toFixed(2),
+    "45": (map["45"] / 100).toFixed(2),
+    "60": (map["60"] / 100).toFixed(2),
+  };
+}
 
 export function DoctorSettingsClient({
   initialDoctor,
@@ -35,9 +60,12 @@ export function DoctorSettingsClient({
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [isCalendarConnected, setIsCalendarConnected] = useState(connected);
-  const [priceInput, setPriceInput] = useState(
-    (initialDoctor.consultationPriceCents / 100).toFixed(2),
+  const [priceInputs, setPriceInputs] = useState<PriceInputs>(() =>
+    priceMapToInputs(initialDoctor.consultationPriceCentsByDuration),
   );
+  // Sticky flag — once the doctor edits the currency manually, we never
+  // overwrite it from a timezone change.
+  const isCurrencyManuallySetRef = useRef(false);
 
   const banner = useMemo(() => {
     if (calendarStatus === "connected") {
@@ -62,16 +90,54 @@ export function DoctorSettingsClient({
     return null;
   }, [calendarStatus]);
 
+  function handleTimezoneChange(nextTimezone: string) {
+    setDoctor((prev) => {
+      const next: DoctorSettings = { ...prev, timezone: nextTimezone };
+      if (!isCurrencyManuallySetRef.current) {
+        next.currency = currencyForTimezone(nextTimezone);
+      }
+      return next;
+    });
+  }
+
+  function handleCurrencyChange(nextCurrency: SupportedCurrency) {
+    isCurrencyManuallySetRef.current = true;
+    setDoctor((prev) => ({ ...prev, currency: nextCurrency }));
+  }
+
+  function updatePriceInput(duration: DurationKey, value: string) {
+    setPriceInputs((prev) => ({ ...prev, [duration]: value }));
+  }
+
+  function normalisePriceInput(duration: DurationKey) {
+    const parsed = Number(priceInputs[duration].trim());
+    if (Number.isFinite(parsed) && parsed > 0) {
+      setPriceInputs((prev) => ({ ...prev, [duration]: parsed.toFixed(2) }));
+    }
+  }
+
   async function onSave() {
     setSavePending(true);
     setSaveError(null);
     setSaveSuccess(null);
     try {
-      const parsedPrice = Number(priceInput.trim());
-      if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-        setSaveError("Please enter a valid consultation price.");
-        return;
+      const parsedPrices: ConsultationPriceCentsByDuration = {
+        "15": 0,
+        "30": 0,
+        "45": 0,
+        "60": 0,
+      };
+      for (const duration of DURATION_KEYS) {
+        const parsed = Number(priceInputs[duration].trim());
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          setSaveError(
+            `Please enter a valid price for the ${duration}-minute consultation.`,
+          );
+          return;
+        }
+        parsedPrices[duration] = Math.round(parsed * 100);
       }
+
       const yearsExperience =
         doctor.yearsExperience === null
           ? null
@@ -89,7 +155,8 @@ export function DoctorSettingsClient({
           bio: doctor.bio,
           profilePhotoUrl: doctor.profilePhotoUrl,
           timezone: doctor.timezone,
-          consultationPriceCents: Math.round(parsedPrice * 100),
+          currency: doctor.currency,
+          consultationPriceCentsByDuration: parsedPrices,
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -102,7 +169,12 @@ export function DoctorSettingsClient({
       }
       if (json.doctor) {
         setDoctor(json.doctor);
-        setPriceInput((json.doctor.consultationPriceCents / 100).toFixed(2));
+        setPriceInputs(
+          priceMapToInputs(
+            json.doctor.consultationPriceCentsByDuration ??
+              DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
+          ),
+        );
       }
       setSaveSuccess("Settings saved.");
       router.refresh();
@@ -243,7 +315,7 @@ export function DoctorSettingsClient({
               </label>
               <select
                 value={doctor.timezone}
-                onChange={(e) => setDoctor((prev) => ({ ...prev, timezone: e.target.value }))}
+                onChange={(e) => handleTimezoneChange(e.target.value)}
                 className={selectClassName}
               >
                 <option value="UTC">UTC</option>
@@ -260,21 +332,50 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Consultation price (USD)
+                Currency
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-                onBlur={() => {
-                  const parsed = Number(priceInput.trim());
-                  if (Number.isFinite(parsed) && parsed > 0) {
-                    setPriceInput(parsed.toFixed(2));
-                  }
-                }}
-                className={inputClassName}
-              />
+              <select
+                value={doctor.currency}
+                onChange={(e) =>
+                  handleCurrencyChange(e.target.value as SupportedCurrency)
+                }
+                className={selectClassName}
+              >
+                {SUPPORTED_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {CURRENCY_LABELS[code]}
+                  </option>
+                ))}
+              </select>
+              <p className="font-montserrat text-xs text-[#5E5E5E]">
+                Used for displaying prices and charging Stripe payments. Auto-suggested from your timezone — change it any time.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <h2 className="font-montaga text-lg font-semibold text-[#333333] md:text-xl">
+              Consultation prices ({doctor.currency})
+            </h2>
+            <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+              Set the price for each available appointment length. All four are required.
+            </p>
+            <div className="mt-4 grid gap-5 md:grid-cols-2">
+              {DURATION_KEYS.map((duration) => (
+                <div key={duration} className="flex flex-col gap-2">
+                  <label className="font-montserrat text-sm font-medium text-[#333333]">
+                    {duration}-minute consultation
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={priceInputs[duration]}
+                    onChange={(e) => updatePriceInput(duration, e.target.value)}
+                    onBlur={() => normalisePriceInput(duration)}
+                    className={inputClassName}
+                  />
+                </div>
+              ))}
             </div>
           </div>
 

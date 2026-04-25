@@ -1,6 +1,11 @@
 import { UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import {
+  consultationPriceCentsByDurationSchema,
+  parsePriceMap,
+} from "@/lib/doctor-pricing";
+import { SUPPORTED_CURRENCIES, coerceSupportedCurrency } from "@/lib/currency";
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -13,7 +18,8 @@ const updateDoctorSettingsSchema = z.object({
   bio: z.string().max(3000).nullable().optional(),
   profilePhotoUrl: z.string().min(1).max(100_000),
   timezone: z.string().min(1).max(128),
-  consultationPriceCents: z.number().int().min(100).max(2_000_000),
+  currency: z.enum(SUPPORTED_CURRENCIES),
+  consultationPriceCentsByDuration: consultationPriceCentsByDurationSchema,
 });
 
 export async function GET() {
@@ -36,7 +42,8 @@ export async function GET() {
       bio: true,
       profilePhotoUrl: true,
       timezone: true,
-      consultationPriceCents: true,
+      currency: true,
+      consultationPriceCentsByDuration: true,
       googleCalendarRefreshToken: true,
     },
   });
@@ -58,7 +65,10 @@ export async function GET() {
       bio: doctor.bio,
       profilePhotoUrl: doctor.profilePhotoUrl,
       timezone: doctor.timezone,
-      consultationPriceCents: doctor.consultationPriceCents,
+      currency: coerceSupportedCurrency(doctor.currency),
+      consultationPriceCentsByDuration: parsePriceMap(
+        doctor.consultationPriceCentsByDuration,
+      ),
     },
     googleCalendarConnected: Boolean(doctor.googleCalendarRefreshToken),
   });
@@ -110,7 +120,8 @@ export async function PATCH(request: Request) {
       bio: data.bio?.trim() || null,
       profilePhotoUrl: data.profilePhotoUrl.trim(),
       timezone: data.timezone.trim(),
-      consultationPriceCents: data.consultationPriceCents,
+      currency: data.currency,
+      consultationPriceCentsByDuration: data.consultationPriceCentsByDuration,
     },
     select: {
       id: true,
@@ -121,9 +132,19 @@ export async function PATCH(request: Request) {
       bio: true,
       profilePhotoUrl: true,
       timezone: true,
-      consultationPriceCents: true,
+      currency: true,
+      consultationPriceCentsByDuration: true,
     },
   });
 
-  return NextResponse.json({ ok: true, doctor: updated });
+  return NextResponse.json({
+    ok: true,
+    doctor: {
+      ...updated,
+      currency: coerceSupportedCurrency(updated.currency),
+      consultationPriceCentsByDuration: parsePriceMap(
+        updated.consultationPriceCentsByDuration,
+      ),
+    },
+  });
 }

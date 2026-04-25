@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { UserRole } from "@/generated/prisma/client";
+import { coerceSupportedCurrency } from "@/lib/currency";
+import { parsePriceMap } from "@/lib/doctor-pricing";
 import { DoctorSettingsClient } from "./DoctorSettingsClient";
 
 export default async function DoctorSettingsPage() {
@@ -22,7 +24,8 @@ export default async function DoctorSettingsPage() {
       bio: true,
       profilePhotoUrl: true,
       timezone: true,
-      consultationPriceCents: true,
+      currency: true,
+      consultationPriceCentsByDuration: true,
       googleCalendarRefreshToken: true,
     },
   });
@@ -42,7 +45,10 @@ export default async function DoctorSettingsPage() {
         bio: doctor.bio,
         profilePhotoUrl: doctor.profilePhotoUrl,
         timezone: doctor.timezone,
-        consultationPriceCents: doctor.consultationPriceCents,
+        currency: coerceSupportedCurrency(doctor.currency),
+        consultationPriceCentsByDuration: parsePriceMap(
+          doctor.consultationPriceCentsByDuration,
+        ),
       }}
       connected={Boolean(doctor.googleCalendarRefreshToken)}
     />
