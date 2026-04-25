@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { MedicineNameAutocomplete } from "./MedicineNameAutocomplete";
 
 type MedicineInput = {
   name: string;
@@ -180,11 +181,9 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
             </div>
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <input
-                type="text"
-                placeholder="Medicine name"
+              <MedicineNameAutocomplete
                 value={medicine.name}
-                onChange={(e) => updateMedicine(index, "name", e.target.value)}
+                onChange={(value) => updateMedicine(index, "name", value)}
                 className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
               />
               <input
