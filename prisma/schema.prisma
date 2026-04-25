@@ -148,8 +148,14 @@ model Doctor {
   timezone         String               @default("UTC")
   /// Length of each bookable slot (minutes). Used when generating and displaying slots.
   slotDurationMinutes Int               @default(30)
-  /// Doctor consultation fee in cents for online appointments.
-  consultationPriceCents Int            @default(3000)
+  /// Doctor consultation fees in cents for online appointments, keyed by slot
+  /// duration in minutes ("15" | "30" | "45" | "60"). Allows different prices
+  /// for different consultation lengths.
+  consultationPriceCentsByDuration Json @default("{\"15\":1500,\"30\":3000,\"45\":4500,\"60\":6000}")
+  /// ISO 4217 currency code (3 letters, uppercase) used to display prices and
+  /// charge Stripe payments for this doctor. Auto-suggested from timezone but
+  /// user-editable.
+  currency         String               @default("USD")
   approvalStatus   DoctorApprovalStatus @default(PENDING)
   approvedAt       DateTime?
   approvedByUserId String?
@@ -243,6 +249,12 @@ model BookingSession {
   time             String
   /// Frozen slot duration at booking-session creation time (minutes).
   durationMinutes  Int               @default(30)
+  /// Snapshot of the doctor's per-duration price (in cents) at session creation.
+  /// Locks in the price the patient was shown, even if the doctor later edits
+  /// their pricing map.
+  priceCentsAtBooking Int?
+  /// Snapshot of the doctor's currency (ISO 4217) at session creation.
+  currencyAtBooking   String?
   notes            String?
   consultationType String
   status           BookingSessionStatus @default(PENDING)
