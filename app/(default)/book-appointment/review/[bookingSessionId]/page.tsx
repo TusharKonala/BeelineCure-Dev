@@ -6,6 +6,14 @@ import { notFound } from "next/navigation";
 import { BookingSessionStatus } from "@/generated/prisma/client";
 import { ExpiredBookingSession } from "./ExpiredBookingSession";
 import { PatientLocalDateTime } from "./PatientLocalDateTime";
+import {
+  parsePriceMap,
+  priceCentsForDuration,
+} from "@/lib/doctor-pricing";
+import {
+  coerceSupportedCurrency,
+  formatPrice,
+} from "@/lib/currency";
 
 type PageProps = {
   params: Promise<{ bookingSessionId: string }>;
@@ -29,12 +37,19 @@ export default async function BookingReviewPage({ params }: PageProps) {
   if (!doctor) {
     notFound();
   }
-  const consultationPriceLabel = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format((doctor.consultationPriceCents ?? 3000) / 100);
 
-  // Time comparison is server-only; expiresAt is authoritative for checkout TTL (10 min).
+  // Prefer the price + currency snapshotted at booking time (immutable). Fall
+  // back to the doctor's current pricing only for legacy sessions where the
+  // snapshot is missing.
+  const priceMap = parsePriceMap(doctor.consultationPriceCentsByDuration);
+  const priceCents =
+    bookingSession.priceCentsAtBooking ??
+    priceCentsForDuration(priceMap, bookingSession.durationMinutes);
+  const currency = coerceSupportedCurrency(
+    bookingSession.currencyAtBooking ?? doctor.currency,
+  );
+  const consultationPriceLabel = formatPrice(priceCents, currency);
+
   const isExpired =
     bookingSession.status === BookingSessionStatus.EXPIRED ||
     bookingSession.expiresAt <= new Date();
@@ -140,4 +155,3 @@ export default async function BookingReviewPage({ params }: PageProps) {
     </div>
   );
 }
-

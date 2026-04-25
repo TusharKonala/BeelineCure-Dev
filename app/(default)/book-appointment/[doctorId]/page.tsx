@@ -18,6 +18,16 @@ import {
   formatDateInPatientTz,
   isDoctorTimeInPast,
 } from "@/lib/timezone-display";
+import {
+  coerceSupportedCurrency,
+  formatPrice,
+  type SupportedCurrency,
+} from "@/lib/currency";
+import {
+  parsePriceMap,
+  priceCentsForDuration,
+  type ConsultationPriceCentsByDuration,
+} from "@/lib/doctor-pricing";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -34,6 +44,7 @@ const patientFormSchema = z.object({
 });
 
 type PatientFormValues = z.infer<typeof patientFormSchema>;
+type SlotDetail = Awaited<ReturnType<typeof getSlots>>["slotDetails"][number];
 
 type SubmitErrorState = {
   message: string;
@@ -76,6 +87,7 @@ async function getSlots(
   slots: string[];
   slotDetails: {
     startTime: string;
+    slotDurationMinutes: number;
     consultationType: "CLINIC" | "ONLINE" | "BOTH";
     availabilityId: string | null;
   }[];
@@ -157,16 +169,14 @@ export default function BookAppointmentDoctorPage() {
     queryFn: () => getDoctor(doctorId),
     enabled: !!doctorId,
   });
-  const consultationPriceLabel = useMemo(() => {
-    const cents =
-      typeof doctor?.consultationPriceCents === "number"
-        ? doctor.consultationPriceCents
-        : 3000;
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100);
-  }, [doctor?.consultationPriceCents]);
+  const doctorCurrency: SupportedCurrency = useMemo(
+    () => coerceSupportedCurrency(doctor?.currency),
+    [doctor?.currency],
+  );
+  const doctorPriceMap: ConsultationPriceCentsByDuration = useMemo(
+    () => parsePriceMap(doctor?.consultationPriceCentsByDuration),
+    [doctor?.consultationPriceCentsByDuration],
+  );
 
   const dateForSlots = selectedDate;
   const {
@@ -181,16 +191,28 @@ export default function BookAppointmentDoctorPage() {
   const slotStarts: string[] = slotsData?.slots ?? [];
   const doctorTz = slotsData?.doctorTimezone ?? "UTC";
   const slotDurationMinutes = slotsData?.slotDurationMinutes ?? 30;
-  const slotDetailByStart = useMemo(
+  const slotDetailByStart = useMemo<Map<string, SlotDetail>>(
     () =>
-      new Map(
-        (slotsData?.slotDetails ?? []).map((detail) => [detail.startTime, detail]),
+      new Map<string, SlotDetail>(
+        (slotsData?.slotDetails ?? []).map(
+          (detail): [string, SlotDetail] => [detail.startTime, detail],
+        ),
       ),
     [slotsData?.slotDetails],
   );
   const selectedSlotDetail = selectedSlot
     ? slotDetailByStart.get(selectedSlot) ?? null
     : null;
+  const selectedSlotDuration =
+    selectedSlotDetail?.slotDurationMinutes ?? slotDurationMinutes;
+  const consultationPriceLabel = useMemo(
+    () =>
+      formatPrice(
+        priceCentsForDuration(doctorPriceMap, selectedSlotDuration),
+        doctorCurrency,
+      ),
+    [doctorPriceMap, doctorCurrency, selectedSlotDuration],
+  );
   const canBookClinic =
     !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
   const canBookOnline =

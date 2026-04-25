@@ -5,6 +5,14 @@ import {
   coerceAllowedSlotDurationMinutes,
   resolveSlotMetaForStart,
 } from "@/lib/doctor-availability-slots";
+import {
+  parsePriceMap,
+  priceCentsForDuration,
+} from "@/lib/doctor-pricing";
+import { coerceSupportedCurrency } from "@/lib/currency";
+import { authOptions } from "@/lib/auth";
+import { UserRole } from "@/generated/prisma/client";
+import { getServerSession } from "next-auth/next";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
@@ -38,6 +46,14 @@ function parseDateOnly(value: string): Date | null {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role === UserRole.DOCTOR) {
+    return NextResponse.json(
+      { error: "Doctors cannot book consultations." },
+      { status: 403 },
+    );
+  }
+
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -71,7 +87,13 @@ export async function POST(request: NextRequest) {
 
   const doctor = await prisma.doctor.findFirst({
     where: publicDoctorByIdWhere(doctorId),
-    select: { id: true, timezone: true, slotDurationMinutes: true },
+    select: {
+      id: true,
+      timezone: true,
+      slotDurationMinutes: true,
+      currency: true,
+      consultationPriceCentsByDuration: true,
+    },
   });
 
   if (!doctor) {
@@ -189,6 +211,16 @@ export async function POST(request: NextRequest) {
 
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
+  // Snapshot the price + currency the patient is being shown so payment is
+  // anchored to this moment, even if the doctor edits their pricing map
+  // before checkout completes.
+  const priceMap = parsePriceMap(doctor.consultationPriceCentsByDuration);
+  const priceCentsAtBooking = priceCentsForDuration(
+    priceMap,
+    slotMeta.slotDurationMinutes,
+  );
+  const currencyAtBooking = coerceSupportedCurrency(doctor.currency);
+
   const bookingSession = await prisma.bookingSession.create({
     data: {
       doctorId,
@@ -198,6 +230,8 @@ export async function POST(request: NextRequest) {
       date,
       time,
       durationMinutes: slotMeta.slotDurationMinutes,
+      priceCentsAtBooking,
+      currencyAtBooking,
       timezone: doctorTimezone,
       patientTimezone,
       notes: notes,

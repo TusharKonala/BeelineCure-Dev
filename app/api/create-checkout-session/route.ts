@@ -3,7 +3,17 @@ import { headers } from "next/headers";
 import { stripe } from "@/lib/stripe";
 import { prisma } from "@/lib/db";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
-import { BookingSessionStatus } from "@/generated/prisma/client";
+import {
+  BookingSessionStatus,
+  UserRole,
+} from "@/generated/prisma/client";
+import {
+  parsePriceMap,
+  priceCentsForDuration,
+} from "@/lib/doctor-pricing";
+import { coerceSupportedCurrency } from "@/lib/currency";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth/next";
 import { z } from "zod";
 
 const schema = z.object({
@@ -12,6 +22,14 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (session?.user?.role === UserRole.DOCTOR) {
+      return NextResponse.json(
+        { error: "Doctors cannot book consultations." },
+        { status: 403 },
+      );
+    }
+
     const body = await request.json().catch(() => null);
 
     if (!body) {
@@ -79,16 +97,26 @@ export async function POST(request: NextRequest) {
 
     const headersList = await headers();
     const origin = headersList.get("origin");
-    const unitAmountCents = doctor.consultationPriceCents ?? 3000;
+
+    // Use the price + currency snapshotted at booking-session creation. Fall
+    // back to the doctor's current map only for legacy sessions where the
+    // snapshot is missing.
+    const priceMap = parsePriceMap(doctor.consultationPriceCentsByDuration);
+    const unitAmountCents =
+      bookingSession.priceCentsAtBooking ??
+      priceCentsForDuration(priceMap, bookingSession.durationMinutes);
+    const currency = coerceSupportedCurrency(
+      bookingSession.currencyAtBooking ?? doctor.currency,
+    );
     const doctorName = doctor.name?.trim() || "your doctor";
     const description = `A secure ${bookingSession.durationMinutes} min online consultation with ${doctorName}.`;
 
-    const session = await stripe.checkout.sessions.create({
+    const stripeSession = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
         {
           price_data: {
-            currency: "usd",
+            currency: currency.toLowerCase(),
             unit_amount: unitAmountCents,
             product_data: {
               name: `Online consultation with ${doctorName}`,
@@ -98,7 +126,7 @@ export async function POST(request: NextRequest) {
           quantity: 1,
         },
       ],
-      success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&notify=1`,
+      success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/book-appointment`,
       metadata: {
         bookingSessionId: bookingSession.id,
@@ -107,6 +135,7 @@ export async function POST(request: NextRequest) {
         time: bookingSession.time,
         durationMinutes: String(bookingSession.durationMinutes),
         consultationPriceCents: String(unitAmountCents),
+        consultationCurrency: currency,
         consultationType: bookingSession.consultationType,
         patientName: bookingSession.patientName,
         email: bookingSession.email,
@@ -114,7 +143,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ url: stripeSession.url });
   } catch (err: unknown) {
     if (err instanceof Error) {
       return NextResponse.json({ error: err.message }, { status: 500 });
