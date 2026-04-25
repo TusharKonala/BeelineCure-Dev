@@ -26,6 +26,7 @@ import {
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
+import { fromZonedTime } from "date-fns-tz";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const existingSameDate = await prisma.appointment.findFirst({
+  const existingSameDateCandidates = await prisma.appointment.findMany({
     where: {
       email,
       doctorId,
@@ -140,7 +141,22 @@ export async function POST(request: NextRequest) {
     select: {
       id: true,
       rescheduleToken: true,
+      date: true,
+      time: true,
+      timezone: true,
     },
+  });
+
+  const nowMs = Date.now();
+  const existingSameDate = existingSameDateCandidates.find((candidate) => {
+    const appointmentDateParam = candidate.date.toISOString().slice(0, 10);
+    const timeWithSeconds =
+      candidate.time.length === 5 ? `${candidate.time}:00` : candidate.time;
+    const appointmentStartMs = fromZonedTime(
+      `${appointmentDateParam}T${timeWithSeconds}`,
+      candidate.timezone || doctorTimezone,
+    ).getTime();
+    return appointmentStartMs >= nowMs;
   });
 
   if (existingSameDate) {

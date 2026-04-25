@@ -35,6 +35,9 @@ export function DoctorSettingsClient({
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [isCalendarConnected, setIsCalendarConnected] = useState(connected);
+  const [priceInput, setPriceInput] = useState(
+    (initialDoctor.consultationPriceCents / 100).toFixed(2),
+  );
 
   const banner = useMemo(() => {
     if (calendarStatus === "connected") {
@@ -64,6 +67,11 @@ export function DoctorSettingsClient({
     setSaveError(null);
     setSaveSuccess(null);
     try {
+      const parsedPrice = Number(priceInput.trim());
+      if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+        setSaveError("Please enter a valid consultation price.");
+        return;
+      }
       const yearsExperience =
         doctor.yearsExperience === null
           ? null
@@ -81,7 +89,7 @@ export function DoctorSettingsClient({
           bio: doctor.bio,
           profilePhotoUrl: doctor.profilePhotoUrl,
           timezone: doctor.timezone,
-          consultationPriceCents: doctor.consultationPriceCents,
+          consultationPriceCents: Math.round(parsedPrice * 100),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as {
@@ -94,6 +102,7 @@ export function DoctorSettingsClient({
       }
       if (json.doctor) {
         setDoctor(json.doctor);
+        setPriceInput((json.doctor.consultationPriceCents / 100).toFixed(2));
       }
       setSaveSuccess("Settings saved.");
       router.refresh();
@@ -123,6 +132,7 @@ export function DoctorSettingsClient({
 
   const inputClassName =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm outline-none placeholder:text-[#5E5E5E]/70 focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20";
+  const selectClassName = `${inputClassName} cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat pr-10`;
 
   return (
     <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -234,7 +244,7 @@ export function DoctorSettingsClient({
               <select
                 value={doctor.timezone}
                 onChange={(e) => setDoctor((prev) => ({ ...prev, timezone: e.target.value }))}
-                className={`${inputClassName} cursor-pointer`}
+                className={selectClassName}
               >
                 <option value="UTC">UTC</option>
                 <option value="America/New_York">America/New_York</option>
@@ -253,19 +263,16 @@ export function DoctorSettingsClient({
                 Consultation price (USD)
               </label>
               <input
-                type="number"
-                min={1}
-                step={0.01}
-                value={(doctor.consultationPriceCents / 100).toFixed(2)}
-                onChange={(e) =>
-                  setDoctor((prev) => ({
-                    ...prev,
-                    consultationPriceCents: Math.max(
-                      100,
-                      Math.round(Number(e.target.value || "0") * 100),
-                    ),
-                  }))
-                }
+                type="text"
+                inputMode="decimal"
+                value={priceInput}
+                onChange={(e) => setPriceInput(e.target.value)}
+                onBlur={() => {
+                  const parsed = Number(priceInput.trim());
+                  if (Number.isFinite(parsed) && parsed > 0) {
+                    setPriceInput(parsed.toFixed(2));
+                  }
+                }}
                 className={inputClassName}
               />
             </div>
@@ -293,7 +300,9 @@ export function DoctorSettingsClient({
                   )}
                 </div>
                 <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-                  Connect your Google Calendar so online appointments include Meet links.
+                  {isCalendarConnected
+                    ? "Google Calendar is connected — Meet links will be included in online appointments."
+                    : "Connect your Google Calendar so online appointments include Meet links."}
                 </p>
                 {disconnectError && (
                   <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 font-montserrat text-sm text-red-800">
@@ -307,6 +316,7 @@ export function DoctorSettingsClient({
                       variant="outline"
                       onClick={() => void onDisconnect()}
                       disabled={disconnectPending}
+                      className="cursor-pointer"
                     >
                       {disconnectPending ? "Disconnecting..." : "Disconnect"}
                     </Button>
@@ -316,6 +326,7 @@ export function DoctorSettingsClient({
                       onClick={() => {
                         window.location.href = "/api/auth/google/calendar/connect";
                       }}
+                      className="cursor-pointer"
                     >
                       Connect Google Calendar
                     </Button>
@@ -335,7 +346,12 @@ export function DoctorSettingsClient({
           )}
 
           <div className="mt-6">
-            <Button type="button" onClick={() => void onSave()} disabled={savePending}>
+            <Button
+              type="button"
+              onClick={() => void onSave()}
+              disabled={savePending}
+              className="cursor-pointer"
+            >
               {savePending ? "Saving..." : "Save settings"}
             </Button>
           </div>

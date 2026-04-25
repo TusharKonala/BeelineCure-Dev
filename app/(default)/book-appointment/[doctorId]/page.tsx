@@ -328,6 +328,21 @@ export default function BookAppointmentDoctorPage() {
   const filteredSlots = slotStarts.filter(
     (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
+  const filteredDurationLabel = useMemo(() => {
+    const durations = [...new Set(
+      filteredSlots
+        .map((slotStart) => slotDetailByStart.get(slotStart)?.slotDurationMinutes)
+        .filter((duration): duration is number => typeof duration === "number"),
+    )].sort((a, b) => a - b);
+    const labelNoun = filteredSlots.length === 1 ? "appointment" : "appointments";
+    if (durations.length === 0) return `${slotDurationMinutes}-minute ${labelNoun}`;
+    if (durations.length === 1) return `${durations[0]}-minute ${labelNoun}`;
+    return `${durations.join(" / ")}-minute ${labelNoun}`;
+  }, [filteredSlots, slotDetailByStart, slotDurationMinutes]);
+
+  useEffect(() => {
+    setSubmitError(null);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!selectedSlotDetail) return;
@@ -519,7 +534,7 @@ export default function BookAppointmentDoctorPage() {
                 </h2>
                 {!slotsLoadingOrFetching && (
                   <p className="font-montserrat text-sm text-[#5E5E5E]">
-                    {slotDurationMinutes}-minute appointments
+                    {filteredDurationLabel}
                   </p>
                 )}
               </div>

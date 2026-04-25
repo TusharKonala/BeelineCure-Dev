@@ -374,19 +374,53 @@ export async function PUT(request: Request) {
     });
     for (const ymdStr of affectedYmd) {
       const date = ymdToPrismaDate(ymdStr);
-      await tx.doctorAvailability.deleteMany({
-        where: { doctorId: doctor.id, date },
-      });
       if (slotStarts.length > 0) {
-        await tx.doctorAvailability.createMany({
-          data: slotStarts.map((startTime) => ({
-            doctorId: doctor.id,
-            date,
+        const existingRows = await tx.doctorAvailability.findMany({
+          where: { doctorId: doctor.id, date },
+          select: {
+            startTime: true,
+            slotDurationMinutes: true,
+            consultationType: true,
+          },
+        });
+        const merged = new Map<
+          string,
+          {
+            startTime: string;
+            slotDurationMinutes: number;
+            consultationType: "CLINIC" | "ONLINE" | "BOTH";
+          }
+        >();
+        for (const row of existingRows) {
+          merged.set(row.startTime, {
+            startTime: row.startTime,
+            slotDurationMinutes: row.slotDurationMinutes,
+            consultationType: row.consultationType,
+          });
+        }
+        for (const startTime of slotStarts) {
+          merged.set(startTime, {
             startTime,
-            endTime: slotEndFromStart(startTime, duration),
             slotDurationMinutes: duration,
             consultationType,
+          });
+        }
+        await tx.doctorAvailability.deleteMany({
+          where: { doctorId: doctor.id, date },
+        });
+        await tx.doctorAvailability.createMany({
+          data: [...merged.values()].map((row) => ({
+            doctorId: doctor.id,
+            date,
+            startTime: row.startTime,
+            endTime: slotEndFromStart(row.startTime, row.slotDurationMinutes),
+            slotDurationMinutes: row.slotDurationMinutes,
+            consultationType: row.consultationType,
           })),
+        });
+      } else {
+        await tx.doctorAvailability.deleteMany({
+          where: { doctorId: doctor.id, date },
         });
       }
     }
