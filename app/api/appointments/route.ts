@@ -6,7 +6,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { Resend } from "resend";
 import { z } from "zod";
-import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  NotificationType,
+  UserRole,
+} from "@/generated/prisma/client";
+import { authOptions } from "@/lib/auth";
+import { getServerSession } from "next-auth/next";
 import { inngest } from "@/inngest/client";
 import {
   coerceAllowedSlotDurationMinutes,
@@ -57,6 +63,14 @@ function parseDateOnly(value: string): Date | null {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions);
+  if (session?.user?.role === UserRole.DOCTOR) {
+    return NextResponse.json(
+      { error: "Doctors cannot book consultations." },
+      { status: 403 },
+    );
+  }
+
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
