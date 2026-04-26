@@ -45,6 +45,10 @@ const patientFormSchema = z.object({
 
 type PatientFormValues = z.infer<typeof patientFormSchema>;
 type SlotDetail = Awaited<ReturnType<typeof getSlots>>["slotDetails"][number];
+type ExchangeRateApiResponse = {
+  result?: string;
+  conversion_rates?: Record<string, number>;
+};
 
 type SubmitErrorState = {
   message: string;
@@ -106,6 +110,31 @@ function todayISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function patientCurrencyFromLocale(): SupportedCurrency | null {
+  const locale = Intl.DateTimeFormat().resolvedOptions().locale;
+  const region = locale.split("-")[1]?.toUpperCase() ?? "";
+  const regionCurrencyMap: Record<string, SupportedCurrency> = {
+    US: "USD",
+    IN: "INR",
+    GB: "GBP",
+    FR: "EUR",
+    DE: "EUR",
+    IT: "EUR",
+    ES: "EUR",
+    NL: "EUR",
+    BE: "EUR",
+    IE: "EUR",
+    PT: "EUR",
+    CA: "CAD",
+    AU: "AUD",
+    JP: "JPY",
+    SG: "SGD",
+    AE: "AED",
+    ZA: "ZAR",
+  };
+  return regionCurrencyMap[region] ?? null;
+}
+
 export default function BookAppointmentDoctorPage() {
   const { data: session, status: sessionStatus } = useSession();
   const params = useParams();
@@ -163,6 +192,9 @@ export default function BookAppointmentDoctorPage() {
     consultationType: "CLINIC" | "ONLINE";
     doctorTimezone: string;
   } | null>(null);
+  const [approxEquivalentLabel, setApproxEquivalentLabel] = useState<string | null>(
+    null,
+  );
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
     queryKey: ["doctor", doctorId],
@@ -213,6 +245,7 @@ export default function BookAppointmentDoctorPage() {
       ),
     [doctorPriceMap, doctorCurrency, selectedSlotDuration],
   );
+  const patientCurrency = useMemo(() => patientCurrencyFromLocale(), []);
   const canBookClinic =
     !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
   const canBookOnline =
@@ -374,6 +407,53 @@ export default function BookAppointmentDoctorPage() {
       setConsultationType("ONLINE");
     }
   }, [selectedSlotDetail]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadApproxEquivalent() {
+      setApproxEquivalentLabel(null);
+      if (!selectedSlot || consultationType !== "ONLINE") return;
+      if (!patientCurrency || patientCurrency === doctorCurrency) return;
+      const apiKey = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY;
+      if (!apiKey) return;
+
+      const baseAmountCents = priceCentsForDuration(
+        doctorPriceMap,
+        selectedSlotDuration,
+      );
+      try {
+        const res = await fetch(
+          `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${doctorCurrency}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as ExchangeRateApiResponse;
+        if (data.result !== "success") return;
+        const rate = data.conversion_rates?.[patientCurrency];
+        if (!rate || rate <= 0) return;
+        const convertedCents = Math.round(baseAmountCents * rate);
+        if (!cancelled) {
+          setApproxEquivalentLabel(
+            `(approx ${formatPrice(convertedCents, patientCurrency)})`,
+          );
+        }
+      } catch {
+        // Best-effort only: skip conversion if API fails.
+      }
+    }
+    void loadApproxEquivalent();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedSlot,
+    consultationType,
+    patientCurrency,
+    doctorCurrency,
+    doctorPriceMap,
+    selectedSlotDuration,
+    setApproxEquivalentLabel,
+  ]);
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const next = e.target.value;
@@ -544,7 +624,7 @@ export default function BookAppointmentDoctorPage() {
               <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                 {consultationType === "CLINIC"
                   ? "Pay at clinic"
-                  : `Online consultation fee: ${consultationPriceLabel}`}
+                  : `Online consultation fee: ${consultationPriceLabel}${approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
               </p>
             </section>
 
@@ -580,16 +660,21 @@ export default function BookAppointmentDoctorPage() {
 
               {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
                 <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                  {filteredSlots.map((time) => (
-                    <Button
-                      key={time}
-                      variant={selectedSlot === time ? "default" : "outline"}
-                      className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                      onClick={() => setSelectedSlot(time)}
-                    >
-                      {formatTimeInPatientTz(selectedDate, time, doctorTz)}
-                    </Button>
-                  ))}
+                  {filteredSlots.map((time) => {
+                    const detail = slotDetailByStart.get(time);
+                    const durationForTile =
+                      detail?.slotDurationMinutes ?? slotDurationMinutes;
+                    return (
+                      <Button
+                        key={time}
+                        variant={selectedSlot === time ? "default" : "outline"}
+                        className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                        onClick={() => setSelectedSlot(time)}
+                      >
+                        {`${formatTimeInPatientTz(selectedDate, time, doctorTz)} · ${durationForTile} min`}
+                      </Button>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -601,6 +686,10 @@ export default function BookAppointmentDoctorPage() {
                   <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
                     Patient information
                   </h2>
+                  <p className="font-montserrat text-sm text-[#5E5E5E]">
+                    Selected slot:{" "}
+                    {`${formatTimeInPatientTz(selectedDate, selectedSlot, doctorTz)} · ${selectedSlotDuration} min`}
+                  </p>
                 </div>
                 <form
                   onSubmit={handleSubmit(onPatientFormSubmit)}
