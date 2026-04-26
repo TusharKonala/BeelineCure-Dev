@@ -38,6 +38,19 @@ export function MyScheduleClient() {
   const [singleDate, setSingleDate] = useState("");
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [initialSelected, setInitialSelected] = useState<Set<string>>(
+    () => new Set(),
+  );
+  /**
+   * Slots the doctor explicitly deselected during this edit session (only ones
+   * that were present in `initialSelected` count). Tracking this separately
+   * from `initialSelected - selected` is required because changing the time
+   * window silently prunes off-screen slots from `selected`; treating that
+   * pruning as a removal would delete slots the doctor never touched.
+   */
+  const [explicitlyRemoved, setExplicitlyRemoved] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [bookedSlots, setBookedSlots] = useState<Set<string>>(() => new Set());
   const [consultationType, setConsultationType] = useState<
     "CLINIC" | "ONLINE" | "BOTH"
@@ -189,7 +202,10 @@ export function MyScheduleClient() {
         generateSlots(windowStart, windowEnd, duration),
       );
       const normalizedStarts = starts.filter((t) => allowed.has(t));
-      setSelected(new Set(normalizedStarts));
+      const normalizedStartSet = new Set(normalizedStarts);
+      setSelected(normalizedStartSet);
+      setInitialSelected(new Set(normalizedStartSet));
+      setExplicitlyRemoved(new Set());
       const normalizedBooked = (data.bookedSlotStarts ?? []).filter((slot) =>
         allowed.has(slot),
       );
@@ -202,6 +218,8 @@ export function MyScheduleClient() {
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load");
       setSelected(new Set());
+      setInitialSelected(new Set());
+      setExplicitlyRemoved(new Set());
       setBookedSlots(new Set());
     } finally {
       setLoadingSlots(false);
@@ -298,10 +316,25 @@ export function MyScheduleClient() {
       return;
     }
     setSaveOk(null);
+    const wasSelected = selected.has(t);
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(t)) next.delete(t);
       else next.add(t);
+      return next;
+    });
+    setExplicitlyRemoved((prev) => {
+      const next = new Set(prev);
+      if (wasSelected) {
+        // Explicit deselection. Only mark for DB removal if it was part of the
+        // initially loaded set; new-and-then-deselected slots leave no trace.
+        if (initialSelected.has(t)) {
+          next.add(t);
+        }
+      } else {
+        // Re-selection clears any pending removal for this slot.
+        next.delete(t);
+      }
       return next;
     });
   }
@@ -335,6 +368,16 @@ export function MyScheduleClient() {
         return;
       }
 
+      const currentSet = new Set(slotStarts);
+      const newlyAdded = [...currentSet].filter(
+        (slot) => !initialSelected.has(slot),
+      );
+      // Authoritative removal list: only slots the doctor explicitly clicked
+      // off (or cleared via Clear all) within this edit session. Slots that
+      // disappeared from `selected` purely because the time-window filter
+      // hid them (e.g. the doctor scrolled to a different window) are NOT
+      // included, so untouched off-window slots stay safe in the DB.
+      const removed = [...explicitlyRemoved];
       const body =
         mode === "range"
           ? {
@@ -350,6 +393,8 @@ export function MyScheduleClient() {
               mode: "single" as const,
               singleDate,
               slotStarts,
+              newSlots: newlyAdded.sort(),
+              removedSlots: removed.sort(),
               slotDurationMinutes,
               consultationType,
               clearDay: false,
@@ -801,12 +846,28 @@ export function MyScheduleClient() {
                         [...selected].filter((slot) => bookedSlots.has(slot)),
                       ),
                     );
+                    setExplicitlyRemoved((prev) => {
+                      const next = new Set(prev);
+                      for (const slot of editableSelectableSlots) {
+                        if (initialSelected.has(slot)) {
+                          next.add(slot);
+                        }
+                      }
+                      return next;
+                    });
                   } else {
                     const next = new Set(selected);
                     for (const slot of editableSelectableSlots) {
                       next.add(slot);
                     }
                     setSelected(next);
+                    setExplicitlyRemoved((prev) => {
+                      const cleared = new Set(prev);
+                      for (const slot of editableSelectableSlots) {
+                        cleared.delete(slot);
+                      }
+                      return cleared;
+                    });
                   }
                 }}
                 className={cn(

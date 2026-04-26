@@ -49,6 +49,8 @@ const putBodySchema = z.discriminatedUnion("mode", [
     startDate: ymd,
     endDate: ymd,
     slotStarts: z.array(z.string()),
+    newSlots: z.array(z.string()).optional(),
+    removedSlots: z.array(z.string()).optional(),
     slotDurationMinutes: durationSchema.optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
     /**
@@ -63,6 +65,8 @@ const putBodySchema = z.discriminatedUnion("mode", [
     mode: z.literal("single"),
     singleDate: ymd,
     slotStarts: z.array(z.string()),
+    newSlots: z.array(z.string()).optional(),
+    removedSlots: z.array(z.string()).optional(),
     slotDurationMinutes: durationSchema.optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
     clearDay: z.boolean().optional().default(false),
@@ -303,6 +307,8 @@ export async function PUT(request: Request) {
   const clearDay = parsed.clearDay ?? false;
 
   const slotStarts = [...new Set(parsed.slotStarts)];
+  const newSlots = [...new Set(parsed.newSlots ?? [])];
+  const removedSlots = [...new Set(parsed.removedSlots ?? [])];
 
   if (clearDay && slotStarts.length > 0) {
     return NextResponse.json(
@@ -324,7 +330,7 @@ export async function PUT(request: Request) {
     );
   }
 
-  for (const s of slotStarts) {
+  for (const s of [...slotStarts, ...newSlots, ...removedSlots]) {
     if (!isValidSlotStartForDuration(s, duration)) {
       return NextResponse.json(
         {
@@ -379,13 +385,18 @@ export async function PUT(request: Request) {
     appointmentsByDate.set(dateKey, current);
   }
 
-  if (slotStarts.length > 0) {
+  if (slotStarts.length > 0 || removedSlots.length > 0) {
     const selectedStarts = new Set(slotStarts);
     for (const ymdStr of affectedYmd) {
       const booked = appointmentsByDate.get(ymdStr) ?? [];
-      const removedBookedSlots = booked
-        .filter((appointment) => !selectedStarts.has(appointment.time))
-        .map((appointment) => appointment.time);
+      const removedBookedSlots =
+        parsed.mode === "single" && (newSlots.length > 0 || removedSlots.length > 0)
+          ? booked
+              .filter((appointment) => removedSlots.includes(appointment.time))
+              .map((appointment) => appointment.time)
+          : booked
+              .filter((appointment) => !selectedStarts.has(appointment.time))
+              .map((appointment) => appointment.time);
       if (removedBookedSlots.length > 0) {
         return NextResponse.json(
           {
@@ -433,12 +444,25 @@ export async function PUT(request: Request) {
           consultationType: row.consultationType,
         });
       }
-      for (const startTime of slotStarts) {
-        merged.set(startTime, {
-          startTime,
-          slotDurationMinutes: duration,
-          consultationType,
-        });
+      if (parsed.mode === "single" && (newSlots.length > 0 || removedSlots.length > 0)) {
+        for (const startTime of removedSlots) {
+          merged.delete(startTime);
+        }
+        for (const startTime of newSlots) {
+          merged.set(startTime, {
+            startTime,
+            slotDurationMinutes: duration,
+            consultationType,
+          });
+        }
+      } else {
+        for (const startTime of slotStarts) {
+          merged.set(startTime, {
+            startTime,
+            slotDurationMinutes: duration,
+            consultationType,
+          });
+        }
       }
       await tx.doctorAvailability.deleteMany({
         where: { doctorId: doctor.id, date },
