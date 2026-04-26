@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { searchMedicineNames, type RxNormSuggestion } from "@/lib/rxnorm";
+import {
+  searchMedicineNames,
+  type LocalMedicineSuggestion,
+} from "@/lib/medicine-search";
 
 type Props = {
   value: string;
@@ -19,7 +22,7 @@ export function MedicineNameAutocomplete({
   placeholder = "Medicine name",
   className,
 }: Props) {
-  const [suggestions, setSuggestions] = useState<RxNormSuggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<LocalMedicineSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,7 +48,9 @@ export function MedicineNameAutocomplete({
       if (controller.signal.aborted) return;
       setSuggestions(results);
       setIsOpen(results.length > 0);
-      setHighlightIndex(results.length > 0 ? 0 : -1);
+      // Do not auto-select first option; Enter should keep free text unless
+      // doctor explicitly navigates/selects a suggestion.
+      setHighlightIndex(-1);
       setIsLoading(false);
     }, DEBOUNCE_MS);
     return () => {
@@ -66,9 +71,9 @@ export function MedicineNameAutocomplete({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function applySuggestion(suggestion: RxNormSuggestion) {
+  function applySuggestion(suggestion: LocalMedicineSuggestion) {
     justSelectedRef.current = true;
-    onChange(suggestion.displayName);
+    onChange(suggestion.name);
     setIsOpen(false);
     setSuggestions([]);
     setHighlightIndex(-1);
@@ -95,6 +100,9 @@ export function MedicineNameAutocomplete({
       if (highlightIndex >= 0 && highlightIndex < suggestions.length) {
         event.preventDefault();
         applySuggestion(suggestions[highlightIndex]!);
+      } else {
+        // Allow free-text submit behavior when no suggestion is explicitly chosen.
+        setIsOpen(false);
       }
     } else if (event.key === "Escape") {
       event.preventDefault();
@@ -141,7 +149,7 @@ export function MedicineNameAutocomplete({
         >
           {suggestions.map((suggestion, index) => (
             <li
-              key={suggestion.rxcui}
+              key={suggestion.name}
               id={`${listboxId}-option-${index}`}
               role="option"
               aria-selected={index === highlightIndex}
@@ -156,10 +164,7 @@ export function MedicineNameAutocomplete({
                   : "text-[#333333]"
               }`}
             >
-              <span className="block text-[#333333]">{suggestion.displayName}</span>
-              <span className="block text-xs text-[#5E5E5E]">
-                {suggestion.synonym} · RXCUI {suggestion.rxcui}
-              </span>
+              <span className="block text-[#333333]">{suggestion.name}</span>
             </li>
           ))}
         </ul>
