@@ -20,6 +20,7 @@ import {
 } from "@/lib/timezone-display";
 import {
   coerceSupportedCurrency,
+  currencyForTimezone,
   formatPrice,
   type SupportedCurrency,
 } from "@/lib/currency";
@@ -110,29 +111,9 @@ function todayISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
-function patientCurrencyFromLocale(): SupportedCurrency | null {
-  const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-  const region = locale.split("-")[1]?.toUpperCase() ?? "";
-  const regionCurrencyMap: Record<string, SupportedCurrency> = {
-    US: "USD",
-    IN: "INR",
-    GB: "GBP",
-    FR: "EUR",
-    DE: "EUR",
-    IT: "EUR",
-    ES: "EUR",
-    NL: "EUR",
-    BE: "EUR",
-    IE: "EUR",
-    PT: "EUR",
-    CA: "CAD",
-    AU: "AUD",
-    JP: "JPY",
-    SG: "SGD",
-    AE: "AED",
-    ZA: "ZAR",
-  };
-  return regionCurrencyMap[region] ?? null;
+function patientCurrencyFromTimezone(): SupportedCurrency {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return currencyForTimezone(timezone);
 }
 
 export default function BookAppointmentDoctorPage() {
@@ -245,7 +226,7 @@ export default function BookAppointmentDoctorPage() {
       ),
     [doctorPriceMap, doctorCurrency, selectedSlotDuration],
   );
-  const patientCurrency = useMemo(() => patientCurrencyFromLocale(), []);
+  const patientCurrency = useMemo(() => patientCurrencyFromTimezone(), []);
   const canBookClinic =
     !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
   const canBookOnline =
