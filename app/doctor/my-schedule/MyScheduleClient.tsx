@@ -323,6 +323,18 @@ export function MyScheduleClient() {
           return !isDoctorTimeInPast(meta.today, t, meta.timezone);
         })
         .sort();
+
+      // Saving with no slots no longer wipes the day — that path is now
+      // explicit via View Schedule -> Mark Holiday (clearDay:true). Bail out
+      // here with an inline error so the user has clear next steps.
+      if (slotStarts.length === 0) {
+        setSaveError(
+          "Select at least one slot, or use View Schedule -> Mark Holiday to clear the day.",
+        );
+        setSaving(false);
+        return;
+      }
+
       const body =
         mode === "range"
           ? {
@@ -332,6 +344,7 @@ export function MyScheduleClient() {
               slotStarts,
               slotDurationMinutes,
               consultationType,
+              clearDay: false,
             }
           : {
               mode: "single" as const,
@@ -339,6 +352,7 @@ export function MyScheduleClient() {
               slotStarts,
               slotDurationMinutes,
               consultationType,
+              clearDay: false,
             };
       const res = await fetch("/api/doctor/availability", {
         method: "PUT",

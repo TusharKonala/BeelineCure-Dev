@@ -51,6 +51,13 @@ const putBodySchema = z.discriminatedUnion("mode", [
     slotStarts: z.array(z.string()),
     slotDurationMinutes: durationSchema.optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
+    /**
+     * Explicitly clear the day(s) — delete all availability rows and cancel any
+     * active appointments. Required to wipe a day; an empty `slotStarts` array
+     * without this flag is rejected so accidental empty saves never destroy
+     * data.
+     */
+    clearDay: z.boolean().optional().default(false),
   }),
   z.object({
     mode: z.literal("single"),
@@ -58,6 +65,7 @@ const putBodySchema = z.discriminatedUnion("mode", [
     slotStarts: z.array(z.string()),
     slotDurationMinutes: durationSchema.optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
+    clearDay: z.boolean().optional().default(false),
   }),
 ]);
 
@@ -292,8 +300,30 @@ export async function PUT(request: Request) {
     parsed.slotDurationMinutes ??
     coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
   const consultationType = parsed.consultationType ?? "BOTH";
+  const clearDay = parsed.clearDay ?? false;
 
   const slotStarts = [...new Set(parsed.slotStarts)];
+
+  if (clearDay && slotStarts.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "clearDay cannot be used together with slotStarts. Send clearDay:true with an empty slotStarts to wipe the day.",
+      },
+      { status: 400 },
+    );
+  }
+
+  if (!clearDay && slotStarts.length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          "No slots provided. Set clearDay:true to mark the day as a holiday.",
+      },
+      { status: 400 },
+    );
+  }
+
   for (const s of slotStarts) {
     if (!isValidSlotStartForDuration(s, duration)) {
       return NextResponse.json(
@@ -374,59 +404,59 @@ export async function PUT(request: Request) {
     });
     for (const ymdStr of affectedYmd) {
       const date = ymdToPrismaDate(ymdStr);
-      if (slotStarts.length > 0) {
-        const existingRows = await tx.doctorAvailability.findMany({
-          where: { doctorId: doctor.id, date },
-          select: {
-            startTime: true,
-            slotDurationMinutes: true,
-            consultationType: true,
-          },
-        });
-        const merged = new Map<
-          string,
-          {
-            startTime: string;
-            slotDurationMinutes: number;
-            consultationType: "CLINIC" | "ONLINE" | "BOTH";
-          }
-        >();
-        for (const row of existingRows) {
-          merged.set(row.startTime, {
-            startTime: row.startTime,
-            slotDurationMinutes: row.slotDurationMinutes,
-            consultationType: row.consultationType,
-          });
-        }
-        for (const startTime of slotStarts) {
-          merged.set(startTime, {
-            startTime,
-            slotDurationMinutes: duration,
-            consultationType,
-          });
-        }
+      if (clearDay) {
         await tx.doctorAvailability.deleteMany({
           where: { doctorId: doctor.id, date },
         });
-        await tx.doctorAvailability.createMany({
-          data: [...merged.values()].map((row) => ({
-            doctorId: doctor.id,
-            date,
-            startTime: row.startTime,
-            endTime: slotEndFromStart(row.startTime, row.slotDurationMinutes),
-            slotDurationMinutes: row.slotDurationMinutes,
-            consultationType: row.consultationType,
-          })),
-        });
-      } else {
-        await tx.doctorAvailability.deleteMany({
-          where: { doctorId: doctor.id, date },
+        continue;
+      }
+      const existingRows = await tx.doctorAvailability.findMany({
+        where: { doctorId: doctor.id, date },
+        select: {
+          startTime: true,
+          slotDurationMinutes: true,
+          consultationType: true,
+        },
+      });
+      const merged = new Map<
+        string,
+        {
+          startTime: string;
+          slotDurationMinutes: number;
+          consultationType: "CLINIC" | "ONLINE" | "BOTH";
+        }
+      >();
+      for (const row of existingRows) {
+        merged.set(row.startTime, {
+          startTime: row.startTime,
+          slotDurationMinutes: row.slotDurationMinutes,
+          consultationType: row.consultationType,
         });
       }
+      for (const startTime of slotStarts) {
+        merged.set(startTime, {
+          startTime,
+          slotDurationMinutes: duration,
+          consultationType,
+        });
+      }
+      await tx.doctorAvailability.deleteMany({
+        where: { doctorId: doctor.id, date },
+      });
+      await tx.doctorAvailability.createMany({
+        data: [...merged.values()].map((row) => ({
+          doctorId: doctor.id,
+          date,
+          startTime: row.startTime,
+          endTime: slotEndFromStart(row.startTime, row.slotDurationMinutes),
+          slotDurationMinutes: row.slotDurationMinutes,
+          consultationType: row.consultationType,
+        })),
+      });
     }
   });
 
-  if (slotStarts.length === 0 && activeAppointments.length > 0) {
+  if (clearDay && activeAppointments.length > 0) {
     const requestOrigin = new URL(request.url).origin;
     for (const appointment of activeAppointments) {
       await cancelAppointmentByDoctor({
@@ -441,6 +471,6 @@ export async function PUT(request: Request) {
   return NextResponse.json({
     ok: true,
     affectedDates: affectedYmd.length,
-    cancelledAppointments: slotStarts.length === 0 ? activeAppointments.length : 0,
+    cancelledAppointments: clearDay ? activeAppointments.length : 0,
   });
 }

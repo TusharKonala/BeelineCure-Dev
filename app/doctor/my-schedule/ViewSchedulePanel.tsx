@@ -348,6 +348,7 @@ export function ViewSchedulePanel({
           mode: "single",
           singleDate: isoDate,
           slotStarts: [],
+          clearDay: true,
         }),
       });
       if (!res.ok) {
