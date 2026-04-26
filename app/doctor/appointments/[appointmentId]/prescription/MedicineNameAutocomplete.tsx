@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { searchMedicineNames } from "@/lib/openfda";
+import { searchMedicineNames, type RxNormSuggestion } from "@/lib/rxnorm";
 
 type Props = {
   value: string;
@@ -19,7 +19,7 @@ export function MedicineNameAutocomplete({
   placeholder = "Medicine name",
   className,
 }: Props) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<RxNormSuggestion[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,9 +36,6 @@ export function MedicineNameAutocomplete({
     }
     const trimmed = value.trim();
     if (trimmed.length < MIN_QUERY_LENGTH) {
-      setSuggestions([]);
-      setIsOpen(false);
-      setHighlightIndex(-1);
       return;
     }
     const controller = new AbortController();
@@ -69,9 +66,9 @@ export function MedicineNameAutocomplete({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  function applySuggestion(suggestion: string) {
+  function applySuggestion(suggestion: RxNormSuggestion) {
     justSelectedRef.current = true;
-    onChange(suggestion);
+    onChange(suggestion.displayName);
     setIsOpen(false);
     setSuggestions([]);
     setHighlightIndex(-1);
@@ -120,7 +117,14 @@ export function MedicineNameAutocomplete({
         }
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          onChange(nextValue);
+          if (nextValue.trim().length < MIN_QUERY_LENGTH) {
+            setIsOpen(false);
+            setHighlightIndex(-1);
+          }
+        }}
         onKeyDown={handleKeyDown}
         onFocus={() => {
           if (suggestions.length > 0) setIsOpen(true);
@@ -137,7 +141,7 @@ export function MedicineNameAutocomplete({
         >
           {suggestions.map((suggestion, index) => (
             <li
-              key={`${suggestion}-${index}`}
+              key={suggestion.rxcui}
               id={`${listboxId}-option-${index}`}
               role="option"
               aria-selected={index === highlightIndex}
@@ -152,7 +156,10 @@ export function MedicineNameAutocomplete({
                   : "text-[#333333]"
               }`}
             >
-              {suggestion}
+              <span className="block text-[#333333]">{suggestion.displayName}</span>
+              <span className="block text-xs text-[#5E5E5E]">
+                {suggestion.synonym} · RXCUI {suggestion.rxcui}
+              </span>
             </li>
           ))}
         </ul>
