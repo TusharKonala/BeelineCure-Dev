@@ -169,6 +169,7 @@ model Doctor {
   availabilities   DoctorAvailability[]
   appointments     Appointment[]
   bookingSessions  BookingSession[]
+  customMedicines  CustomMedicine[]
 }
 
 model DoctorAvailability {
@@ -232,6 +233,17 @@ model Prescription {
   appointment   Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
   medicines     Json
   generalNotes  String?     @db.Text
+}
+
+model CustomMedicine {
+  id                String   @id @default(cuid())
+  name              String
+  createdByDoctorId String   @map("created_by_doctor_id")
+  createdByDoctor   Doctor   @relation(fields: [createdByDoctorId], references: [id], onDelete: Cascade)
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([createdByDoctorId, createdAt(sort: Desc)])
+  @@map("custom_medicines")
 }
 
 model BookingSession {

@@ -14,6 +14,10 @@ import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { prescriptionReminderTsFromSavedAt } from "@/lib/reminder-time";
 import {
+  isKnownLocalMedicine,
+  normalizeMedicineName,
+} from "@/lib/medicine-catalog";
+import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
@@ -196,8 +200,38 @@ export async function PUT(
   const generalNotes =
     typeof body?.generalNotes === "string" ? body.generalNotes.trim() : "";
   const notificationKind = appointment.prescription ? "UPDATED" : "READY";
+  const customMedicineCandidates = new Map<string, string>();
+  for (const medicine of medicines) {
+    const cleanedName = medicine.name.trim().replace(/\s+/g, " ");
+    if (!cleanedName || isKnownLocalMedicine(cleanedName)) continue;
+    const key = normalizeMedicineName(cleanedName);
+    if (!customMedicineCandidates.has(key)) {
+      customMedicineCandidates.set(key, cleanedName);
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
+    for (const [normalizedName, displayName] of customMedicineCandidates) {
+      const existing = await tx.customMedicine.findFirst({
+        where: {
+          createdByDoctorId: doctorResult.doctor.id,
+          name: {
+            equals: normalizedName,
+            mode: "insensitive",
+          },
+        },
+        select: { id: true },
+      });
+      if (!existing) {
+        await tx.customMedicine.create({
+          data: {
+            name: displayName,
+            createdByDoctorId: doctorResult.doctor.id,
+          },
+        });
+      }
+    }
+
     await tx.prescription.upsert({
       where: { appointmentId: appointment.id },
       create: {
