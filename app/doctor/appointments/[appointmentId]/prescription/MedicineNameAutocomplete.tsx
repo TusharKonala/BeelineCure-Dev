@@ -13,7 +13,7 @@ type Props = {
   className?: string;
 };
 
-const DEBOUNCE_MS = 120;
+const DEBOUNCE_MS = 75;
 const MIN_QUERY_LENGTH = 1;
 
 export function MedicineNameAutocomplete({
