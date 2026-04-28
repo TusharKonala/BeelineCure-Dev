@@ -58,8 +58,11 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [doctorDisplayName, setDoctorDisplayName] = useState(
+    session?.user?.name?.trim() || "Doctor",
+  );
   const lastActivityPingAtRef = useRef(0);
-  const doctorName = session?.user?.name?.trim() || "Doctor";
+  const doctorName = doctorDisplayName;
   const initials =
     doctorName
       .split(/\s+/)
@@ -109,6 +112,33 @@ export default function DoctorLayout({ children }: { children: ReactNode }) {
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onWindowFocus);
+    };
+  }, [session?.user?.id, session?.user?.role]);
+
+  useEffect(() => {
+    if (!session?.user?.id || session.user.role !== "DOCTOR") return;
+    let cancelled = false;
+
+    async function loadDoctorName() {
+      try {
+        const res = await fetch("/api/doctor/settings", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          doctor?: { name?: unknown };
+        };
+        const nextName =
+          typeof data.doctor?.name === "string" ? data.doctor.name.trim() : "";
+        if (!cancelled && nextName) {
+          setDoctorDisplayName(nextName);
+        }
+      } catch {
+        // best-effort name sync for dashboard navbar
+      }
+    }
+
+    void loadDoctorName();
+    return () => {
+      cancelled = true;
     };
   }, [session?.user?.id, session?.user?.role]);
 
