@@ -57,6 +57,7 @@ export function DoctorSettingsClient({
   const [savePending, setSavePending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [photoUploadPending, setPhotoUploadPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const [isCalendarConnected, setIsCalendarConnected] = useState(connected);
@@ -114,6 +115,34 @@ export function DoctorSettingsClient({
     if (Number.isFinite(parsed) && parsed > 0) {
       setPriceInputs((prev) => ({ ...prev, [duration]: parsed.toFixed(2) }));
     }
+  }
+
+  function onProfilePhotoUpload(file: File) {
+    void (async () => {
+      setSaveError(null);
+      setSaveSuccess(null);
+      setPhotoUploadPending(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch("/api/uploads/doctor-photo", {
+          method: "POST",
+          body: formData,
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          url?: string;
+        };
+        if (!res.ok || !data.url) {
+          setSaveError(data.error ?? "Unable to upload profile photo.");
+          return;
+        }
+        setDoctor((prev) => ({ ...prev, profilePhotoUrl: data.url ?? prev.profilePhotoUrl }));
+        setSaveSuccess("Profile photo uploaded.");
+      } finally {
+        setPhotoUploadPending(false);
+      }
+    })();
   }
 
   async function onSave() {
@@ -300,6 +329,27 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2 md:col-span-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
+                Upload profile photo
+              </label>
+              <input
+                name="profilePhotoUpload"
+                type="file"
+                accept="image/*"
+                className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] shadow-sm transition-colors file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-[#2555F3]/10 file:px-3 file:py-1.5 file:font-montserrat file:text-xs file:font-medium file:text-[#2555F3] hover:border-[#d8d8d8] hover:bg-[#fafafa] focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  onProfilePhotoUpload(file);
+                }}
+              />
+              {photoUploadPending && (
+                <p className="font-montserrat text-xs text-[#5E5E5E]">
+                  Uploading image...
+                </p>
+              )}
+            </div>
+            <div className="flex flex-col gap-2 md:col-span-2">
+              <label className="font-montserrat text-sm font-medium text-[#333333]">
                 Short bio
               </label>
               <textarea
@@ -450,10 +500,14 @@ export function DoctorSettingsClient({
             <Button
               type="button"
               onClick={() => void onSave()}
-              disabled={savePending}
+              disabled={savePending || photoUploadPending}
               className="cursor-pointer"
             >
-              {savePending ? "Saving..." : "Save settings"}
+              {savePending
+                ? "Saving..."
+                : photoUploadPending
+                  ? "Uploading photo..."
+                  : "Save settings"}
             </Button>
           </div>
         </section>
