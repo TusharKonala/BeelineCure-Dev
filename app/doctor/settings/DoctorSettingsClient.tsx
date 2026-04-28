@@ -70,6 +70,7 @@ export function DoctorSettingsClient({
   const [selectedPhotoPreviewUrl, setSelectedPhotoPreviewUrl] = useState<
     string | null
   >(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   // Sticky flag — once the doctor edits the currency manually, we never
   // overwrite it from a timezone change.
   const isCurrencyManuallySetRef = useRef(false);
@@ -196,6 +197,9 @@ export function DoctorSettingsClient({
       if (json.doctor) {
         setDoctor(json.doctor);
         setProfilePhotoFile(null);
+        if (profilePhotoInputRef.current) {
+          profilePhotoInputRef.current.value = "";
+        }
         setPriceInputs(
           priceMapToInputs(
             json.doctor.consultationPriceCentsByDuration ??
@@ -332,6 +336,7 @@ export function DoctorSettingsClient({
                 </div>
               )}
               <input
+                ref={profilePhotoInputRef}
                 name="profilePhotoUpload"
                 type="file"
                 accept="image/*"
