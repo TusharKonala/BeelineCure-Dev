@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Calendar, CheckCircle2 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
@@ -57,6 +58,7 @@ export function DoctorSettingsClient({
   const [savePending, setSavePending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [photoUploadPending, setPhotoUploadPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
@@ -117,32 +119,21 @@ export function DoctorSettingsClient({
     }
   }
 
-  function onProfilePhotoUpload(file: File) {
-    void (async () => {
-      setSaveError(null);
-      setSaveSuccess(null);
-      setPhotoUploadPending(true);
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/uploads/doctor-photo", {
-          method: "POST",
-          body: formData,
-        });
-        const data = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          url?: string;
-        };
-        if (!res.ok || !data.url) {
-          setSaveError(data.error ?? "Unable to upload profile photo.");
-          return;
-        }
-        setDoctor((prev) => ({ ...prev, profilePhotoUrl: data.url ?? prev.profilePhotoUrl }));
-        setSaveSuccess("Profile photo uploaded.");
-      } finally {
-        setPhotoUploadPending(false);
-      }
-    })();
+  async function uploadProfilePhoto(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/uploads/doctor-photo", {
+      method: "POST",
+      body: formData,
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      url?: string;
+    };
+    if (!res.ok || !data.url) {
+      throw new Error(data.error ?? "Unable to upload profile photo.");
+    }
+    return data.url;
   }
 
   async function onSave() {
@@ -173,6 +164,15 @@ export function DoctorSettingsClient({
           : Number.isFinite(doctor.yearsExperience)
             ? doctor.yearsExperience
             : null;
+      let resolvedProfilePhotoUrl = doctor.profilePhotoUrl;
+      if (profilePhotoFile) {
+        setPhotoUploadPending(true);
+        try {
+          resolvedProfilePhotoUrl = await uploadProfilePhoto(profilePhotoFile);
+        } finally {
+          setPhotoUploadPending(false);
+        }
+      }
       const res = await fetch("/api/doctor/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -182,7 +182,7 @@ export function DoctorSettingsClient({
           licenseNumber: doctor.licenseNumber,
           yearsExperience,
           bio: doctor.bio,
-          profilePhotoUrl: doctor.profilePhotoUrl,
+          profilePhotoUrl: resolvedProfilePhotoUrl,
           timezone: doctor.timezone,
           currency: doctor.currency,
           consultationPriceCentsByDuration: parsedPrices,
@@ -198,6 +198,7 @@ export function DoctorSettingsClient({
       }
       if (json.doctor) {
         setDoctor(json.doctor);
+        setProfilePhotoFile(null);
         setPriceInputs(
           priceMapToInputs(
             json.doctor.consultationPriceCentsByDuration ??
@@ -207,6 +208,8 @@ export function DoctorSettingsClient({
       }
       setSaveSuccess("Settings saved.");
       router.refresh();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save settings.");
     } finally {
       setSavePending(false);
     }
@@ -317,20 +320,19 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2 md:col-span-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Profile photo URL
-              </label>
-              <input
-                value={doctor.profilePhotoUrl}
-                onChange={(e) =>
-                  setDoctor((prev) => ({ ...prev, profilePhotoUrl: e.target.value }))
-                }
-                className={inputClassName}
-              />
-            </div>
-            <div className="flex flex-col gap-2 md:col-span-2">
-              <label className="font-montserrat text-sm font-medium text-[#333333]">
                 Upload profile photo
               </label>
+              {doctor.profilePhotoUrl && (
+                <div className="mb-1">
+                  <Image
+                    src={doctor.profilePhotoUrl}
+                    alt="Doctor profile photo"
+                    width={56}
+                    height={56}
+                    className="size-14 rounded-lg border border-[#e5e5e5] object-cover"
+                  />
+                </div>
+              )}
               <input
                 name="profilePhotoUpload"
                 type="file"
@@ -339,7 +341,9 @@ export function DoctorSettingsClient({
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (!file) return;
-                  onProfilePhotoUpload(file);
+                  setSaveError(null);
+                  setSaveSuccess(null);
+                  setProfilePhotoFile(file);
                 }}
               />
               {photoUploadPending && (

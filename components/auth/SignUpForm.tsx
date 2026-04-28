@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,10 +24,28 @@ export function SignUpForm({
   const [bio, setBio] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [photoUploadPending, setPhotoUploadPending] = useState(false);
+
+  async function uploadProfilePhoto(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/uploads/doctor-photo", {
+      method: "POST",
+      body: formData,
+    });
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      url?: string;
+    };
+    if (!res.ok || !data.url) {
+      throw new Error(data.error ?? "Unable to upload profile photo.");
+    }
+    return data.url;
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +60,20 @@ export function SignUpForm({
         !Number.isFinite(parsedYearsExperience)
       ) {
         setError("Years of experience must be a valid number.");
+        return;
+      }
+      let resolvedProfilePhotoUrl: string | undefined = undefined;
+      if (role === "DOCTOR" && profilePhotoFile) {
+        setPhotoUploadPending(true);
+        try {
+          resolvedProfilePhotoUrl = await uploadProfilePhoto(profilePhotoFile);
+          setProfilePhotoUrl(resolvedProfilePhotoUrl);
+        } finally {
+          setPhotoUploadPending(false);
+        }
+      }
+      if (role === "DOCTOR" && !resolvedProfilePhotoUrl) {
+        setError("Doctor profile photo is required.");
         return;
       }
 
@@ -62,7 +95,7 @@ export function SignUpForm({
                       ? Math.max(0, Math.floor(parsedYearsExperience))
                       : undefined,
                   bio: bio.trim() || undefined,
-                  profilePhotoUrl: profilePhotoUrl.trim() || undefined,
+                  profilePhotoUrl: resolvedProfilePhotoUrl,
                   timezone: timezone.trim(),
                 }
               : undefined,
@@ -80,6 +113,8 @@ export function SignUpForm({
       const roleParam = role === "DOCTOR" ? "&role=doctor" : "&role=patient";
       router.push(`/auth/signin?registered=1${roleParam}`);
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setPending(false);
     }
@@ -301,33 +336,22 @@ export function SignUpForm({
 
           <div className="flex flex-col gap-2">
             <label
-              htmlFor="signup-doctor-photo-url"
-              className="font-montserrat text-sm font-medium text-[#333333]"
-            >
-              Profile photo URL
-            </label>
-            <input
-              id="signup-doctor-photo-url"
-              name="profilePhotoUrl"
-              type="url"
-              required
-              value={profilePhotoUrl}
-              onChange={(e) => setProfilePhotoUrl(e.target.value)}
-              className={inputClassName}
-              placeholder="https://example.com/doctor-photo.jpg"
-            />
-            <p className="font-montserrat text-xs text-[#5E5E5E]">
-              You can also upload a file below to auto-fill this field.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label
               htmlFor="signup-doctor-photo-upload"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
               Upload profile photo
             </label>
+            {profilePhotoUrl && (
+              <div className="mb-1">
+                <Image
+                  src={profilePhotoUrl}
+                  alt="Doctor profile photo"
+                  width={56}
+                  height={56}
+                  className="size-14 rounded-lg border border-[#e5e5e5] object-cover"
+                />
+              </div>
+            )}
             <input
               id="signup-doctor-photo-upload"
               name="profilePhotoUpload"
@@ -337,29 +361,8 @@ export function SignUpForm({
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                void (async () => {
-                  setError(null);
-                  setPhotoUploadPending(true);
-                  try {
-                    const formData = new FormData();
-                    formData.append("file", file);
-                    const res = await fetch("/api/uploads/doctor-photo", {
-                      method: "POST",
-                      body: formData,
-                    });
-                    const data = (await res.json().catch(() => ({}))) as {
-                      error?: string;
-                      url?: string;
-                    };
-                    if (!res.ok || !data.url) {
-                      setError(data.error ?? "Unable to upload profile photo.");
-                      return;
-                    }
-                    setProfilePhotoUrl(data.url);
-                  } finally {
-                    setPhotoUploadPending(false);
-                  }
-                })();
+                setError(null);
+                setProfilePhotoFile(file);
               }}
             />
             {photoUploadPending && (
