@@ -13,8 +13,8 @@ type Props = {
   className?: string;
 };
 
-const DEBOUNCE_MS = 300;
-const MIN_QUERY_LENGTH = 2;
+const DEBOUNCE_MS = 120;
+const MIN_QUERY_LENGTH = 1;
 
 export function MedicineNameAutocomplete({
   value,

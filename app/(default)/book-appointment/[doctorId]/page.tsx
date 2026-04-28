@@ -216,8 +216,10 @@ export default function BookAppointmentDoctorPage() {
   const selectedSlotDetail = selectedSlot
     ? slotDetailByStart.get(selectedSlot) ?? null
     : null;
+  // Default displayed online fee should be the base 15-minute consultation fee
+  // until a slot is explicitly selected.
   const selectedSlotDuration =
-    selectedSlotDetail?.slotDurationMinutes ?? slotDurationMinutes;
+    selectedSlotDetail?.slotDurationMinutes ?? 15;
   const consultationPriceLabel = useMemo(
     () =>
       formatPrice(
@@ -227,6 +229,10 @@ export default function BookAppointmentDoctorPage() {
     [doctorPriceMap, doctorCurrency, selectedSlotDuration],
   );
   const patientCurrency = useMemo(() => patientCurrencyFromTimezone(), []);
+  const shouldShowApproxEquivalent =
+    consultationType === "ONLINE" &&
+    !!selectedSlot &&
+    patientCurrency !== doctorCurrency;
   const canBookClinic =
     !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
   const canBookOnline =
@@ -394,7 +400,7 @@ export default function BookAppointmentDoctorPage() {
     async function loadApproxEquivalent() {
       setApproxEquivalentLabel(null);
       if (!selectedSlot || consultationType !== "ONLINE") return;
-      if (!patientCurrency || patientCurrency === doctorCurrency) return;
+      if (!shouldShowApproxEquivalent) return;
       const apiKey = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY;
       if (!apiKey) return;
 
@@ -429,6 +435,7 @@ export default function BookAppointmentDoctorPage() {
   }, [
     selectedSlot,
     consultationType,
+    shouldShowApproxEquivalent,
     patientCurrency,
     doctorCurrency,
     doctorPriceMap,
@@ -605,7 +612,7 @@ export default function BookAppointmentDoctorPage() {
               <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                 {consultationType === "CLINIC"
                   ? "Pay at clinic"
-                  : `Online consultation fee: ${consultationPriceLabel}${approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
+                  : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
               </p>
             </section>
 
