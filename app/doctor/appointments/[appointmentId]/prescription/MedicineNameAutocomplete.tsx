@@ -169,6 +169,13 @@ export function MedicineNameAutocomplete({
           ))}
         </ul>
       ) : null}
+      {!isLoading &&
+      value.trim().length >= MIN_QUERY_LENGTH &&
+      suggestions.length === 0 ? (
+        <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#5E5E5E] shadow-lg">
+          No matches found.
+        </div>
+      ) : null}
       {isLoading && value.trim().length >= MIN_QUERY_LENGTH ? (
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-montserrat text-xs text-[#5E5E5E]">
           ...
