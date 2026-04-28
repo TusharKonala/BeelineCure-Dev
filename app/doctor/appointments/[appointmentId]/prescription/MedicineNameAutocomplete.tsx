@@ -26,6 +26,7 @@ export function MedicineNameAutocomplete({
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // True only while we're applying a suggestion the user just selected, so we
   // don't immediately re-open the popup from the change event.
@@ -51,6 +52,7 @@ export function MedicineNameAutocomplete({
       // Do not auto-select first option; Enter should keep free text unless
       // doctor explicitly navigates/selects a suggestion.
       setHighlightIndex(-1);
+      setHasSearched(true);
       setIsLoading(false);
     }, DEBOUNCE_MS);
     return () => {
@@ -128,6 +130,7 @@ export function MedicineNameAutocomplete({
         onChange={(e) => {
           const nextValue = e.target.value;
           onChange(nextValue);
+          setHasSearched(false);
           if (nextValue.trim().length < MIN_QUERY_LENGTH) {
             setIsOpen(false);
             setHighlightIndex(-1);
@@ -170,6 +173,7 @@ export function MedicineNameAutocomplete({
         </ul>
       ) : null}
       {!isLoading &&
+      hasSearched &&
       value.trim().length >= MIN_QUERY_LENGTH &&
       suggestions.length === 0 ? (
         <div className="absolute left-0 right-0 top-full z-20 mt-1 rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#5E5E5E] shadow-lg">
