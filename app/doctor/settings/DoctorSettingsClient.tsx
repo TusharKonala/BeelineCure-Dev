@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Calendar, CheckCircle2 } from "lucide-react";
@@ -16,6 +16,7 @@ import {
   type ConsultationPriceCentsByDuration,
   DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
 } from "@/lib/doctor-pricing";
+import { uploadDoctorPhoto } from "@/lib/uploads/uploadDoctorPhoto";
 
 const DURATION_KEYS = ["15", "30", "45", "60"] as const;
 type DurationKey = (typeof DURATION_KEYS)[number];
@@ -66,6 +67,9 @@ export function DoctorSettingsClient({
   const [priceInputs, setPriceInputs] = useState<PriceInputs>(() =>
     priceMapToInputs(initialDoctor.consultationPriceCentsByDuration),
   );
+  const [selectedPhotoPreviewUrl, setSelectedPhotoPreviewUrl] = useState<
+    string | null
+  >(null);
   // Sticky flag — once the doctor edits the currency manually, we never
   // overwrite it from a timezone change.
   const isCurrencyManuallySetRef = useRef(false);
@@ -93,6 +97,16 @@ export function DoctorSettingsClient({
     return null;
   }, [calendarStatus]);
 
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setSelectedPhotoPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(profilePhotoFile);
+    setSelectedPhotoPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profilePhotoFile]);
+
   function handleTimezoneChange(nextTimezone: string) {
     setDoctor((prev) => {
       const next: DoctorSettings = { ...prev, timezone: nextTimezone };
@@ -117,23 +131,6 @@ export function DoctorSettingsClient({
     if (Number.isFinite(parsed) && parsed > 0) {
       setPriceInputs((prev) => ({ ...prev, [duration]: parsed.toFixed(2) }));
     }
-  }
-
-  async function uploadProfilePhoto(file: File): Promise<string> {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/uploads/doctor-photo", {
-      method: "POST",
-      body: formData,
-    });
-    const data = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      url?: string;
-    };
-    if (!res.ok || !data.url) {
-      throw new Error(data.error ?? "Unable to upload profile photo.");
-    }
-    return data.url;
   }
 
   async function onSave() {
@@ -168,7 +165,7 @@ export function DoctorSettingsClient({
       if (profilePhotoFile) {
         setPhotoUploadPending(true);
         try {
-          resolvedProfilePhotoUrl = await uploadProfilePhoto(profilePhotoFile);
+          resolvedProfilePhotoUrl = await uploadDoctorPhoto(profilePhotoFile);
         } finally {
           setPhotoUploadPending(false);
         }
@@ -237,6 +234,7 @@ export function DoctorSettingsClient({
   const inputClassName =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm outline-none placeholder:text-[#5E5E5E]/70 focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20";
   const selectClassName = `${inputClassName} cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat pr-10`;
+  const profilePhotoPreviewSrc = selectedPhotoPreviewUrl ?? doctor.profilePhotoUrl;
 
   return (
     <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -322,10 +320,10 @@ export function DoctorSettingsClient({
               <label className="font-montserrat text-sm font-medium text-[#333333]">
                 Upload profile photo
               </label>
-              {doctor.profilePhotoUrl && (
+              {profilePhotoPreviewSrc && (
                 <div className="mb-1">
                   <Image
-                    src={doctor.profilePhotoUrl}
+                    src={profilePhotoPreviewSrc}
                     alt="Doctor profile photo"
                     width={56}
                     height={56}

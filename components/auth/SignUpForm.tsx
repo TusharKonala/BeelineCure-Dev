@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { uploadDoctorPhoto } from "@/lib/uploads/uploadDoctorPhoto";
 
 export function SignUpForm({
   initialRole = "PATIENT",
@@ -29,23 +30,19 @@ export function SignUpForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [photoUploadPending, setPhotoUploadPending] = useState(false);
+  const [selectedPhotoPreviewUrl, setSelectedPhotoPreviewUrl] = useState<
+    string | null
+  >(null);
 
-  async function uploadProfilePhoto(file: File): Promise<string> {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/uploads/doctor-photo", {
-      method: "POST",
-      body: formData,
-    });
-    const data = (await res.json().catch(() => ({}))) as {
-      error?: string;
-      url?: string;
-    };
-    if (!res.ok || !data.url) {
-      throw new Error(data.error ?? "Unable to upload profile photo.");
+  useEffect(() => {
+    if (!profilePhotoFile) {
+      setSelectedPhotoPreviewUrl(null);
+      return;
     }
-    return data.url;
-  }
+    const objectUrl = URL.createObjectURL(profilePhotoFile);
+    setSelectedPhotoPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profilePhotoFile]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -66,7 +63,7 @@ export function SignUpForm({
       if (role === "DOCTOR" && profilePhotoFile) {
         setPhotoUploadPending(true);
         try {
-          resolvedProfilePhotoUrl = await uploadProfilePhoto(profilePhotoFile);
+          resolvedProfilePhotoUrl = await uploadDoctorPhoto(profilePhotoFile);
           setProfilePhotoUrl(resolvedProfilePhotoUrl);
         } finally {
           setPhotoUploadPending(false);
@@ -341,10 +338,10 @@ export function SignUpForm({
             >
               Upload profile photo
             </label>
-            {profilePhotoUrl && (
+            {selectedPhotoPreviewUrl && (
               <div className="mb-1">
                 <Image
-                  src={profilePhotoUrl}
+                  src={selectedPhotoPreviewUrl}
                   alt="Doctor profile photo"
                   width={56}
                   height={56}
