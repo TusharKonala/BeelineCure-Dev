@@ -164,6 +164,14 @@ export function ViewSchedulePanel({
   const [holidayConfirmDate, setHolidayConfirmDate] = useState<string | null>(
     null,
   );
+  const [holidayCancelCount, setHolidayCancelCount] = useState<number | null>(
+    null,
+  );
+  const [holidayCancelCountLoading, setHolidayCancelCountLoading] =
+    useState(false);
+  const [holidayCancelCountError, setHolidayCancelCountError] = useState<
+    string | null
+  >(null);
   const [mounted, setMounted] = useState(false);
 
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
@@ -336,6 +344,49 @@ export function ViewSchedulePanel({
     };
   }, [holidayConfirmDate]);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!holidayConfirmDate) {
+      setHolidayCancelCount(null);
+      setHolidayCancelCountError(null);
+      setHolidayCancelCountLoading(false);
+      return;
+    }
+    void (async () => {
+      setHolidayCancelCountLoading(true);
+      setHolidayCancelCountError(null);
+      setHolidayCancelCount(null);
+      try {
+        const res = await fetch(
+          `/api/doctor/availability?date=${encodeURIComponent(holidayConfirmDate)}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Could not load appointment count");
+        }
+        const data = (await res.json()) as { bookedSlotStarts?: string[] };
+        if (!cancelled) {
+          const count = Array.isArray(data.bookedSlotStarts)
+            ? data.bookedSlotStarts.length
+            : 0;
+          setHolidayCancelCount(count);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setHolidayCancelCountError(
+            e instanceof Error ? e.message : "Could not load appointment count",
+          );
+        }
+      } finally {
+        if (!cancelled) setHolidayCancelCountLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [holidayConfirmDate]);
+
   async function executeMarkHoliday(isoDate: string) {
     setHolidayError(null);
     setClearingDate(isoDate);
@@ -396,7 +447,25 @@ export function ViewSchedulePanel({
             <span className="font-medium text-[#333333]">
               {formatScheduleDayHeading(holidayConfirmDate)}
             </span>
-            ? Confirmed and pending appointments for this date will be cancelled.
+            ?{" "}
+            {holidayCancelCountLoading ? (
+              <span>Checking appointments to cancel...</span>
+            ) : holidayCancelCountError ? (
+              <span>
+                Could not load cancellation count right now. Confirmed and
+                pending appointments for this date will still be cancelled.
+              </span>
+            ) : (
+              <span>
+                <span className="font-medium text-red-600">
+                  {holidayCancelCount ?? 0}{" "}
+                  {(holidayCancelCount ?? 0) === 1
+                    ? "appointment"
+                    : "appointments"}
+                </span>{" "}
+                will be cancelled.
+              </span>
+            )}{" "}
             Paid online bookings will be fully refunded, and patients will be
             notified.
           </p>
