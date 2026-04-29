@@ -1,10 +1,10 @@
 import { getServerSession } from "next-auth/next";
-import { NextResponse } from "next/server";
-import { UserRole } from "@/generated/prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { DoctorApprovalStatus, UserRole, type Prisma } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -13,30 +13,69 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const doctors = await prisma.doctor.findMany({
-    select: {
-      id: true,
-      userId: true,
-      name: true,
-      specialization: true,
-      licenseNumber: true,
-      yearsExperience: true,
-      profilePhotoUrl: true,
-      approvalStatus: true,
-      createdAt: true,
-      user: {
-        select: {
-          email: true,
+  const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
+  const rawStatus = request.nextUrl.searchParams.get("status");
+  const status =
+    rawStatus === "PENDING" || rawStatus === "APPROVED" || rawStatus === "REJECTED"
+      ? rawStatus
+      : null;
+  const page = Math.max(
+    1,
+    Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
+  );
+  const limit = Math.min(
+    20,
+    Math.max(5, Number(request.nextUrl.searchParams.get("limit") ?? "10") || 10),
+  );
+
+  const where: Prisma.DoctorWhereInput = {};
+  if (status) {
+    where.approvalStatus = status as DoctorApprovalStatus;
+  }
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      {
+        user: {
+          is: {
+            email: { contains: search, mode: "insensitive" },
+          },
         },
       },
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+    ];
+  }
+
+  const skip = (page - 1) * limit;
+  const [doctors, total] = await Promise.all([
+    prisma.doctor.findMany({
+      where,
+      select: {
+        id: true,
+        userId: true,
+        name: true,
+        specialization: true,
+        licenseNumber: true,
+        yearsExperience: true,
+        profilePhotoUrl: true,
+        approvalStatus: true,
+        createdAt: true,
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take: limit,
+    }),
+    prisma.doctor.count({ where }),
+  ]);
 
   return NextResponse.json({
-    doctors: doctors.map((doctor) => ({
+    items: doctors.map((doctor) => ({
       id: doctor.id,
       userId: doctor.userId,
       name: doctor.name,
@@ -48,5 +87,8 @@ export async function GET() {
       approvalStatus: doctor.approvalStatus,
       createdAt: doctor.createdAt.toISOString(),
     })),
+    hasMore: skip + doctors.length < total,
+    total,
+    page,
   });
 }
