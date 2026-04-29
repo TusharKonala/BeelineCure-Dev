@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
 
 type ApprovalTab = "PENDING" | "APPROVED" | "REJECTED";
@@ -18,6 +19,10 @@ type AdminDoctor = {
   approvalStatus: ApprovalTab;
   createdAt: string;
 };
+
+/** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` inset. */
+const SELECT_CHEVRON =
+  'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
 
 const tabItems: Array<{ key: ApprovalTab; label: string }> = [
   { key: "PENDING", label: "Pending" },
@@ -47,62 +52,77 @@ function formatCreatedDate(value: string) {
 
 export default function AdminDoctorsPage() {
   const [doctors, setDoctors] = useState<AdminDoctor[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<ApprovalTab>("PENDING");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyDoctorId, setBusyDoctorId] = useState<string | null>(null);
+  const latestRequestIdRef = useRef(0);
 
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async (nextPage: number, append: boolean) => {
+    const requestId = ++latestRequestIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/doctors", { cache: "no-store" });
+      const params = new URLSearchParams({
+        page: String(nextPage),
+        limit: "10",
+        status: activeTab,
+      });
+      if (query.trim()) params.set("search", query.trim());
+      const response = await fetch(`/api/admin/doctors?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!response.ok) {
+        if (latestRequestIdRef.current !== requestId) return;
         setError("Failed to load doctors.");
         return;
       }
-      const data = (await response.json()) as { doctors?: AdminDoctor[] };
-      setDoctors(Array.isArray(data.doctors) ? data.doctors : []);
+      const data = (await response.json()) as {
+        items?: AdminDoctor[];
+        hasMore?: boolean;
+        page?: number;
+      };
+      if (latestRequestIdRef.current !== requestId) return;
+      const nextItems = Array.isArray(data.items) ? data.items : [];
+      setDoctors((current) => (append ? [...current, ...nextItems] : nextItems));
+      setHasMore(Boolean(data.hasMore));
+      setPage(typeof data.page === "number" ? data.page : nextPage);
     } catch {
+      if (latestRequestIdRef.current !== requestId) return;
       setError("Failed to load doctors.");
     } finally {
+      if (latestRequestIdRef.current !== requestId) return;
       setLoading(false);
     }
-  };
+  }, [activeTab, query]);
 
   useEffect(() => {
-    void loadDoctors();
-  }, []);
+    void loadDoctors(1, false);
+  }, [loadDoctors]);
 
-  const filteredDoctors = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return doctors.filter((doctor) => {
-      if (doctor.approvalStatus !== activeTab) return false;
-      if (!normalized) return true;
-      const nameMatch = doctor.name.toLowerCase().includes(normalized);
-      const emailMatch = (doctor.email ?? "").toLowerCase().includes(normalized);
-      return nameMatch || emailMatch;
-    });
-  }, [activeTab, doctors, query]);
-
-  const tabCounts = useMemo(() => {
-    return {
-      PENDING: doctors.filter((doctor) => doctor.approvalStatus === "PENDING").length,
-      APPROVED: doctors.filter((doctor) => doctor.approvalStatus === "APPROVED").length,
-      REJECTED: doctors.filter((doctor) => doctor.approvalStatus === "REJECTED").length,
-    };
-  }, [doctors]);
+  const [sentryRef] = useInfiniteScroll({
+    loading,
+    hasNextPage: hasMore,
+    onLoadMore: () => void loadDoctors(page + 1, true),
+    disabled: false,
+    rootMargin: "0px 0px 300px 0px",
+  });
 
   const handleAction = async (doctor: AdminDoctor, action: "approve" | "reject") => {
     if (!doctor.userId) return;
     setBusyDoctorId(doctor.id);
     setError(null);
     try {
-      const response = await fetch(
-        `/api/admin/doctors/${doctor.userId}/${action === "approve" ? "approve" : "reject"}`,
-        { method: "POST" },
-      );
+      const response = await fetch(`/api/admin/doctors/${doctor.userId}/approval`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: action === "approve" ? "APPROVED" : "REJECTED",
+        }),
+      });
       if (!response.ok) {
         setError(
           action === "approve"
@@ -111,7 +131,7 @@ export default function AdminDoctorsPage() {
         );
         return;
       }
-      await loadDoctors();
+      await loadDoctors(1, false);
     } catch {
       setError(
         action === "approve"
@@ -122,6 +142,8 @@ export default function AdminDoctorsPage() {
       setBusyDoctorId(null);
     }
   };
+
+  const visibleDoctors = useMemo(() => doctors, [doctors]);
 
   return (
     <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -155,11 +177,11 @@ export default function AdminDoctorsPage() {
               id="admin-doctor-tab"
               value={activeTab}
               onChange={(event) => setActiveTab(event.target.value as ApprovalTab)}
-              className="rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-9 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+              className={`cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
             >
               {tabItems.map((tab) => (
                 <option key={tab.key} value={tab.key}>
-                  {tab.label} ({tabCounts[tab.key]})
+                  {tab.label}
                 </option>
               ))}
             </select>
@@ -173,13 +195,13 @@ export default function AdminDoctorsPage() {
                   key={tab.key}
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
-                  className={`rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
+                  className={`cursor-pointer rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
                     active
                       ? "bg-[#2555F3] text-white"
                       : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
                   }`}
                 >
-                  {tab.label} ({tabCounts[tab.key]})
+                  {tab.label}
                 </button>
               );
             })}
@@ -195,7 +217,7 @@ export default function AdminDoctorsPage() {
             <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
               <p className="font-montserrat text-sm text-[#5e5e5e]">Loading doctors...</p>
             </div>
-          ) : filteredDoctors.length === 0 ? (
+          ) : visibleDoctors.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
               <p className="font-montserrat text-sm text-[#5e5e5e]">
                 No doctors found for this filter.
@@ -230,7 +252,7 @@ export default function AdminDoctorsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDoctors.map((doctor) => {
+                  {visibleDoctors.map((doctor) => {
                     const isBusy = busyDoctorId === doctor.id;
                     const hasAccount = Boolean(doctor.userId);
                     return (
@@ -276,7 +298,7 @@ export default function AdminDoctorsPage() {
                                   type="button"
                                   disabled={isBusy}
                                   onClick={() => void handleAction(doctor, "approve")}
-                                  className="rounded-lg bg-[#2555F3] px-3 py-1.5 font-montserrat text-xs font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="cursor-pointer rounded-lg bg-[#2555F3] px-3 py-1.5 font-montserrat text-xs font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   Approve
                                 </button>
@@ -284,7 +306,7 @@ export default function AdminDoctorsPage() {
                                   type="button"
                                   disabled={isBusy}
                                   onClick={() => void handleAction(doctor, "reject")}
-                                  className="rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   Reject
                                 </button>
@@ -307,6 +329,15 @@ export default function AdminDoctorsPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {(hasMore || loading) && visibleDoctors.length > 0 && (
+            <div
+              ref={sentryRef}
+              className="py-4 text-center font-montserrat text-sm text-[#5E5E5E]"
+            >
+              {loading ? "Loading..." : "Scroll for more"}
             </div>
           )}
         </section>
