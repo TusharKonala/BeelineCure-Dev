@@ -15,6 +15,6 @@ export function getPostLoginPath({
       ? "/doctor/overview"
       : "/auth/doctor-pending-approval";
   }
-  if (role === "ADMIN") return "/admin/overview";
+  if (role === "ADMIN") return "/admin/dashboard";
   return "/patient/overview";
 }

@@ -43,6 +43,12 @@ export default withAuth(
       }
     }
 
+    if (pathname.startsWith("/admin")) {
+      if (token?.role !== "ADMIN") {
+        return NextResponse.redirect(new URL("/", req.url));
+      }
+    }
+
     return NextResponse.next();
   },
   {
@@ -66,6 +72,7 @@ export const config = {
   matcher: [
     "/patient/:path*",
     "/doctor/:path*",
+    "/admin/:path*",
     "/book-appointment/:path*",
   ],
 };

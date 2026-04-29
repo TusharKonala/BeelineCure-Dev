@@ -19,7 +19,7 @@ export function Navbar() {
       : roleKey === "doctor"
         ? "/doctor/overview"
         : roleKey === "admin"
-          ? "/admin/overview"
+          ? "/admin/dashboard"
           : "/patient/overview";
 
   return (
