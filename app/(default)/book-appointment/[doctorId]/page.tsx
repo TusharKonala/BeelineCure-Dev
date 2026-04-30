@@ -29,6 +29,7 @@ import {
   priceCentsForDuration,
   type ConsultationPriceCentsByDuration,
 } from "@/lib/doctor-pricing";
+import { convertCentsAmount } from "@/lib/fx-rates";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -46,11 +47,6 @@ const patientFormSchema = z.object({
 
 type PatientFormValues = z.infer<typeof patientFormSchema>;
 type SlotDetail = Awaited<ReturnType<typeof getSlots>>["slotDetails"][number];
-type ExchangeRateApiResponse = {
-  result?: string;
-  conversion_rates?: Record<string, number>;
-};
-
 type SubmitErrorState = {
   message: string;
   link?: {
@@ -220,19 +216,17 @@ export default function BookAppointmentDoctorPage() {
   // until a slot is explicitly selected.
   const selectedSlotDuration =
     selectedSlotDetail?.slotDurationMinutes ?? 15;
+  const selectedSlotPriceCents = useMemo(
+    () => priceCentsForDuration(doctorPriceMap, selectedSlotDuration),
+    [doctorPriceMap, selectedSlotDuration],
+  );
   const consultationPriceLabel = useMemo(
-    () =>
-      formatPrice(
-        priceCentsForDuration(doctorPriceMap, selectedSlotDuration),
-        doctorCurrency,
-      ),
-    [doctorPriceMap, doctorCurrency, selectedSlotDuration],
+    () => formatPrice(selectedSlotPriceCents, doctorCurrency),
+    [selectedSlotPriceCents, doctorCurrency],
   );
   const patientCurrency = useMemo(() => patientCurrencyFromTimezone(), []);
   const shouldShowApproxEquivalent =
-    consultationType === "ONLINE" &&
-    !!selectedSlot &&
-    patientCurrency !== doctorCurrency;
+    !!selectedSlot && patientCurrency !== doctorCurrency;
   const canBookClinic =
     !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
   const canBookOnline =
@@ -399,26 +393,14 @@ export default function BookAppointmentDoctorPage() {
     let cancelled = false;
     async function loadApproxEquivalent() {
       setApproxEquivalentLabel(null);
-      if (!selectedSlot || consultationType !== "ONLINE") return;
+      if (!selectedSlot) return;
       if (!shouldShowApproxEquivalent) return;
-      const apiKey = process.env.NEXT_PUBLIC_EXCHANGE_RATE_API_KEY;
-      if (!apiKey) return;
-
-      const baseAmountCents = priceCentsForDuration(
-        doctorPriceMap,
-        selectedSlotDuration,
-      );
       try {
-        const res = await fetch(
-          `https://v6.exchangerate-api.com/v6/${apiKey}/latest/${doctorCurrency}`,
-          { cache: "no-store" },
+        const convertedCents = await convertCentsAmount(
+          selectedSlotPriceCents,
+          doctorCurrency,
+          patientCurrency,
         );
-        if (!res.ok) return;
-        const data = (await res.json()) as ExchangeRateApiResponse;
-        if (data.result !== "success") return;
-        const rate = data.conversion_rates?.[patientCurrency];
-        if (!rate || rate <= 0) return;
-        const convertedCents = Math.round(baseAmountCents * rate);
         if (!cancelled) {
           setApproxEquivalentLabel(
             `(approx ${formatPrice(convertedCents, patientCurrency)})`,
@@ -438,8 +420,7 @@ export default function BookAppointmentDoctorPage() {
     shouldShowApproxEquivalent,
     patientCurrency,
     doctorCurrency,
-    doctorPriceMap,
-    selectedSlotDuration,
+    selectedSlotPriceCents,
     setApproxEquivalentLabel,
   ]);
 
@@ -611,7 +592,7 @@ export default function BookAppointmentDoctorPage() {
               )}
               <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                 {consultationType === "CLINIC"
-                  ? `Consultation fee (payable at clinic): ${consultationPriceLabel}`
+                  ? `Consultation fee (payable at clinic): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
                   : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
               </p>
             </section>
