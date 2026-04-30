@@ -18,6 +18,8 @@ import {
   coerceAllowedSlotDurationMinutes,
   resolveSlotMetaForStart,
 } from "@/lib/doctor-availability-slots";
+import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
+import { coerceSupportedCurrency } from "@/lib/currency";
 import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import {
@@ -104,7 +106,14 @@ export async function POST(request: NextRequest) {
 
   const doctor = await prisma.doctor.findFirst({
     where: publicDoctorByIdWhere(doctorId),
-    select: { id: true, name: true, timezone: true, slotDurationMinutes: true },
+    select: {
+      id: true,
+      name: true,
+      timezone: true,
+      slotDurationMinutes: true,
+      consultationPriceCentsByDuration: true,
+      currency: true,
+    },
   });
 
   if (!doctor) {
@@ -236,6 +245,11 @@ export async function POST(request: NextRequest) {
 
   const cancelToken = randomBytes(32).toString("hex");
   const rescheduleToken = randomBytes(32).toString("hex");
+  const priceCentsAtBooking = priceCentsForDuration(
+    parsePriceMap(doctor.consultationPriceCentsByDuration),
+    slotMeta.slotDurationMinutes,
+  );
+  const currencyAtBooking = coerceSupportedCurrency(doctor.currency);
 
   let appointment;
   try {
@@ -250,6 +264,8 @@ export async function POST(request: NextRequest) {
         notes,
         consultationType,
         durationMinutes: slotMeta.slotDurationMinutes,
+        priceCentsAtBooking,
+        currencyAtBooking,
         timezone: doctorTimezone,
         patientTimezone,
         status: AppointmentStatus.CONFIRMED,

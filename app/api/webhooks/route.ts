@@ -30,6 +30,8 @@ import {
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { createMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
+import { coerceSupportedCurrency } from "@/lib/currency";
+import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -115,6 +117,20 @@ export async function POST(request: NextRequest) {
       );
       return new NextResponse("OK", { status: 200 });
     }
+    const fallbackPriceCentsAtBooking = priceCentsForDuration(
+      parsePriceMap(doctor.consultationPriceCentsByDuration),
+      bookingSession.durationMinutes,
+    );
+    const fallbackCurrencyAtBooking = coerceSupportedCurrency(doctor.currency);
+    const priceCentsAtBooking =
+      typeof bookingSession.priceCentsAtBooking === "number"
+        ? bookingSession.priceCentsAtBooking
+        : fallbackPriceCentsAtBooking;
+    const currencyAtBooking =
+      typeof bookingSession.currencyAtBooking === "string" &&
+      bookingSession.currencyAtBooking.trim().length > 0
+        ? bookingSession.currencyAtBooking.trim().toUpperCase()
+        : fallbackCurrencyAtBooking;
 
     const cancelToken = randomBytes(32).toString("hex");
     const rescheduleToken = randomBytes(32).toString("hex");
@@ -134,6 +150,8 @@ export async function POST(request: NextRequest) {
           status: AppointmentStatus.CONFIRMED,
           consultationType:
             ConsultationType.ONLINE,
+          priceCentsAtBooking,
+          currencyAtBooking,
           stripePaymentId: session.id,
           paymentStatus: PaymentStatus.PAID,
           cancelToken,
