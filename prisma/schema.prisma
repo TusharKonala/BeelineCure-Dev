@@ -90,6 +90,9 @@ model User {
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
   role      UserRole @default(PATIENT)
+  /// Admin dashboard revenue display currency preference (ISO 4217).
+  /// When null, currency can be supplied by client context (for example, browser detection).
+  preferredCurrency String?
   profileComplete Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -200,6 +203,11 @@ model Appointment {
   time             String
   /// Frozen slot duration at booking time (minutes), used for event timings and display.
   durationMinutes  Int               @default(30)
+  /// Snapshot of the doctor's consultation fee at appointment creation (in cents).
+  /// This value is immutable historical booking data for reporting.
+  priceCentsAtBooking Int?
+  /// Snapshot of the doctor's consultation fee currency at appointment creation.
+  currencyAtBooking   String?
   notes            String?
   prescription     Prescription?
   consultationType ConsultationType
