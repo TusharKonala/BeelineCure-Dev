@@ -73,12 +73,16 @@ export function SignUpForm({
         setError("Doctor profile photo is required.");
         return;
       }
+      if (role === "DOCTOR" && !name.trim()) {
+        setError("Name is required for doctor signup.");
+        return;
+      }
 
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: name.trim() || undefined,
+          name: role === "DOCTOR" ? name.trim() : name.trim() || undefined,
           email: email.trim(),
           password,
           role,
@@ -172,13 +176,17 @@ export function SignUpForm({
           htmlFor="signup-name"
           className="font-montserrat text-sm font-medium text-[#333333]"
         >
-          Name <span className="font-normal text-[#5E5E5E]">(optional)</span>
+          Name{" "}
+          {role !== "DOCTOR" && (
+            <span className="font-normal text-[#5E5E5E]">(optional)</span>
+          )}
         </label>
         <input
           id="signup-name"
           name="name"
           type="text"
           autoComplete="name"
+          required={role === "DOCTOR"}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={inputClassName}

@@ -37,6 +37,13 @@ const registerSchema = z
         path: ["doctor"],
       });
     }
+    if (value.role === "DOCTOR" && !value.name?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Name is required for doctor signup",
+        path: ["name"],
+      });
+    }
   });
 
 export async function POST(request: Request) {
