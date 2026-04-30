@@ -611,7 +611,7 @@ export default function BookAppointmentDoctorPage() {
               )}
               <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                 {consultationType === "CLINIC"
-                  ? "Pay at clinic"
+                  ? `Consultation fee (payable at clinic): ${consultationPriceLabel}`
                   : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
               </p>
             </section>
