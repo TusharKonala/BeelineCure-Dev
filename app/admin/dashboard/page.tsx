@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Container } from "@/components/layout/Container";
-import { currencyForTimezone, formatPrice, type SupportedCurrency } from "@/lib/currency";
+import {
+  currencyForTimezone,
+  formatPrice,
+  type SupportedCurrency,
+} from "@/lib/currency";
 
 type StatsResponse = {
   totals: {
@@ -97,7 +101,9 @@ export default function AdminDashboardPage() {
 
           {loading ? (
             <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
-              <p className="font-montserrat text-sm text-[#5e5e5e]">Loading dashboard...</p>
+              <p className="font-montserrat text-sm text-[#5e5e5e]">
+                Loading dashboard...
+              </p>
             </div>
           ) : error ? (
             <div className="mt-6 rounded-xl border border-dashed border-[#ffd0d0] bg-[#fff6f6] p-4">
@@ -107,31 +113,58 @@ export default function AdminDashboardPage() {
             <>
               <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Total approved doctors</p>
-                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">{stats.totals.approvedDoctors}</p>
-                </div>
-                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Total patients</p>
-                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">{stats.totals.patients}</p>
-                </div>
-                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Bookings all-time</p>
-                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">{stats.totals.bookingsAllTime}</p>
-                </div>
-                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Bookings this month</p>
-                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">{stats.totals.bookingsThisMonth}</p>
-                </div>
-                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Total revenue</p>
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Total approved doctors
+                  </p>
                   <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
-                    {formatPrice(stats.revenue.amountCents, stats.revenue.currency)}{" "}
-                    <span className="text-base font-medium text-[#5e5e5e]">{stats.revenue.currency}</span>
+                    {stats.totals.approvedDoctors}
                   </p>
                 </div>
                 <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
-                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">Cancellation rate</p>
-                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">{formatPercent(stats.cancellationRate)}</p>
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Registered patients
+                  </p>
+                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
+                    {stats.totals.patients}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Bookings all-time
+                  </p>
+                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
+                    {stats.totals.bookingsAllTime}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Bookings this month
+                  </p>
+                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
+                    {stats.totals.bookingsThisMonth}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Total revenue
+                  </p>
+                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
+                    {formatPrice(
+                      stats.revenue.amountCents,
+                      stats.revenue.currency,
+                    )}{" "}
+                    <span className="text-base font-medium text-[#5e5e5e]">
+                      {stats.revenue.currency}
+                    </span>
+                  </p>
+                </div>
+                <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
+                  <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">
+                    Cancellation rate
+                  </p>
+                  <p className="mt-2 font-montserrat text-2xl font-semibold text-[#111111]">
+                    {formatPercent(stats.cancellationRate)}
+                  </p>
                 </div>
               </div>
 
@@ -145,27 +178,57 @@ export default function AdminDashboardPage() {
                 <table className="min-w-[960px] w-full border-collapse bg-white">
                   <thead className="bg-[#fafafa]">
                     <tr>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Patient</th>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Doctor</th>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Type</th>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Amount</th>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Status</th>
-                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">Date</th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Patient
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Doctor
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Type
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Amount
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Status
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Date
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {stats.recentBookings.map((booking) => (
-                      <tr key={booking.id} className="border-t border-[#ededed]">
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">{booking.patientName}</td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">{booking.doctorName}</td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">{booking.appointmentType === "CLINIC" ? "Clinic" : "Online"}</td>
+                      <tr
+                        key={booking.id}
+                        className="border-t border-[#ededed]"
+                      >
+                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                          {booking.patientName}
+                        </td>
+                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                          {booking.doctorName}
+                        </td>
+                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                          {booking.appointmentType === "CLINIC"
+                            ? "Clinic"
+                            : "Online"}
+                        </td>
                         <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
                           {typeof booking.amountCents === "number"
-                            ? formatPrice(booking.amountCents, stats.revenue.currency)
+                            ? formatPrice(
+                                booking.amountCents,
+                                stats.revenue.currency,
+                              )
                             : "—"}
                         </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">{booking.status}</td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">{formatDate(booking.date)}</td>
+                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                          {booking.status}
+                        </td>
+                        <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">
+                          {formatDate(booking.date)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
