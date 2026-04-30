@@ -100,6 +100,7 @@ model User {
   healthProfile HealthProfile?
   doctor        Doctor?
   notifications Notification[]
+  patientReviews Review[] @relation("PatientReviews")
 }
 
 model HealthProfile {
@@ -173,6 +174,23 @@ model Doctor {
   appointments     Appointment[]
   bookingSessions  BookingSession[]
   customMedicines  CustomMedicine[]
+  reviews          Review[]
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  patientId String
+  patient   User     @relation("PatientReviews", fields: [patientId], references: [id], onDelete: Cascade)
+  doctorId  String
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  rating    Int
+  comment   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([doctorId])
+  @@index([rating])
+  @@index([createdAt(sort: Desc)])
 }
 
 model DoctorAvailability {
