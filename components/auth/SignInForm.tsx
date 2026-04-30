@@ -39,6 +39,10 @@ export function SignInForm() {
       if (result?.error) {
         if (result.error === "EMAIL_NOT_VERIFIED") {
           setError("Please verify your email before signing in.");
+        } else if (result.error === "DOCTOR_REJECTED") {
+          setError(
+            "Your doctor account was rejected by admin. Please contact support or sign up again with updated details.",
+          );
         } else if (result.error === "DOCTOR_NOT_APPROVED") {
           setError(
             "Your doctor account is pending admin approval. Please try again after approval.",
@@ -111,7 +115,7 @@ export function SignInForm() {
       {registered && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
           {registeredRole === "doctor"
-            ? "Doctor account created. Verify your email first; admin approval is required before dashboard access."
+            ? "Doctor account created. Verify your email first. Admin approval is required before dashboard access."
             : "Account created. Please verify your email before signing in."}
         </p>
       )}
@@ -144,6 +148,12 @@ export function SignInForm() {
       {!error && oauthError === "DOCTOR_NOT_APPROVED" && (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 font-montserrat text-sm text-amber-900">
           Your doctor account is pending admin approval.
+        </p>
+      )}
+      {!error && oauthError === "DOCTOR_REJECTED" && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 font-montserrat text-sm text-red-800">
+          Your doctor account was rejected by admin. Please contact support or sign
+          up again with updated details.
         </p>
       )}
 

@@ -47,11 +47,13 @@ async function authorizeMagicLink(rawToken: string) {
     });
     if (cleared.count !== 1) return null;
 
-    if (
-      user.role === UserRole.DOCTOR &&
-      user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
-    ) {
-      throw new Error("DOCTOR_NOT_APPROVED");
+    if (user.role === UserRole.DOCTOR) {
+      if (user.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
+        throw new Error("DOCTOR_REJECTED");
+      }
+      if (user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED) {
+        throw new Error("DOCTOR_NOT_APPROVED");
+      }
     }
 
     return {
@@ -110,11 +112,13 @@ export const authOptions: NextAuthOptions = {
         if (!user.emailVerifiedAt) {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
-        if (
-          user.role === UserRole.DOCTOR &&
-          user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
-        ) {
-          throw new Error("DOCTOR_NOT_APPROVED");
+        if (user.role === UserRole.DOCTOR) {
+          if (user.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
+            throw new Error("DOCTOR_REJECTED");
+          }
+          if (user.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED) {
+            throw new Error("DOCTOR_NOT_APPROVED");
+          }
         }
 
         return {
@@ -162,11 +166,13 @@ export const authOptions: NextAuthOptions = {
             },
           },
         });
-        if (
-          dbUser.role === UserRole.DOCTOR &&
-          dbUser.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED
-        ) {
-          throw new Error("DOCTOR_NOT_APPROVED");
+        if (dbUser.role === UserRole.DOCTOR) {
+          if (dbUser.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
+            throw new Error("DOCTOR_REJECTED");
+          }
+          if (dbUser.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED) {
+            throw new Error("DOCTOR_NOT_APPROVED");
+          }
         }
 
         token.id = dbUser.id;
