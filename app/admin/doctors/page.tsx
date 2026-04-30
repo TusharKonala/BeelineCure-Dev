@@ -224,121 +224,123 @@ export default function AdminDoctorsPage() {
               </p>
             </div>
           ) : (
-            <div className="mt-6 overflow-x-auto rounded-xl border border-[#e5e5e5]">
-              <table className="min-w-[980px] w-full border-collapse bg-white">
-                <thead className="bg-[#fafafa]">
-                  <tr>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Doctor
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Email
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Specialization
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      License
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Experience
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Created
-                    </th>
-                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleDoctors.map((doctor) => {
-                    const isBusy = busyDoctorId === doctor.id;
-                    const hasAccount = Boolean(doctor.userId);
-                    return (
-                      <tr key={doctor.id} className="border-t border-[#ededed] align-top">
-                        <td className="px-3 py-3">
-                          <div className="flex items-center gap-3">
-                            <div className="relative h-10 w-10 overflow-hidden rounded-full border border-[#e5e5e5] bg-[#f5f5f5]">
-                              <Image
-                                src={doctor.profilePhotoUrl}
-                                alt={doctor.name}
-                                fill
-                                sizes="40px"
-                                className="object-cover"
-                              />
-                            </div>
-                            <p className="font-montserrat text-sm font-medium text-[#333333]">
-                              {doctor.name}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">
-                          {doctor.email ?? "—"}
-                        </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
-                          {doctor.specialization}
-                        </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
-                          {doctor.licenseNumber}
-                        </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
-                          {doctor.yearsExperience != null
-                            ? `${doctor.yearsExperience} yrs`
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">
-                          {formatCreatedDate(doctor.createdAt)}
-                        </td>
-                        <td className="px-3 py-3">
-                          {doctor.approvalStatus === "PENDING" ? (
-                            hasAccount ? (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => void handleAction(doctor, "approve")}
-                                  className="cursor-pointer rounded-lg bg-[#2555F3] px-3 py-1.5 font-montserrat text-xs font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  Approve
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => void handleAction(doctor, "reject")}
-                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  Reject
-                                </button>
+            <>
+              <div className="mt-6 overflow-x-auto rounded-xl border border-[#e5e5e5]">
+                <table className="min-w-[980px] w-full border-collapse bg-white">
+                  <thead className="bg-[#fafafa]">
+                    <tr>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Doctor
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Email
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Specialization
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        License
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Experience
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Created
+                      </th>
+                      <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleDoctors.map((doctor) => {
+                      const isBusy = busyDoctorId === doctor.id;
+                      const hasAccount = Boolean(doctor.userId);
+                      return (
+                        <tr key={doctor.id} className="border-t border-[#ededed] align-top">
+                          <td className="px-3 py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="relative h-10 w-10 overflow-hidden rounded-full border border-[#e5e5e5] bg-[#f5f5f5]">
+                                <Image
+                                  src={doctor.profilePhotoUrl}
+                                  alt={doctor.name}
+                                  fill
+                                  sizes="40px"
+                                  className="object-cover"
+                                />
                               </div>
+                              <p className="font-montserrat text-sm font-medium text-[#333333]">
+                                {doctor.name}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">
+                            {doctor.email ?? "—"}
+                          </td>
+                          <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                            {doctor.specialization}
+                          </td>
+                          <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                            {doctor.licenseNumber}
+                          </td>
+                          <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
+                            {doctor.yearsExperience != null
+                              ? `${doctor.yearsExperience} yrs`
+                              : "—"}
+                          </td>
+                          <td className="px-3 py-3 font-montserrat text-sm text-[#5e5e5e]">
+                            {formatCreatedDate(doctor.createdAt)}
+                          </td>
+                          <td className="px-3 py-3">
+                            {doctor.approvalStatus === "PENDING" ? (
+                              hasAccount ? (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => void handleAction(doctor, "approve")}
+                                    className="cursor-pointer rounded-lg bg-[#2555F3] px-3 py-1.5 font-montserrat text-xs font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Approve
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => void handleAction(doctor, "reject")}
+                                    className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Reject
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full border border-[#e5e5e5] bg-[#fafafa] px-2.5 py-1 font-montserrat text-xs font-medium text-[#5e5e5e]">
+                                  No account linked
+                                </span>
+                              )
                             ) : (
-                              <span className="inline-flex items-center rounded-full border border-[#e5e5e5] bg-[#fafafa] px-2.5 py-1 font-montserrat text-xs font-medium text-[#5e5e5e]">
-                                No account linked
+                              <span className={statusBadgeClass(doctor.approvalStatus)}>
+                                {doctor.approvalStatus === "APPROVED"
+                                  ? "Approved"
+                                  : "Rejected"}
                               </span>
-                            )
-                          ) : (
-                            <span className={statusBadgeClass(doctor.approvalStatus)}>
-                              {doctor.approvalStatus === "APPROVED"
-                                ? "Approved"
-                                : "Rejected"}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-          {(hasMore || loading) && visibleDoctors.length > 0 && (
-            <div
-              ref={sentryRef}
-              className="py-4 text-center font-montserrat text-sm text-[#5E5E5E]"
-            >
-              {loading ? "Loading..." : "Scroll for more"}
-            </div>
+              {(hasMore || loading) && visibleDoctors.length > 0 && (
+                <div
+                  ref={sentryRef}
+                  className="py-4 text-center font-montserrat text-sm text-[#5E5E5E]"
+                >
+                  {loading ? "Loading..." : "Scroll for more"}
+                </div>
+              )}
+            </>
           )}
         </section>
       </Container>
