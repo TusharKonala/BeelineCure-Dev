@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:reviews": "tsx prisma/seed-reviews.ts",
     "db:seed:admin": "tsx prisma/seed-admin.ts"
   },
   "prisma": {
