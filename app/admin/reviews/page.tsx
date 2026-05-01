@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Star } from "lucide-react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
@@ -67,7 +68,29 @@ export default function AdminReviewsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyReviewId, setBusyReviewId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminReview | null>(null);
+  const [mounted, setMounted] = useState(false);
   const latestRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busyReviewId) {
+        setDeleteTarget(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [deleteTarget, busyReviewId]);
 
   const loadReviews = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
@@ -123,16 +146,12 @@ export default function AdminReviewsPage() {
     rootMargin: "0px 0px 300px 0px",
   });
 
-  const handleDelete = async (review: AdminReview) => {
-    const confirmed = window.confirm(
-      `Delete this review from ${review.patientName ?? "Unknown patient"} for Dr. ${review.doctorName}?`,
-    );
-    if (!confirmed) return;
-
-    setBusyReviewId(review.id);
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setBusyReviewId(deleteTarget.id);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/reviews/${review.id}`, {
+      const response = await fetch(`/api/admin/reviews/${deleteTarget.id}`, {
         method: "DELETE",
       });
 
@@ -141,6 +160,7 @@ export default function AdminReviewsPage() {
         return;
       }
 
+      setDeleteTarget(null);
       await loadReviews(1, false);
     } catch {
       setError("Failed to delete review. Please try again.");
@@ -263,7 +283,7 @@ export default function AdminReviewsPage() {
                             <button
                               type="button"
                               disabled={isBusy}
-                              onClick={() => void handleDelete(review)}
+                              onClick={() => setDeleteTarget(review)}
                               className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {isBusy ? "Deleting..." : "Delete"}
@@ -288,6 +308,68 @@ export default function AdminReviewsPage() {
           )}
         </section>
       </Container>
+      {mounted &&
+        deleteTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-review-delete-title"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default bg-black/40"
+              aria-label="Close dialog"
+              onClick={() => {
+                if (!busyReviewId) {
+                  setDeleteTarget(null);
+                }
+              }}
+            />
+            <div
+              className="relative z-[1] w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-lg"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2
+                id="admin-review-delete-title"
+                className="font-montaga text-xl font-semibold text-[#333333]"
+              >
+                Delete review?
+              </h2>
+              <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                This will permanently remove the review from{" "}
+                <span className="font-medium text-[#333333]">
+                  {deleteTarget.patientName ?? "Unknown patient"}
+                </span>{" "}
+                for{" "}
+                <span className="font-medium text-[#333333]">
+                  Dr. {deleteTarget.doctorName}
+                </span>
+                .
+              </p>
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={Boolean(busyReviewId)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void handleDeleteConfirm()}
+                  disabled={Boolean(busyReviewId)}
+                >
+                  {busyReviewId ? "Deleting..." : "Delete review"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
