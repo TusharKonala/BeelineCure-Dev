@@ -24,6 +24,21 @@ type AdminDoctor = {
   createdAt: string;
 };
 
+type DeactivationImpact = {
+  futurePaidOnlineCount: number;
+  futureClinicCount: number;
+  futureOnlineUnpaidCount: number;
+  totalFutureCount: number;
+  farthestAppointment: {
+    doctorDateLabel: string;
+    doctorTimeLabel: string;
+    doctorTimezone: string;
+    viewerDateLabel?: string;
+    viewerTimeLabel?: string;
+    viewerTimezone?: string;
+  } | null;
+};
+
 /** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` inset. */
 const SELECT_CHEVRON =
   'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
@@ -70,6 +85,10 @@ export default function AdminDoctorsPage() {
   const [error, setError] = useState<string | null>(null);
   const [busyDoctorId, setBusyDoctorId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminDoctor | null>(null);
+  const [deactivationImpact, setDeactivationImpact] =
+    useState<DeactivationImpact | null>(null);
+  const [deactivationImpactLoading, setDeactivationImpactLoading] =
+    useState(false);
   const [mounted, setMounted] = useState(false);
   const latestRequestIdRef = useRef(0);
 
@@ -92,6 +111,43 @@ export default function AdminDoctorsPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [deleteTarget, busyDoctorId]);
+
+  useEffect(() => {
+    if (!deleteTarget) {
+      setDeactivationImpact(null);
+      setDeactivationImpactLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDeactivationImpact(null);
+    setDeactivationImpactLoading(true);
+    const viewerTz =
+      typeof Intl !== "undefined"
+        ? Intl.DateTimeFormat().resolvedOptions().timeZone
+        : "";
+    const viewerParam =
+      viewerTz.length > 0
+        ? `?viewerTz=${encodeURIComponent(viewerTz)}`
+        : "";
+    void fetch(`/api/admin/doctors/${deleteTarget.id}${viewerParam}`, {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok || cancelled) return;
+        const data = (await response.json()) as DeactivationImpact;
+        if (cancelled) return;
+        setDeactivationImpact(data);
+      })
+      .catch(() => {
+        if (!cancelled) setDeactivationImpact(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDeactivationImpactLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deleteTarget]);
 
   const loadDoctors = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
@@ -495,9 +551,143 @@ export default function AdminDoctorsPage() {
                   {formatDoctorDisplayName(deleteTarget.name)}
                 </span>{" "}
                 will be marked inactive and hidden from public listings and default admin lists.
-                Future appointments will be cancelled, and eligible patients will receive full
-                refunds. Past records will be preserved.
+                Upcoming appointments will be cancelled; paid online consultations receive a full
+                refund. Past records will be preserved.
               </p>
+              <div className="mt-4 rounded-lg border border-[#ededed] bg-[#fafafa] p-4 font-montserrat text-sm text-[#333333]">
+                {deactivationImpactLoading ? (
+                  <p className="text-[#5E5E5E]">Loading upcoming appointments…</p>
+                ) : deactivationImpact ? (
+                  <>
+                    {deactivationImpact.totalFutureCount === 0 ? (
+                      <p className="text-[#5E5E5E]">
+                        No upcoming appointments to cancel.
+                      </p>
+                    ) : (
+                      <>
+                        <ul className="list-disc space-y-2 pl-5 text-[#333333]">
+                          <li>
+                            <span className="font-medium">Online (paid)</span>
+                            {": "}
+                            {deactivationImpact.futurePaidOnlineCount}{" "}
+                            {deactivationImpact.futurePaidOnlineCount === 1
+                              ? "appointment"
+                              : "appointments"}{" "}
+                            — will be refunded
+                          </li>
+                          <li>
+                            <span className="font-medium">Clinic visits</span>
+                            {": "}
+                            {deactivationImpact.futureClinicCount}{" "}
+                            {deactivationImpact.futureClinicCount === 1
+                              ? "appointment"
+                              : "appointments"}{" "}
+                            — will not be refunded
+                          </li>
+                          {deactivationImpact.futureOnlineUnpaidCount > 0 ? (
+                            <li>
+                              <span className="font-medium">Online (unpaid)</span>
+                              {": "}
+                              {deactivationImpact.futureOnlineUnpaidCount}{" "}
+                              {deactivationImpact.futureOnlineUnpaidCount === 1
+                                ? "appointment"
+                                : "appointments"}{" "}
+                              — will not be refunded
+                            </li>
+                          ) : null}
+                        </ul>
+                        {deactivationImpact.farthestAppointment ? (
+                          <div className="mt-3 space-y-2 text-[#5E5E5E]">
+                            <p>
+                              <span className="font-medium text-[#333333]">
+                                Farthest upcoming appointment
+                              </span>
+                              {deactivationImpact.farthestAppointment
+                                .viewerDateLabel != null &&
+                              deactivationImpact.farthestAppointment
+                                .viewerTimeLabel != null &&
+                              deactivationImpact.farthestAppointment
+                                .viewerTimezone != null ? (
+                                <>
+                                  {": "}
+                                  {
+                                    deactivationImpact.farthestAppointment
+                                      .viewerDateLabel
+                                  }{" "}
+                                  at{" "}
+                                  {
+                                    deactivationImpact.farthestAppointment
+                                      .viewerTimeLabel
+                                  }
+                                  <span className="text-[#5E5E5E]">
+                                    {" "}
+                                    (
+                                    {
+                                      deactivationImpact.farthestAppointment
+                                        .viewerTimezone
+                                    }
+                                    , your time)
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  {": "}
+                                  {
+                                    deactivationImpact.farthestAppointment
+                                      .doctorDateLabel
+                                  }{" "}
+                                  at{" "}
+                                  {
+                                    deactivationImpact.farthestAppointment
+                                      .doctorTimeLabel
+                                  }
+                                  <span className="text-[#5E5E5E]">
+                                    {" "}
+                                    (
+                                    {
+                                      deactivationImpact.farthestAppointment
+                                        .doctorTimezone
+                                    }
+                                    )
+                                  </span>
+                                </>
+                              )}
+                            </p>
+                            {deactivationImpact.farthestAppointment
+                              .viewerDateLabel != null &&
+                            deactivationImpact.farthestAppointment
+                              .viewerTimezone != null ? (
+                              <p className="text-xs text-[#6b7280]">
+                                Doctor&apos;s local:{" "}
+                                {
+                                  deactivationImpact.farthestAppointment
+                                    .doctorDateLabel
+                                }{" "}
+                                at{" "}
+                                {
+                                  deactivationImpact.farthestAppointment
+                                    .doctorTimeLabel
+                                }{" "}
+                                (
+                                {
+                                  deactivationImpact.farthestAppointment
+                                    .doctorTimezone
+                                }
+                                )
+                              </p>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[#5E5E5E]">
+                    Could not load appointment summary. You can still deactivate; cancellation
+                    runs on confirm.
+                  </p>
+                )}
+              </div>
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button
                   type="button"
