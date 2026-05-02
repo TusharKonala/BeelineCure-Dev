@@ -106,6 +106,20 @@ export function formatTimeInDoctorTz(
 }
 
 /**
+ * Returns true if `timeZone` is a valid IANA time zone for Intl (e.g. for query params).
+ */
+export function isValidIanaTimeZone(timeZone: string): boolean {
+  const trimmed = timeZone.trim();
+  if (!trimmed) return false;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: trimmed }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check whether a doctor-local appointment time is in the past.
  */
 export function isDoctorTimeInPast(
