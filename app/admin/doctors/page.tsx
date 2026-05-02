@@ -5,6 +5,7 @@ import Image from "next/image";
 import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 type ApprovalTab = "PENDING" | "APPROVED" | "REJECTED";
 type ActivityTab = "active" | "inactive";
@@ -490,8 +491,10 @@ export default function AdminDoctorsPage() {
                 Deactivate doctor?
               </h2>
               <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
-                Dr. <span className="font-medium text-[#333333]">{deleteTarget.name}</span> will
-                be marked inactive and hidden from public listings and default admin lists.
+                <span className="font-medium text-[#333333]">
+                  {formatDoctorDisplayName(deleteTarget.name)}
+                </span>{" "}
+                will be marked inactive and hidden from public listings and default admin lists.
                 Future appointments will be cancelled, and eligible patients will receive full
                 refunds. Past records will be preserved.
               </p>
