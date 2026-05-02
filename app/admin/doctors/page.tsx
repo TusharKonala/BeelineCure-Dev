@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
 
 type ApprovalTab = "PENDING" | "APPROVED" | "REJECTED";
+type ActivityTab = "active" | "inactive";
 
 type AdminDoctor = {
   id: string;
@@ -17,6 +19,7 @@ type AdminDoctor = {
   yearsExperience: number | null;
   profilePhotoUrl: string;
   approvalStatus: ApprovalTab;
+  isActive: boolean;
   createdAt: string;
 };
 
@@ -28,6 +31,11 @@ const tabItems: Array<{ key: ApprovalTab; label: string }> = [
   { key: "PENDING", label: "Pending" },
   { key: "APPROVED", label: "Approved" },
   { key: "REJECTED", label: "Rejected" },
+];
+
+const activityItems: Array<{ key: ActivityTab; label: string }> = [
+  { key: "active", label: "Active" },
+  { key: "inactive", label: "Inactive" },
 ];
 
 function statusBadgeClass(status: ApprovalTab) {
@@ -55,11 +63,34 @@ export default function AdminDoctorsPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [activeTab, setActiveTab] = useState<ApprovalTab>("PENDING");
+  const [activityTab, setActivityTab] = useState<ActivityTab>("active");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyDoctorId, setBusyDoctorId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminDoctor | null>(null);
+  const [mounted, setMounted] = useState(false);
   const latestRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!deleteTarget) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !busyDoctorId) {
+        setDeleteTarget(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [deleteTarget, busyDoctorId]);
 
   const loadDoctors = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
@@ -70,6 +101,7 @@ export default function AdminDoctorsPage() {
         page: String(nextPage),
         limit: "10",
         status: activeTab,
+        activity: activityTab,
       });
       if (query.trim()) params.set("search", query.trim());
       const response = await fetch(`/api/admin/doctors?${params.toString()}`, {
@@ -97,7 +129,7 @@ export default function AdminDoctorsPage() {
       if (latestRequestIdRef.current !== requestId) return;
       setLoading(false);
     }
-  }, [activeTab, query]);
+  }, [activeTab, activityTab, query]);
 
   useEffect(() => {
     void loadDoctors(1, false);
@@ -116,7 +148,7 @@ export default function AdminDoctorsPage() {
     setBusyDoctorId(doctor.id);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/doctors/${doctor.userId}/approval`, {
+      const response = await fetch(`/api/admin/doctors/${doctor.id}/approval`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -138,6 +170,27 @@ export default function AdminDoctorsPage() {
           ? "Failed to approve doctor. Please try again."
           : "Failed to reject doctor. Please try again.",
       );
+    } finally {
+      setBusyDoctorId(null);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setBusyDoctorId(deleteTarget.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/admin/doctors/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        setError("Failed to deactivate doctor. Please try again.");
+        return;
+      }
+      setDeleteTarget(null);
+      await loadDoctors(1, false);
+    } catch {
+      setError("Failed to deactivate doctor. Please try again.");
     } finally {
       setBusyDoctorId(null);
     }
@@ -170,6 +223,22 @@ export default function AdminDoctorsPage() {
           </div>
 
           <div className="mt-4 grid gap-3 md:hidden">
+            <label className="sr-only" htmlFor="admin-doctor-activity">
+              Filter doctors by activity
+            </label>
+            <select
+              id="admin-doctor-activity"
+              value={activityTab}
+              onChange={(event) => setActivityTab(event.target.value as ActivityTab)}
+              className={`cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
+            >
+              {activityItems.map((tab) => (
+                <option key={tab.key} value={tab.key}>
+                  {tab.label}
+                </option>
+              ))}
+            </select>
+
             <label className="sr-only" htmlFor="admin-doctor-tab">
               Filter doctors by status
             </label>
@@ -185,6 +254,26 @@ export default function AdminDoctorsPage() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="mt-4 hidden flex-wrap gap-2 md:flex">
+            {activityItems.map((tab) => {
+              const active = activityTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setActivityTab(tab.key)}
+                  className={`cursor-pointer rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
+                    active
+                      ? "bg-[#111827] text-white"
+                      : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
           <div className="mt-4 hidden flex-wrap gap-2 md:flex">
@@ -292,7 +381,11 @@ export default function AdminDoctorsPage() {
                             {formatCreatedDate(doctor.createdAt)}
                           </td>
                           <td className="px-3 py-3">
-                            {doctor.approvalStatus === "PENDING" ? (
+                            {!doctor.isActive ? (
+                              <span className="inline-flex items-center rounded-full border border-[#d0d5dd] bg-[#f8f9fb] px-2.5 py-1 font-montserrat text-xs font-medium text-[#344054]">
+                                Inactive
+                              </span>
+                            ) : doctor.approvalStatus === "PENDING" ? (
                               hasAccount ? (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <button
@@ -311,18 +404,41 @@ export default function AdminDoctorsPage() {
                                   >
                                     Reject
                                   </button>
+                                  <button
+                                    type="button"
+                                    disabled={isBusy}
+                                    onClick={() => setDeleteTarget(doctor)}
+                                    className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    Delete
+                                  </button>
                                 </div>
                               ) : (
-                                <span className="inline-flex items-center rounded-full border border-[#e5e5e5] bg-[#fafafa] px-2.5 py-1 font-montserrat text-xs font-medium text-[#5e5e5e]">
-                                  No account linked
-                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => setDeleteTarget(doctor)}
+                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Delete
+                                </button>
                               )
                             ) : (
-                              <span className={statusBadgeClass(doctor.approvalStatus)}>
-                                {doctor.approvalStatus === "APPROVED"
-                                  ? "Approved"
-                                  : "Rejected"}
-                              </span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={statusBadgeClass(doctor.approvalStatus)}>
+                                  {doctor.approvalStatus === "APPROVED"
+                                    ? "Approved"
+                                    : "Rejected"}
+                                </span>
+                                <button
+                                  type="button"
+                                  disabled={isBusy}
+                                  onClick={() => setDeleteTarget(doctor)}
+                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  Delete
+                                </button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -344,6 +460,63 @@ export default function AdminDoctorsPage() {
           )}
         </section>
       </Container>
+      {mounted &&
+        deleteTarget &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-100 flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-doctor-delete-title"
+          >
+            <button
+              type="button"
+              className="absolute inset-0 cursor-default bg-black/40"
+              aria-label="Close dialog"
+              onClick={() => {
+                if (!busyDoctorId) {
+                  setDeleteTarget(null);
+                }
+              }}
+            />
+            <div
+              className="relative z-1 w-full max-w-lg rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-lg"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <h2
+                id="admin-doctor-delete-title"
+                className="font-montaga text-xl font-semibold text-[#333333]"
+              >
+                Deactivate doctor?
+              </h2>
+              <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                Dr. <span className="font-medium text-[#333333]">{deleteTarget.name}</span> will
+                be marked inactive and hidden from public listings and default admin lists.
+                Future appointments will be cancelled, and eligible patients will receive full
+                refunds. Past records will be preserved.
+              </p>
+              <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={Boolean(busyDoctorId)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void handleDeleteConfirm()}
+                  disabled={Boolean(busyDoctorId)}
+                >
+                  {busyDoctorId ? "Deactivating..." : "Deactivate doctor"}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
