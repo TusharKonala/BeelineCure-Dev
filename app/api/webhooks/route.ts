@@ -253,28 +253,8 @@ export async function POST(request: NextRequest) {
       console.error("[webhooks] Confirmation email failed:", emailError);
     }
 
-    try {
-      const formattedDate = formatDateInPatientTz(
-        bookingSession.date,
-        bookingSession.time,
-        bookingSession.timezone,
-        bookingSession.patientTimezone,
-      );
-      const formattedTime = formatTimeInPatientTz(
-        bookingSession.date,
-        bookingSession.time,
-        bookingSession.timezone,
-        bookingSession.patientTimezone,
-      );
-      await createAppointmentNotificationForEmail({
-        patientEmail: appointment.email,
-        type: NotificationType.APPOINTMENT_BOOKED,
-        title: "Appointment booked",
-        message: `Your appointment with ${formatDoctorDisplayName(doctor.name)} is confirmed for ${formattedDate} at ${formattedTime}.`,
-      });
-    } catch (err) {
-      console.error("[webhooks] Failed to create patient notification:", err);
-    }
+    // No in-app patient notification after Stripe checkout: email + payment-success
+    // page already confirm; avoids toast duplication from notification polling.
 
     try {
       const doctorDateLabel = formatDateInDoctorTz(

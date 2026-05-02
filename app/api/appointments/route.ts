@@ -28,11 +28,7 @@ import {
   formatTimeInDoctorTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import {
-  createAppointmentNotificationForEmail,
-  createDoctorNotificationForDoctorId,
-} from "@/lib/notifications";
-import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { createDoctorNotificationForDoctorId } from "@/lib/notifications";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { fromZonedTime } from "date-fns-tz";
 
@@ -319,28 +315,8 @@ export async function POST(request: NextRequest) {
     console.error("[appointments] Confirmation email failed:", err);
   }
 
-  try {
-    const formattedDate = formatDateInPatientTz(
-      dateParam,
-      time,
-      doctorTimezone,
-      patientTimezone,
-    );
-    const formattedTime = formatTimeInPatientTz(
-      dateParam,
-      time,
-      doctorTimezone,
-      patientTimezone,
-    );
-    await createAppointmentNotificationForEmail({
-      patientEmail: email,
-      type: NotificationType.APPOINTMENT_BOOKED,
-      title: "Appointment booked",
-      message: `Your appointment with ${formatDoctorDisplayName(doctor.name)} is confirmed for ${formattedDate} at ${formattedTime}.`,
-    });
-  } catch (err) {
-    console.error("[appointments] Failed to create patient notification:", err);
-  }
+  // No in-app patient notification for self-service booking: confirmation email
+  // and the on-page success state are enough; avoids duplicate toasts from polling.
 
   try {
     const doctorDateLabel = formatDateInDoctorTz(dateParam, time, doctorTimezone);
