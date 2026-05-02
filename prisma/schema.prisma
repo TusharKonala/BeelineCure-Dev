@@ -163,6 +163,9 @@ model Doctor {
   approvalStatus   DoctorApprovalStatus @default(PENDING)
   approvedAt       DateTime?
   approvedByUserId String?
+  isActive         Boolean              @default(true)
+  deactivatedAt    DateTime?
+  deactivatedByUserId String?
   lastSeenAt       DateTime?
   /// Doctor Google Calendar OAuth — set when the doctor connects Google Calendar from their dashboard.
   googleCalendarAccessToken          String?   @db.Text
