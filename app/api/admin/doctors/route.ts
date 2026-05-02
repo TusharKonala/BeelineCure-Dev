@@ -15,10 +15,12 @@ export async function GET(request: NextRequest) {
 
   const search = (request.nextUrl.searchParams.get("search") ?? "").trim();
   const rawStatus = request.nextUrl.searchParams.get("status");
+  const rawActivity = request.nextUrl.searchParams.get("activity");
   const status =
     rawStatus === "PENDING" || rawStatus === "APPROVED" || rawStatus === "REJECTED"
       ? rawStatus
       : null;
+  const activity = rawActivity === "inactive" ? "inactive" : "active";
   const page = Math.max(
     1,
     Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
@@ -29,6 +31,7 @@ export async function GET(request: NextRequest) {
   );
 
   const where: Prisma.DoctorWhereInput = {};
+  where.isActive = activity !== "inactive";
   if (status) {
     where.approvalStatus = status as DoctorApprovalStatus;
   }
@@ -58,6 +61,7 @@ export async function GET(request: NextRequest) {
         yearsExperience: true,
         profilePhotoUrl: true,
         approvalStatus: true,
+        isActive: true,
         createdAt: true,
         user: {
           select: {
@@ -85,6 +89,7 @@ export async function GET(request: NextRequest) {
       yearsExperience: doctor.yearsExperience,
       profilePhotoUrl: doctor.profilePhotoUrl,
       approvalStatus: doctor.approvalStatus,
+      isActive: doctor.isActive,
       createdAt: doctor.createdAt.toISOString(),
     })),
     hasMore: skip + doctors.length < total,
