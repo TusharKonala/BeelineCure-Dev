@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 
 export async function POST(
   _request: Request,
-  context: { params: Promise<{ userId: string }> },
+  context: { params: Promise<{ doctorId: string }> },
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -16,21 +16,27 @@ export async function POST(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { userId } = await context.params;
-  if (!userId) {
-    return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
+  const { doctorId } = await context.params;
+  if (!doctorId) {
+    return NextResponse.json({ error: "Invalid doctor id" }, { status: 400 });
   }
 
   const doctor = await prisma.doctor.findUnique({
-    where: { userId },
-    select: { id: true },
+    where: { id: doctorId },
+    select: { id: true, userId: true },
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
   }
+  if (!doctor.userId) {
+    return NextResponse.json(
+      { error: "This doctor has no user account; approval is not applicable." },
+      { status: 400 },
+    );
+  }
 
   await prisma.doctor.update({
-    where: { userId },
+    where: { id: doctorId },
     data: {
       approvalStatus: DoctorApprovalStatus.APPROVED,
       approvedAt: new Date(),
