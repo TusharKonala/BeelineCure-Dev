@@ -72,7 +72,10 @@ export async function GET(request: NextRequest) {
     recentBookingsRaw,
   ] = await Promise.all([
     prisma.doctor.count({
-      where: { approvalStatus: DoctorApprovalStatus.APPROVED },
+      where: {
+        approvalStatus: DoctorApprovalStatus.APPROVED,
+        isActive: true,
+      },
     }),
     prisma.user.count({
       where: { role: UserRole.PATIENT },
