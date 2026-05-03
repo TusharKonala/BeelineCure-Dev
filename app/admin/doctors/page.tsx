@@ -157,9 +157,11 @@ export default function AdminDoctorsPage() {
       const params = new URLSearchParams({
         page: String(nextPage),
         limit: "10",
-        status: activeTab,
         activity: activityTab,
       });
+      if (activityTab === "active") {
+        params.set("status", activeTab);
+      }
       if (query.trim()) params.set("search", query.trim());
       const response = await fetch(`/api/admin/doctors?${params.toString()}`, {
         cache: "no-store",
@@ -199,6 +201,17 @@ export default function AdminDoctorsPage() {
     disabled: false,
     rootMargin: "0px 0px 300px 0px",
   });
+
+  const approvalFilterDisabled = activityTab === "inactive";
+
+  const handleActivityTabChange = useCallback((next: ActivityTab) => {
+    if (next === "active") {
+      setActivityTab("active");
+      setActiveTab("PENDING");
+    } else {
+      setActivityTab("inactive");
+    }
+  }, []);
 
   const handleAction = async (doctor: AdminDoctor, action: "approve" | "reject") => {
     if (!doctor.userId) return;
@@ -286,7 +299,9 @@ export default function AdminDoctorsPage() {
             <select
               id="admin-doctor-activity"
               value={activityTab}
-              onChange={(event) => setActivityTab(event.target.value as ActivityTab)}
+              onChange={(event) =>
+                handleActivityTabChange(event.target.value as ActivityTab)
+              }
               className={`cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
             >
               {activityItems.map((tab) => (
@@ -302,8 +317,14 @@ export default function AdminDoctorsPage() {
             <select
               id="admin-doctor-tab"
               value={activeTab}
+              disabled={approvalFilterDisabled}
+              aria-disabled={approvalFilterDisabled}
               onChange={(event) => setActiveTab(event.target.value as ApprovalTab)}
-              className={`cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
+              className={`rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON} ${
+                approvalFilterDisabled
+                  ? "cursor-not-allowed opacity-50"
+                  : "cursor-pointer"
+              }`}
             >
               {tabItems.map((tab) => (
                 <option key={tab.key} value={tab.key}>
@@ -320,7 +341,7 @@ export default function AdminDoctorsPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActivityTab(tab.key)}
+                  onClick={() => handleActivityTabChange(tab.key)}
                   className={`cursor-pointer rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
                     active
                       ? "bg-[#111827] text-white"
@@ -335,16 +356,20 @@ export default function AdminDoctorsPage() {
 
           <div className="mt-4 hidden flex-wrap gap-2 md:flex">
             {tabItems.map((tab) => {
-              const active = activeTab === tab.key;
+              const selected = !approvalFilterDisabled && activeTab === tab.key;
               return (
                 <button
                   key={tab.key}
                   type="button"
+                  disabled={approvalFilterDisabled}
+                  aria-disabled={approvalFilterDisabled}
                   onClick={() => setActiveTab(tab.key)}
-                  className={`cursor-pointer rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
-                    active
-                      ? "bg-[#2555F3] text-white"
-                      : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+                  className={`rounded-full px-4 py-2 font-montserrat text-sm transition-colors ${
+                    approvalFilterDisabled
+                      ? "cursor-not-allowed border border-[#e5e5e5] bg-[#f3f4f6] text-[#9ca3af]"
+                      : selected
+                        ? "cursor-pointer bg-[#2555F3] text-white"
+                        : "cursor-pointer border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
                   }`}
                 >
                   {tab.label}
@@ -438,11 +463,17 @@ export default function AdminDoctorsPage() {
                             {formatCreatedDate(doctor.createdAt)}
                           </td>
                           <td className="px-3 py-3">
-                            {!doctor.isActive ? (
-                              <span className="inline-flex items-center rounded-full border border-[#d0d5dd] bg-[#f8f9fb] px-2.5 py-1 font-montserrat text-xs font-medium text-[#344054]">
-                                Inactive
+                            {activityTab === "inactive" ? (
+                              <span
+                                className={statusBadgeClass(doctor.approvalStatus)}
+                              >
+                                {doctor.approvalStatus === "APPROVED"
+                                  ? "Approved"
+                                  : doctor.approvalStatus === "REJECTED"
+                                    ? "Rejected"
+                                    : "Pending"}
                               </span>
-                            ) : doctor.approvalStatus === "PENDING" ? (
+                            ) : activeTab === "PENDING" ? (
                               hasAccount ? (
                                 <div className="flex flex-wrap items-center gap-2">
                                   <button
@@ -461,41 +492,25 @@ export default function AdminDoctorsPage() {
                                   >
                                     Reject
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={isBusy}
-                                    onClick={() => setDeleteTarget(doctor)}
-                                    className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    Delete
-                                  </button>
                                 </div>
                               ) : (
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => setDeleteTarget(doctor)}
-                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  Delete
-                                </button>
-                              )
-                            ) : (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className={statusBadgeClass(doctor.approvalStatus)}>
-                                  {doctor.approvalStatus === "APPROVED"
-                                    ? "Approved"
-                                    : "Rejected"}
+                                <span className="font-montserrat text-sm text-[#9ca3af]">
+                                  —
                                 </span>
-                                <button
-                                  type="button"
-                                  disabled={isBusy}
-                                  onClick={() => setDeleteTarget(doctor)}
-                                  className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              )
+                            ) : activeTab === "APPROVED" ? (
+                              <button
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => setDeleteTarget(doctor)}
+                                className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#b42318] transition-colors hover:bg-[#fafafa] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Delete
+                              </button>
+                            ) : (
+                              <span className={statusBadgeClass("REJECTED")}>
+                                Rejected
+                              </span>
                             )}
                           </td>
                         </tr>
