@@ -28,7 +28,6 @@ import {
   createDoctorNotificationForDoctorId,
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
-import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { createMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
 import { coerceSupportedCurrency } from "@/lib/currency";
 import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
@@ -105,8 +104,11 @@ export async function POST(request: NextRequest) {
       return new NextResponse("OK", { status: 200 });
     }
 
-    const doctor = await prisma.doctor.findFirst({
-      where: publicDoctorByIdWhere(bookingSession.doctorId),
+    // Payment already succeeded — always create the appointment regardless of
+    // the doctor's current visibility (e.g. admin deactivation between checkout
+    // start and webhook delivery). Look up by id only; no isActive filter.
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: bookingSession.doctorId },
     });
 
     if (!doctor) {
