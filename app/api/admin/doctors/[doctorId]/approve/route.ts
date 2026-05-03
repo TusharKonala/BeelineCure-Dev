@@ -41,6 +41,7 @@ export async function POST(
       approvalStatus: DoctorApprovalStatus.APPROVED,
       approvedAt: new Date(),
       approvedByUserId: session.user.id,
+      isActive: true,
     },
   });
 

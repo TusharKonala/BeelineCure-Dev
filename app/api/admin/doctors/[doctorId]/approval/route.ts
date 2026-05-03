@@ -54,11 +54,13 @@ export async function PATCH(
             approvalStatus: DoctorApprovalStatus.APPROVED,
             approvedAt: new Date(),
             approvedByUserId: session.user.id,
+            isActive: true,
           }
         : {
             approvalStatus: DoctorApprovalStatus.REJECTED,
             approvedAt: null,
             approvedByUserId: null,
+            isActive: false,
           },
   });
 
