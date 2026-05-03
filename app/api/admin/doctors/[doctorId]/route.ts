@@ -7,7 +7,6 @@ import {
   summarizeFutureAppointmentsForDeactivation,
 } from "@/lib/admin-doctor-deactivation";
 import { prisma } from "@/lib/db";
-import { cancelAppointmentByDoctor } from "@/lib/doctor-cancellations";
 import {
   formatDateInDoctorTz,
   formatDateInPatientTz,
@@ -131,32 +130,8 @@ export async function DELETE(
     });
   }
 
-  const futureAppointments = await getFutureActiveAppointmentsForDoctor(doctor.id);
-
-  let cancelledAppointments = 0;
-  for (const appointment of futureAppointments) {
-    const result = await cancelAppointmentByDoctor({
-      appointmentId: appointment.id,
-      doctorId: doctor.id,
-      reason: "doctor_unavailable",
-      requestOrigin: request.nextUrl.origin,
-    });
-
-    if (result.ok) {
-      cancelledAppointments += 1;
-      continue;
-    }
-    if (result.code === "ALREADY_CANCELLED" || result.code === "COMPLETED") {
-      continue;
-    }
-    return NextResponse.json(
-      {
-        error:
-          "Failed to cancel one or more future appointments while deactivating doctor.",
-      },
-      { status: 500 },
-    );
-  }
+  // Do not mass-cancel future appointments here. The doctor stays able to sign in
+  // (while upcoming work remains) and cancel from the dashboard so refunds follow policy.
 
   await prisma.doctor.update({
     where: { id: doctor.id },
@@ -170,6 +145,6 @@ export async function DELETE(
   return NextResponse.json({
     ok: true,
     alreadyInactive: false,
-    cancelledAppointments,
+    cancelledAppointments: 0,
   });
 }

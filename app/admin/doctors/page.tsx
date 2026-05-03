@@ -565,9 +565,10 @@ export default function AdminDoctorsPage() {
                 <span className="font-medium text-[#333333]">
                   {formatDoctorDisplayName(deleteTarget.name)}
                 </span>{" "}
-                will be marked inactive and hidden from public listings and default admin lists.
-                Upcoming appointments will be cancelled; paid online consultations receive a full
-                refund. Past records will be preserved.
+                will be marked inactive and hidden from public booking. Existing upcoming
+                appointments are not auto-cancelled — the doctor can sign in to view and cancel
+                them from their dashboard (refunds follow your cancellation policy). Past records
+                are preserved.
               </p>
               <div className="mt-4 rounded-lg border border-[#ededed] bg-[#fafafa] p-4 font-montserrat text-sm text-[#333333]">
                 {deactivationImpactLoading ? (
@@ -576,10 +577,14 @@ export default function AdminDoctorsPage() {
                   <>
                     {deactivationImpact.totalFutureCount === 0 ? (
                       <p className="text-[#5E5E5E]">
-                        No upcoming appointments to cancel.
+                        No upcoming appointments on the schedule.
                       </p>
                     ) : (
                       <>
+                        <p className="mb-2 text-[#5E5E5E]">
+                          Upcoming appointments that remain for the doctor to manage from their
+                          dashboard:
+                        </p>
                         <ul className="list-disc space-y-2 pl-5 text-[#333333]">
                           <li>
                             <span className="font-medium">Online (paid)</span>
@@ -587,8 +592,7 @@ export default function AdminDoctorsPage() {
                             {deactivationImpact.futurePaidOnlineCount}{" "}
                             {deactivationImpact.futurePaidOnlineCount === 1
                               ? "appointment"
-                              : "appointments"}{" "}
-                            — will be refunded
+                              : "appointments"}
                           </li>
                           <li>
                             <span className="font-medium">Clinic visits</span>
@@ -596,8 +600,7 @@ export default function AdminDoctorsPage() {
                             {deactivationImpact.futureClinicCount}{" "}
                             {deactivationImpact.futureClinicCount === 1
                               ? "appointment"
-                              : "appointments"}{" "}
-                            — will not be refunded
+                              : "appointments"}
                           </li>
                           {deactivationImpact.futureOnlineUnpaidCount > 0 ? (
                             <li>
@@ -606,8 +609,7 @@ export default function AdminDoctorsPage() {
                               {deactivationImpact.futureOnlineUnpaidCount}{" "}
                               {deactivationImpact.futureOnlineUnpaidCount === 1
                                 ? "appointment"
-                                : "appointments"}{" "}
-                              — will not be refunded
+                                : "appointments"}
                             </li>
                           ) : null}
                         </ul>
@@ -698,8 +700,7 @@ export default function AdminDoctorsPage() {
                   </>
                 ) : (
                   <p className="text-[#5E5E5E]">
-                    Could not load appointment summary. You can still deactivate; cancellation
-                    runs on confirm.
+                    Could not load appointment summary. You can still deactivate the doctor.
                   </p>
                 )}
               </div>
