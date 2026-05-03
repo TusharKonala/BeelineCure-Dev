@@ -30,10 +30,20 @@ export async function GET(request: NextRequest) {
     Math.max(5, Number(request.nextUrl.searchParams.get("limit") ?? "10") || 10),
   );
 
+  // Pending (and rejected) account-backed doctors use isActive=false until approved /
+  // per lifecycle — so filtering activity "active" with isActive:true hides every
+  // PENDING row. Match approval tab without isActive for PENDING and REJECTED; only
+  // Approved uses isActive together with the activity toggle (live vs deactivated).
   const where: Prisma.DoctorWhereInput = {};
-  where.isActive = activity !== "inactive";
-  if (status) {
-    where.approvalStatus = status as DoctorApprovalStatus;
+  if (status === "PENDING") {
+    where.approvalStatus = DoctorApprovalStatus.PENDING;
+  } else if (status === "REJECTED") {
+    where.approvalStatus = DoctorApprovalStatus.REJECTED;
+  } else if (status === "APPROVED") {
+    where.approvalStatus = DoctorApprovalStatus.APPROVED;
+    where.isActive = activity !== "inactive";
+  } else {
+    where.isActive = activity !== "inactive";
   }
   if (search) {
     where.OR = [
