@@ -250,12 +250,21 @@ export async function PATCH(request: Request) {
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId: session.user.id },
-    select: { id: true },
+    select: { id: true, isActive: true },
   });
   if (!doctor) {
     return NextResponse.json(
       { error: "Doctor profile not found" },
       { status: 404 },
+    );
+  }
+  if (!doctor.isActive) {
+    return NextResponse.json(
+      {
+        error:
+          "Account deactivated. New availability cannot be accepted while your account is inactive.",
+      },
+      { status: 403 },
     );
   }
 
@@ -281,12 +290,26 @@ export async function PUT(request: Request) {
 
   const doctor = await prisma.doctor.findUnique({
     where: { userId: session.user.id },
-    select: { id: true, timezone: true, slotDurationMinutes: true },
+    select: {
+      id: true,
+      timezone: true,
+      slotDurationMinutes: true,
+      isActive: true,
+    },
   });
   if (!doctor) {
     return NextResponse.json(
       { error: "Doctor profile not found" },
       { status: 404 },
+    );
+  }
+  if (!doctor.isActive) {
+    return NextResponse.json(
+      {
+        error:
+          "Account deactivated. New availability cannot be accepted while your account is inactive.",
+      },
+      { status: 403 },
     );
   }
 
