@@ -76,6 +76,7 @@ async function main() {
         licenseNumber: "SEED",
         profilePhotoUrl: seed.profilePhotoUrl,
         timezone: seed.timezone,
+        isActive: true,
       },
     });
 
