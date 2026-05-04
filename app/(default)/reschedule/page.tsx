@@ -11,8 +11,8 @@ import { ConsultationType, AppointmentStatus } from "@/generated/prisma/client";
 import {
   formatTimeInPatientTz,
   formatDateInPatientTz,
-  isDoctorTimeInPast,
 } from "@/lib/timezone-display";
+import { filterReschedulableSlots } from "@/lib/reschedule-slots";
 
 type RescheduleUiState =
   | "idle"
@@ -30,6 +30,7 @@ type AppointmentDetails = {
   timezone: string;
   consultationType: ConsultationType;
   status: AppointmentStatus;
+  durationMinutes: number;
 };
 
 function todayISO(): string {
@@ -61,6 +62,7 @@ async function getSlots(
   excludeAppointmentId: string,
 ): Promise<{
   slots: string[];
+  slotDetails: { startTime: string; slotDurationMinutes: number }[];
   doctorTimezone: string;
   slotDurationMinutes: number;
 }> {
@@ -147,14 +149,19 @@ function RescheduleContent() {
       getSlots(selectedDoctorId, selectedDate, appointment?.id ?? ""),
   });
 
-  const slots = slotsData?.slots ?? [];
   const doctorTz = slotsData?.doctorTimezone ?? appointment?.timezone ?? "UTC";
-  const slotDurationMinutes = slotsData?.slotDurationMinutes ?? 30;
+  const slotDetails = slotsData?.slotDetails ?? [];
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
 
-  const filteredSlots = slots.filter(
-    (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
-  );
+  const filteredSlots =
+    appointment && selectedDate
+      ? filterReschedulableSlots({
+          slotDetails,
+          bookedDurationMinutes: appointment.durationMinutes,
+          selectedDate,
+          doctorTimezone: doctorTz,
+        })
+      : [];
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setHasSelectionInteraction(true);
@@ -329,9 +336,10 @@ function RescheduleContent() {
                         <h2 className="font-montaga text-xl font-semibold leading-tight text-[#333333]">
                           Available times
                         </h2>
-                        {!slotsLoadingOrFetching && (
+                        {!slotsLoadingOrFetching && appointment && (
                           <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-                            {slotDurationMinutes}-minute appointments
+                            {appointment.durationMinutes}-minute appointments (same
+                            length as your booking)
                           </p>
                         )}
 
