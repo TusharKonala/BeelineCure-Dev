@@ -54,16 +54,17 @@ function cancellationContent(reason: CancelReason) {
   };
 }
 
-export async function cancelAppointmentByDoctor(input: {
+/** Cancel by doctor (scoped) or admin (omit `doctorId`). */
+export async function cancelAppointmentByStaff(input: {
   appointmentId: string;
-  doctorId: string;
+  doctorId?: string;
   reason: CancelReason;
   requestOrigin?: string;
 }) {
   const appointment = await prisma.appointment.findFirst({
     where: {
       id: input.appointmentId,
-      doctorId: input.doctorId,
+      ...(input.doctorId ? { doctorId: input.doctorId } : {}),
     },
     select: {
       id: true,
@@ -236,4 +237,13 @@ export async function cancelAppointmentByDoctor(input: {
   }
 
   return { ok: true as const };
+}
+
+export async function cancelAppointmentByDoctor(input: {
+  appointmentId: string;
+  doctorId: string;
+  reason: CancelReason;
+  requestOrigin?: string;
+}) {
+  return cancelAppointmentByStaff(input);
 }

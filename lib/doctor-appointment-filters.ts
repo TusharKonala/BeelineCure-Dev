@@ -107,6 +107,37 @@ export function mergeDoctorPatientSearch(
   };
 }
 
+/** Admin: filter by doctor display name, doctor phone, or account email. */
+export function mergeAdminDoctorSearch(
+  baseWhere: Prisma.AppointmentWhereInput,
+  search: string,
+): Prisma.AppointmentWhereInput {
+  const trimmed = search.trim();
+  if (!trimmed) return baseWhere;
+  return {
+    AND: [
+      baseWhere,
+      {
+        doctor: {
+          is: {
+            OR: [
+              { name: { contains: trimmed, mode: "insensitive" } },
+              { phone: { contains: trimmed, mode: "insensitive" } },
+              {
+                user: {
+                  is: {
+                    email: { contains: trimmed, mode: "insensitive" },
+                  },
+                },
+              },
+            ],
+          },
+        },
+      },
+    ],
+  };
+}
+
 export function doctorAppointmentDateTimeOrderBy(
   dateFilter: DoctorDateFilterValue,
 ): Prisma.AppointmentOrderByWithRelationInput[] {
