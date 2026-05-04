@@ -10,6 +10,7 @@ import { EmailVerificationTemplate } from "@/components/email-verification-templ
 import { formatDoctorStoredName } from "@/lib/doctor-name";
 
 const doctorSignupSchema = z.object({
+  phone: z.string().min(5, "Phone is required").max(32),
   specialization: z.string().min(2, "Specialization is required"),
   licenseNumber: z.string().min(3, "License number is required"),
   yearsExperience: z.number().int().min(0).max(80).optional(),
@@ -113,6 +114,7 @@ export async function POST(request: Request) {
           ? {
               create: {
                 name: formatDoctorStoredName(name, emailLocal),
+                phone: doctorSignup.phone.trim(),
                 specialization: doctorSignup.specialization.trim(),
                 licenseNumber: doctorSignup.licenseNumber.trim(),
                 yearsExperience: doctorSignup.yearsExperience,

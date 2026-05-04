@@ -12,6 +12,7 @@ import { z } from "zod";
 
 const updateDoctorSettingsSchema = z.object({
   name: z.string().min(1).max(255),
+  phone: z.string().max(32).optional(),
   specialization: z.string().min(2).max(255),
   licenseNumber: z.string().min(3).max(255),
   yearsExperience: z.number().int().min(0).max(80).nullable().optional(),
@@ -36,6 +37,7 @@ export async function GET() {
     select: {
       id: true,
       name: true,
+      phone: true,
       specialization: true,
       licenseNumber: true,
       yearsExperience: true,
@@ -59,6 +61,7 @@ export async function GET() {
     doctor: {
       id: doctor.id,
       name: doctor.name,
+      phone: doctor.phone,
       specialization: doctor.specialization,
       licenseNumber: doctor.licenseNumber,
       yearsExperience: doctor.yearsExperience,
@@ -110,10 +113,25 @@ export async function PATCH(request: Request) {
   }
 
   const data = parsed.data;
+  const phoneRaw = data.phone !== undefined ? data.phone.trim() : undefined;
+  let phoneUpdate: string | null | undefined = undefined;
+  if (phoneRaw !== undefined) {
+    if (phoneRaw.length === 0) {
+      phoneUpdate = null;
+    } else if (phoneRaw.length < 5) {
+      return NextResponse.json(
+        { error: "Phone must be at least 5 characters if provided" },
+        { status: 400 },
+      );
+    } else {
+      phoneUpdate = phoneRaw;
+    }
+  }
   const updated = await prisma.doctor.update({
     where: { id: doctor.id },
     data: {
       name: data.name.trim(),
+      ...(phoneUpdate !== undefined ? { phone: phoneUpdate } : {}),
       specialization: data.specialization.trim(),
       licenseNumber: data.licenseNumber.trim(),
       yearsExperience: data.yearsExperience ?? null,
@@ -126,6 +144,7 @@ export async function PATCH(request: Request) {
     select: {
       id: true,
       name: true,
+      phone: true,
       specialization: true,
       licenseNumber: true,
       yearsExperience: true,

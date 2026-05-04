@@ -18,6 +18,7 @@ export default async function DoctorSettingsPage() {
     select: {
       id: true,
       name: true,
+      phone: true,
       specialization: true,
       licenseNumber: true,
       yearsExperience: true,
@@ -39,6 +40,7 @@ export default async function DoctorSettingsPage() {
       initialDoctor={{
         id: doctor.id,
         name: doctor.name,
+        phone: doctor.phone,
         specialization: doctor.specialization,
         licenseNumber: doctor.licenseNumber,
         yearsExperience: doctor.yearsExperience,

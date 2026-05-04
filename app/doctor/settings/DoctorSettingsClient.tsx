@@ -24,6 +24,7 @@ type DurationKey = (typeof DURATION_KEYS)[number];
 type DoctorSettings = {
   id: string;
   name: string;
+  phone: string | null;
   specialization: string;
   licenseNumber: string;
   yearsExperience: number | null;
@@ -176,6 +177,7 @@ export function DoctorSettingsClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: doctor.name,
+          phone: doctor.phone?.trim() ?? "",
           specialization: doctor.specialization,
           licenseNumber: doctor.licenseNumber,
           yearsExperience,
@@ -300,6 +302,22 @@ export function DoctorSettingsClient({
                   setDoctor((prev) => ({ ...prev, licenseNumber: e.target.value }))
                 }
                 className={inputClassName}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="font-montserrat text-sm font-medium text-[#333333]">
+                Phone{" "}
+                <span className="font-normal text-[#5E5E5E]">(optional)</span>
+              </label>
+              <input
+                type="tel"
+                autoComplete="tel"
+                value={doctor.phone ?? ""}
+                onChange={(e) =>
+                  setDoctor((prev) => ({ ...prev, phone: e.target.value || null }))
+                }
+                className={inputClassName}
+                placeholder="Clinic or mobile number"
               />
             </div>
             <div className="flex flex-col gap-2">

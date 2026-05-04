@@ -19,6 +19,7 @@ export function SignUpForm({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [specialization, setSpecialization] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
@@ -75,6 +76,10 @@ export function SignUpForm({
       }
       if (role === "DOCTOR" && !name.trim()) {
         setError("Name is required for doctor signup.");
+        return;
+      }
+      if (role === "DOCTOR" && phone.trim().length < 5) {
+        setError("Phone is required (at least 5 characters).");
         return;
       }
 
@@ -252,6 +257,25 @@ export function SignUpForm({
 
       {role === "DOCTOR" && (
         <>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-phone"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Phone
+            </label>
+            <input
+              id="signup-phone"
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              required
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className={inputClassName}
+            />
+          </div>
+
           <div className="flex flex-col gap-2">
             <label
               htmlFor="signup-specialization"
