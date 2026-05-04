@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
+  Calendar,
   LayoutDashboard,
   Menu,
   Settings,
@@ -22,6 +23,7 @@ type AdminNavItem = {
 const navItems: AdminNavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
+  { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
