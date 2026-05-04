@@ -142,6 +142,8 @@ model Doctor {
   userId           String?              @unique
   user             User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
+  /// Contact phone for clinic / admin search (optional for legacy rows).
+  phone            String?
   specialization   String
   licenseNumber    String
   yearsExperience  Int?
