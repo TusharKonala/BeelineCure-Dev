@@ -6,6 +6,7 @@ import {
   parsePriceMap,
 } from "@/lib/doctor-pricing";
 import { SUPPORTED_CURRENCIES, coerceSupportedCurrency } from "@/lib/currency";
+import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -13,7 +14,15 @@ import { z } from "zod";
 const updateDoctorSettingsSchema = z.object({
   name: z.string().min(1).max(255),
   phone: z.string().max(32).optional(),
-  specialization: z.string().min(2).max(255),
+  specialization: z.enum(
+    DOCTOR_SPECIALIZATIONS as unknown as readonly [string, ...string[]],
+    { message: "Please choose a valid specialization." },
+  ),
+  qualification: z
+    .string()
+    .min(2, "Qualification is required")
+    .max(255)
+    .optional(),
   licenseNumber: z.string().min(3).max(255),
   yearsExperience: z.number().int().min(0).max(80).nullable().optional(),
   bio: z.string().max(3000).nullable().optional(),
@@ -39,6 +48,7 @@ export async function GET() {
       name: true,
       phone: true,
       specialization: true,
+      qualification: true,
       licenseNumber: true,
       yearsExperience: true,
       bio: true,
@@ -63,6 +73,7 @@ export async function GET() {
       name: doctor.name,
       phone: doctor.phone,
       specialization: doctor.specialization,
+      qualification: doctor.qualification,
       licenseNumber: doctor.licenseNumber,
       yearsExperience: doctor.yearsExperience,
       bio: doctor.bio,
@@ -133,6 +144,9 @@ export async function PATCH(request: Request) {
       name: data.name.trim(),
       ...(phoneUpdate !== undefined ? { phone: phoneUpdate } : {}),
       specialization: data.specialization.trim(),
+      ...(data.qualification !== undefined
+        ? { qualification: data.qualification.trim() || null }
+        : {}),
       licenseNumber: data.licenseNumber.trim(),
       yearsExperience: data.yearsExperience ?? null,
       bio: data.bio?.trim() || null,
@@ -146,6 +160,7 @@ export async function PATCH(request: Request) {
       name: true,
       phone: true,
       specialization: true,
+      qualification: true,
       licenseNumber: true,
       yearsExperience: true,
       bio: true,
