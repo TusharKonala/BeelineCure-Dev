@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm, useWatch } from "react-hook-form";
@@ -91,6 +91,37 @@ function toFormDefaults(p: HealthProfileDto | null): FormValues {
     emergencyContact2Phone: p?.emergencyContact2Phone ?? "",
     emergencyContact2Relationship: p?.emergencyContact2Relationship ?? "",
   };
+}
+
+const UNIT_SYSTEM_STORAGE_KEY = "clinivo:health-units";
+type UnitSystem = "metric" | "imperial";
+
+const KG_PER_LB = 0.45359237;
+const CM_PER_INCH = 2.54;
+
+function kgToLbs(kg: number): number {
+  return kg / KG_PER_LB;
+}
+
+function lbsToKg(lbs: number): number {
+  return lbs * KG_PER_LB;
+}
+
+function cmToFeetInches(cm: number): { feet: number; inches: number } {
+  const totalInches = cm / CM_PER_INCH;
+  let feet = Math.floor(totalInches / 12);
+  let inches = totalInches - feet * 12;
+  // Round inches to one decimal for display; carry to feet on overflow.
+  inches = Math.round(inches * 10) / 10;
+  if (inches >= 12) {
+    feet += 1;
+    inches = 0;
+  }
+  return { feet, inches };
+}
+
+function feetInchesToCm(feet: number, inches: number): number {
+  return (feet * 12 + inches) * CM_PER_INCH;
 }
 
 function parseNumField(s: string): number | null {
@@ -189,6 +220,61 @@ export function HealthProfileClient({ initialProfile }: Props) {
     resolver: zodResolver(formSchema),
     defaultValues: toFormDefaults(initialProfile),
   });
+
+  const [unitSystem, setUnitSystem] = useState<UnitSystem>("metric");
+  // Imperial display state. We derive these on first load from the metric
+  // form values, then keep them in sync as the user edits in either mode.
+  const [imperialFeet, setImperialFeet] = useState("");
+  const [imperialInches, setImperialInches] = useState("");
+  const [imperialLbs, setImperialLbs] = useState("");
+
+  // Restore the user's unit preference from localStorage on mount.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(UNIT_SYSTEM_STORAGE_KEY);
+      if (raw === "imperial" || raw === "metric") setUnitSystem(raw);
+    } catch {
+      /* ignore storage errors */
+    }
+  }, []);
+
+  // Persist the toggle so it sticks across visits.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(UNIT_SYSTEM_STORAGE_KEY, unitSystem);
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [unitSystem]);
+
+  // When switching INTO imperial, seed the imperial fields from the current
+  // metric values so the user sees the equivalent. We don't seed the other
+  // direction — metric values are still the source of truth in the form.
+  useEffect(() => {
+    if (unitSystem !== "imperial") return;
+    const heightCm = parseFloat(
+      String(form.getValues("heightCm")).replace(",", "."),
+    );
+    if (Number.isFinite(heightCm) && heightCm > 0) {
+      const { feet, inches } = cmToFeetInches(heightCm);
+      setImperialFeet(String(feet));
+      setImperialInches(inches === 0 ? "0" : String(inches));
+    } else {
+      setImperialFeet("");
+      setImperialInches("");
+    }
+    const weightKg = parseFloat(
+      String(form.getValues("weightKg")).replace(",", "."),
+    );
+    if (Number.isFinite(weightKg) && weightKg > 0) {
+      setImperialLbs((Math.round(kgToLbs(weightKg) * 10) / 10).toString());
+    } else {
+      setImperialLbs("");
+    }
+    // We intentionally don't include form values; we only want to seed when
+    // the unit system actually flips.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitSystem]);
 
   const heightWatch = useWatch({ control: form.control, name: "heightCm" }) ?? "";
   const weightWatch = useWatch({ control: form.control, name: "weightKg" }) ?? "";
@@ -319,10 +405,22 @@ export function HealthProfileClient({ initialProfile }: Props) {
                       profile.heightCm != null || profile.weightKg != null
                         ? [
                             profile.heightCm != null
-                              ? `${profile.heightCm} cm`
+                              ? unitSystem === "imperial"
+                                ? (() => {
+                                    const { feet, inches } = cmToFeetInches(
+                                      profile.heightCm,
+                                    );
+                                    return `${feet}'${inches}"`;
+                                  })()
+                                : `${profile.heightCm} cm`
                               : null,
                             profile.weightKg != null
-                              ? `${profile.weightKg} kg`
+                              ? unitSystem === "imperial"
+                                ? `${(
+                                    Math.round(kgToLbs(profile.weightKg) * 10) /
+                                    10
+                                  ).toFixed(1)} lbs`
+                                : `${profile.weightKg} kg`
                               : null,
                           ]
                             .filter(Boolean)
@@ -437,42 +535,160 @@ export function HealthProfileClient({ initialProfile }: Props) {
                   </select>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="flex flex-col gap-2">
-                    <label
-                      htmlFor="heightCm"
-                      className="font-montserrat text-sm font-medium text-[#333333]"
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-montserrat text-sm font-medium text-[#333333]">
+                    Height &amp; weight units
+                  </span>
+                  <div
+                    role="group"
+                    aria-label="Unit system"
+                    className="inline-flex overflow-hidden rounded-xl border border-[#e5e5e5] bg-white"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setUnitSystem("metric")}
+                      className={`cursor-pointer px-3 py-1.5 font-montserrat text-xs transition-colors ${
+                        unitSystem === "metric"
+                          ? "bg-[#2555F3] text-white"
+                          : "bg-white text-[#333333] hover:bg-[#fafafa]"
+                      }`}
                     >
-                      Height (cm)
-                    </label>
-                    <input
-                      id="heightCm"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="e.g. 170"
-                      className={inputClassName}
-                      {...form.register("heightCm")}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label
-                      htmlFor="weightKg"
-                      className="font-montserrat text-sm font-medium text-[#333333]"
+                      Metric (cm / kg)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUnitSystem("imperial")}
+                      className={`cursor-pointer px-3 py-1.5 font-montserrat text-xs transition-colors ${
+                        unitSystem === "imperial"
+                          ? "bg-[#2555F3] text-white"
+                          : "bg-white text-[#333333] hover:bg-[#fafafa]"
+                      }`}
                     >
-                      Weight (kg)
-                    </label>
-                    <input
-                      id="weightKg"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="e.g. 70"
-                      className={inputClassName}
-                      {...form.register("weightKg")}
-                    />
+                      Imperial (ft / lbs)
+                    </button>
                   </div>
                 </div>
+
+                {unitSystem === "metric" ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <label
+                        htmlFor="heightCm"
+                        className="font-montserrat text-sm font-medium text-[#333333]"
+                      >
+                        Height (cm)
+                      </label>
+                      <input
+                        id="heightCm"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="e.g. 170"
+                        className={inputClassName}
+                        {...form.register("heightCm")}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label
+                        htmlFor="weightKg"
+                        className="font-montserrat text-sm font-medium text-[#333333]"
+                      >
+                        Weight (kg)
+                      </label>
+                      <input
+                        id="weightKg"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="e.g. 70"
+                        className={inputClassName}
+                        {...form.register("weightKg")}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <span className="font-montserrat text-sm font-medium text-[#333333]">
+                        Height (ft / in)
+                      </span>
+                      <div className="flex gap-2">
+                        <input
+                          id="heightFeet"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="off"
+                          placeholder="ft"
+                          className={inputClassName}
+                          value={imperialFeet}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setImperialFeet(next);
+                            const ft = parseFloat(next.replace(",", ".")) || 0;
+                            const inch =
+                              parseFloat(imperialInches.replace(",", ".")) || 0;
+                            const cm = feetInchesToCm(ft, inch);
+                            form.setValue(
+                              "heightCm",
+                              cm > 0 ? (Math.round(cm * 10) / 10).toString() : "",
+                              { shouldDirty: true },
+                            );
+                          }}
+                        />
+                        <input
+                          id="heightInches"
+                          type="text"
+                          inputMode="decimal"
+                          autoComplete="off"
+                          placeholder="in"
+                          className={inputClassName}
+                          value={imperialInches}
+                          onChange={(e) => {
+                            const next = e.target.value;
+                            setImperialInches(next);
+                            const ft =
+                              parseFloat(imperialFeet.replace(",", ".")) || 0;
+                            const inch = parseFloat(next.replace(",", ".")) || 0;
+                            const cm = feetInchesToCm(ft, inch);
+                            form.setValue(
+                              "heightCm",
+                              cm > 0 ? (Math.round(cm * 10) / 10).toString() : "",
+                              { shouldDirty: true },
+                            );
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      <label
+                        htmlFor="weightLbs"
+                        className="font-montserrat text-sm font-medium text-[#333333]"
+                      >
+                        Weight (lbs)
+                      </label>
+                      <input
+                        id="weightLbs"
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="e.g. 154"
+                        className={inputClassName}
+                        value={imperialLbs}
+                        onChange={(e) => {
+                          const next = e.target.value;
+                          setImperialLbs(next);
+                          const lbs = parseFloat(next.replace(",", ".")) || 0;
+                          const kg = lbs > 0 ? lbsToKg(lbs) : 0;
+                          form.setValue(
+                            "weightKg",
+                            kg > 0 ? (Math.round(kg * 10) / 10).toString() : "",
+                            { shouldDirty: true },
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {bmiPreview != null && (
                   <p className="rounded-xl border border-[#e5e5e5] bg-[#f8f9fc] px-3 py-2 font-montserrat text-sm text-[#333333]">
