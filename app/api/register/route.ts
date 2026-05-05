@@ -8,10 +8,22 @@ import { createHash, randomBytes } from "crypto";
 import { Resend } from "resend";
 import { EmailVerificationTemplate } from "@/components/email-verification-template";
 import { formatDoctorStoredName } from "@/lib/doctor-name";
+import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
 
 const doctorSignupSchema = z.object({
-  phone: z.string().min(5, "Phone is required").max(32),
-  specialization: z.string().min(2, "Specialization is required"),
+  phone: z
+    .string()
+    .min(7, "Phone number is too short")
+    .max(32, "Phone number is too long")
+    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+  specialization: z.enum(
+    DOCTOR_SPECIALIZATIONS as unknown as readonly [string, ...string[]],
+    { message: "Please choose a valid specialization." },
+  ),
+  qualification: z
+    .string()
+    .min(2, "Qualification is required")
+    .max(255, "Qualification is too long"),
   licenseNumber: z.string().min(3, "License number is required"),
   yearsExperience: z.number().int().min(0).max(80).optional(),
   bio: z.string().max(3000).optional(),
@@ -116,6 +128,7 @@ export async function POST(request: Request) {
                 name: formatDoctorStoredName(name, emailLocal),
                 phone: doctorSignup.phone.trim(),
                 specialization: doctorSignup.specialization.trim(),
+                qualification: doctorSignup.qualification.trim(),
                 licenseNumber: doctorSignup.licenseNumber.trim(),
                 yearsExperience: doctorSignup.yearsExperience,
                 bio: doctorSignup.bio?.trim() || null,

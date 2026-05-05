@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { uploadDoctorPhoto } from "@/lib/uploads/uploadDoctorPhoto";
+import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
+import { DoctorPhotoCropper } from "@/components/doctor/DoctorPhotoCropper";
 
 export function SignUpForm({
   initialRole = "PATIENT",
@@ -21,12 +23,19 @@ export function SignUpForm({
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [specialization, setSpecialization] = useState("");
+  const [qualification, setQualification] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
   const [yearsExperience, setYearsExperience] = useState("");
   const [bio, setBio] = useState("");
   const [timezone, setTimezone] = useState("UTC");
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [pendingCropImageUrl, setPendingCropImageUrl] = useState<string | null>(
+    null,
+  );
+  const [pendingCropFileName, setPendingCropFileName] = useState<string | null>(
+    null,
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -78,9 +87,25 @@ export function SignUpForm({
         setError("Name is required for doctor signup.");
         return;
       }
-      if (role === "DOCTOR" && phone.trim().length < 5) {
-        setError("Phone is required (at least 5 characters).");
-        return;
+      if (role === "DOCTOR") {
+        const phoneValue = phone.trim();
+        if (phoneValue.length < 7) {
+          setError("Phone number is too short.");
+          return;
+        }
+        if (phoneValue.length > 32) {
+          setError("Phone number is too long.");
+          return;
+        }
+        if (!/^[+0-9()\-\s]+$/.test(phoneValue)) {
+          setError("Invalid phone number.");
+          return;
+        }
+        const qualificationValue = qualification.trim();
+        if (qualificationValue.length < 2) {
+          setError("Please enter your degree / qualification.");
+          return;
+        }
       }
 
       const res = await fetch("/api/register", {
@@ -96,6 +121,7 @@ export function SignUpForm({
               ? {
                   phone: phone.trim(),
                   specialization: specialization.trim(),
+                  qualification: qualification.trim(),
                   licenseNumber: licenseNumber.trim(),
                   yearsExperience:
                     parsedYearsExperience != null
@@ -263,7 +289,7 @@ export function SignUpForm({
               htmlFor="signup-phone"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
-              Phone
+              Phone <span className="text-red-600">*</span>
             </label>
             <input
               id="signup-phone"
@@ -271,6 +297,9 @@ export function SignUpForm({
               type="tel"
               autoComplete="tel"
               required
+              minLength={7}
+              maxLength={32}
+              pattern="[+0-9()\-\s]+"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               className={inputClassName}
@@ -282,15 +311,44 @@ export function SignUpForm({
               htmlFor="signup-specialization"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
-              Specialization
+              Specialization <span className="text-red-600">*</span>
             </label>
-            <input
+            <select
               id="signup-specialization"
               name="specialization"
-              type="text"
               required
               value={specialization}
               onChange={(e) => setSpecialization(e.target.value)}
+              className={inputClassName}
+            >
+              <option value="" disabled>
+                Select a specialization
+              </option>
+              {DOCTOR_SPECIALIZATIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-qualification"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Degree / Qualification <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="signup-qualification"
+              name="qualification"
+              type="text"
+              required
+              minLength={2}
+              maxLength={255}
+              placeholder="e.g. MBBS, MD"
+              value={qualification}
+              onChange={(e) => setQualification(e.target.value)}
               className={inputClassName}
             />
           </div>
@@ -392,7 +450,15 @@ export function SignUpForm({
                 const file = e.target.files?.[0];
                 if (!file) return;
                 setError(null);
-                setProfilePhotoFile(file);
+                // Open the cropper instead of using the raw file directly so
+                // every uploaded photo ends up as a consistent square JPEG.
+                const url = URL.createObjectURL(file);
+                setPendingCropImageUrl((prev) => {
+                  if (prev) URL.revokeObjectURL(prev);
+                  return url;
+                });
+                setPendingCropFileName(file.name);
+                e.target.value = "";
               }}
             />
             {photoUploadPending && (
@@ -448,6 +514,23 @@ export function SignUpForm({
           Sign in
         </Link>
       </p>
+      {pendingCropImageUrl ? (
+        <DoctorPhotoCropper
+          imageUrl={pendingCropImageUrl}
+          originalFileName={pendingCropFileName ?? undefined}
+          onCancel={() => {
+            if (pendingCropImageUrl) URL.revokeObjectURL(pendingCropImageUrl);
+            setPendingCropImageUrl(null);
+            setPendingCropFileName(null);
+          }}
+          onCrop={(file) => {
+            if (pendingCropImageUrl) URL.revokeObjectURL(pendingCropImageUrl);
+            setPendingCropImageUrl(null);
+            setPendingCropFileName(null);
+            setProfilePhotoFile(file);
+          }}
+        />
+      ) : null}
     </form>
   );
 }
