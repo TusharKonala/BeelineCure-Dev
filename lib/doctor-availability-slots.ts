@@ -11,9 +11,9 @@ export type AllowedSlotDurationMinutes =
   (typeof ALLOWED_SLOT_DURATION_MINUTES)[number];
 export type AvailabilityConsultationType = "CLINIC" | "ONLINE" | "BOTH";
 
-/** Default window for the schedule UI (09:00–13:00 doctor-local). */
+/** Default window for the schedule UI (09:00–24:00 doctor-local). */
 export const DEFAULT_SLOT_WINDOW_START = "09:00";
-export const DEFAULT_SLOT_WINDOW_END = "13:00";
+export const DEFAULT_SLOT_WINDOW_END = "24:00";
 
 /** @deprecated Use DEFAULT_SLOT_WINDOW_START */
 export const CLINIC_DAY_START = DEFAULT_SLOT_WINDOW_START;

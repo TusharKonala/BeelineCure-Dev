@@ -188,6 +188,22 @@ export function MyScheduleClient() {
         slotWindowEndRef.current = windowEnd;
         setSlotWindowStart(windowStart);
         setSlotWindowEnd(windowEnd);
+      } else {
+        // Empty day: reset the window to the global default 09:00–24:00 so
+        // every fresh date starts from the same canvas, instead of carrying
+        // over whatever the previously viewed day had.
+        windowStart = alignWindowStartToSlotGrid(
+          DEFAULT_SLOT_WINDOW_START,
+          duration,
+        );
+        windowEnd = alignWindowEndExclusiveToSlotGrid(
+          DEFAULT_SLOT_WINDOW_END,
+          duration,
+        );
+        slotWindowStartRef.current = windowStart;
+        slotWindowEndRef.current = windowEnd;
+        setSlotWindowStart(windowStart);
+        setSlotWindowEnd(windowEnd);
       }
 
       setSlotDurationMinutes(duration);
