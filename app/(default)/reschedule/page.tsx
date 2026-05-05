@@ -62,7 +62,11 @@ async function getSlots(
   excludeAppointmentId: string,
 ): Promise<{
   slots: string[];
-  slotDetails: { startTime: string; slotDurationMinutes: number }[];
+  slotDetails: {
+    startTime: string;
+    slotDurationMinutes: number;
+    consultationType?: "CLINIC" | "ONLINE" | "BOTH";
+  }[];
   doctorTimezone: string;
   slotDurationMinutes: number;
 }> {
@@ -158,6 +162,7 @@ function RescheduleContent() {
       ? filterReschedulableSlots({
           slotDetails,
           bookedDurationMinutes: appointment.durationMinutes,
+          bookedConsultationType: appointment.consultationType,
           selectedDate,
           doctorTimezone: doctorTz,
         })
@@ -362,22 +367,37 @@ function RescheduleContent() {
 
                         {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
                           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                            {filteredSlots.map((time) => (
-                              <Button
-                                key={time}
-                                variant={
-                                  selectedSlot === time ? "default" : "outline"
-                                }
-                                className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                                onClick={() => {
-                                  setHasSelectionInteraction(true);
-                                  setSelectedSlot(time);
-                                  setSubmitError(null);
-                                }}
-                              >
-                                {formatTimeInPatientTz(selectedDate, time, doctorTz)}
-                              </Button>
-                            ))}
+                            {filteredSlots.map((time) => {
+                              const isCurrent =
+                                !!appointment &&
+                                time === appointment.time &&
+                                selectedDate === appointment.date;
+                              return (
+                                <Button
+                                  key={time}
+                                  variant={
+                                    selectedSlot === time ? "default" : "outline"
+                                  }
+                                  disabled={isCurrent}
+                                  aria-disabled={isCurrent}
+                                  title={isCurrent ? "Current Slot" : undefined}
+                                  className={`h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base ${
+                                    isCurrent
+                                      ? "cursor-not-allowed opacity-60"
+                                      : "cursor-pointer"
+                                  }`}
+                                  onClick={() => {
+                                    if (isCurrent) return;
+                                    setHasSelectionInteraction(true);
+                                    setSelectedSlot(time);
+                                    setSubmitError(null);
+                                  }}
+                                >
+                                  {formatTimeInPatientTz(selectedDate, time, doctorTz)}
+                                  {isCurrent ? " · Current Slot" : ""}
+                                </Button>
+                              );
+                            })}
                           </div>
                         )}
                       </section>
