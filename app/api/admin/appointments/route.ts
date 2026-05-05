@@ -83,6 +83,7 @@ export async function GET(request: NextRequest) {
       date: true,
       time: true,
       timezone: true,
+      patientTimezone: true,
       durationMinutes: true,
       consultationType: true,
       status: true,
@@ -133,6 +134,7 @@ export async function GET(request: NextRequest) {
       date: a.date.toISOString().slice(0, 10),
       time: a.time,
       timezone: a.timezone,
+      patientTimezone: a.patientTimezone,
       durationMinutes: a.durationMinutes,
       consultationType: a.consultationType,
       status: a.status,
@@ -180,6 +182,7 @@ export async function PATCH(request: NextRequest) {
     appointmentId,
     reason,
     requestOrigin: request.nextUrl.origin,
+    actorUserId: session.user.id,
   });
 
   if (!result.ok) {
