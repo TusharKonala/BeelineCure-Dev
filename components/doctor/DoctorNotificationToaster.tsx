@@ -9,6 +9,7 @@ type ApiNotification = {
   id: string;
   title: string;
   message: string;
+  actorUserId?: string | null;
   createdAt: string;
 };
 
@@ -31,6 +32,8 @@ export function DoctorNotificationToaster() {
   const isDoctor = useMemo(() => {
     return session?.user?.role === USER_ROLE.DOCTOR;
   }, [session?.user?.role]);
+
+  const currentUserId = session?.user?.id ?? null;
 
   useEffect(() => {
     if (status !== "authenticated" || !isDoctor) {
@@ -75,9 +78,19 @@ export function DoctorNotificationToaster() {
 
         if (cancelled) return;
 
+        // Suppress toasts for actions the recipient performed themselves.
+        // The notification still appears in the notifications panel/history.
+        const toastable = newNotifications.filter(
+          (notification) =>
+            !notification.actorUserId ||
+            notification.actorUserId !== currentUserId,
+        );
+
+        if (toastable.length === 0) return;
+
         setToasts((current) => {
           const existingIds = new Set(current.map((toast) => toast.id));
-          const additions = newNotifications
+          const additions = toastable
             .filter((notification) => !existingIds.has(notification.id))
             .map((notification) => ({
               ...notification,
@@ -97,7 +110,7 @@ export function DoctorNotificationToaster() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [isDoctor, status]);
+  }, [isDoctor, status, currentUserId]);
 
   useEffect(() => {
     if (toasts.length === 0) return;
