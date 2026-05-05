@@ -172,6 +172,12 @@ export async function POST(request: NextRequest) {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
     "http://localhost:3000";
 
+  // Patient reschedule via tokenized link — set the patient as the actor so
+  // their toaster suppresses the live toast for their own action.
+  const patientUser = await prisma.user.findUnique({
+    where: { email: appointment.email },
+    select: { id: true },
+  });
   const result = await reschedulePatientAppointment({
     appointment: {
       id: appointment.id,
@@ -189,6 +195,7 @@ export async function POST(request: NextRequest) {
     time,
     patientTimezoneOverride: patientTimezone,
     requestOrigin,
+    actorUserId: patientUser?.id ?? null,
   });
 
   if (!result.ok) {
