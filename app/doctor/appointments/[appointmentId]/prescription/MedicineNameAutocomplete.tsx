@@ -27,6 +27,7 @@ export function MedicineNameAutocomplete({
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   // True only while we're applying a suggestion the user just selected, so we
   // don't immediately re-open the popup from the change event.
@@ -138,7 +139,17 @@ export function MedicineNameAutocomplete({
         }}
         onKeyDown={handleKeyDown}
         onFocus={() => {
+          setIsFocused(true);
           if (suggestions.length > 0) setIsOpen(true);
+        }}
+        onBlur={() => {
+          // Defer hiding so click-on-suggestion (mousedown handler) still
+          // fires before this clears the dropdown.
+          setTimeout(() => {
+            setIsFocused(false);
+            setHasSearched(false);
+            setIsOpen(false);
+          }, 100);
         }}
         className={className}
         autoComplete="off"
@@ -172,7 +183,8 @@ export function MedicineNameAutocomplete({
           ))}
         </ul>
       ) : null}
-      {!isLoading &&
+      {isFocused &&
+      !isLoading &&
       hasSearched &&
       value.trim().length >= MIN_QUERY_LENGTH &&
       suggestions.length === 0 ? (
