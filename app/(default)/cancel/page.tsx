@@ -20,7 +20,24 @@ type RefundPolicyPreview = {
   description: string;
   originalPaidAmountCents?: number | null;
   eligibleRefundAmountCents?: number | null;
+  /** ISO 4217 currency code the original payment was charged in. */
+  currency?: string | null;
+  /** Eligible refund converted to the patient's local currency (when different). */
+  localRefundAmountCents?: number | null;
+  localCurrency?: string | null;
 } | null;
+
+function formatCents(cents: number, currency: string | null | undefined): string {
+  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+    }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${code}`;
+  }
+}
 
 function CancelContent() {
   const searchParams = useSearchParams();
@@ -47,12 +64,22 @@ function CancelContent() {
     ) {
       return null;
     }
-    const original = (refundPolicy.originalPaidAmountCents / 100).toFixed(2);
-    const refund = (refundPolicy.eligibleRefundAmountCents / 100).toFixed(2);
+    const currency = refundPolicy.currency ?? null;
+    const original = formatCents(refundPolicy.originalPaidAmountCents, currency);
+    const refund = formatCents(refundPolicy.eligibleRefundAmountCents, currency);
+    const localApprox =
+      typeof refundPolicy.localRefundAmountCents === "number" &&
+      refundPolicy.localCurrency &&
+      refundPolicy.localCurrency !== currency
+        ? ` (approx ${formatCents(
+            refundPolicy.localRefundAmountCents,
+            refundPolicy.localCurrency,
+          )})`
+        : "";
     if (refundPolicy.percentage === 100) {
-      return `You paid $${original}. You are eligible for a full refund of $${refund}.`;
+      return `You paid ${original}. You are eligible for a full refund of ${refund}${localApprox}.`;
     }
-    return `You paid $${original}. Cancelling now will refund $${refund} (${refundPolicy.percentage}%).`;
+    return `You paid ${original}. Cancelling now will refund ${refund}${localApprox} (${refundPolicy.percentage}%).`;
   }, [refundPolicy]);
 
   useEffect(() => {

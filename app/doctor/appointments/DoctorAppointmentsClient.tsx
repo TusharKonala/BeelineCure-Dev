@@ -15,6 +15,28 @@ type TabKey = "upcoming" | "pending-review" | "completed" | "cancelled";
 type DateFilterValue = "asc" | "desc" | "today" | "week" | "month";
 type CancelReason = "patient_no_show" | "doctor_unavailable";
 
+type RefundPreviewPayload = {
+  tier: "full_refund" | "partial_refund" | "no_refund_no_show";
+  percentage: 100 | 50 | 0;
+  title: string;
+  description: string;
+  originalPaidAmountCents: number | null;
+  eligibleRefundAmountCents: number | null;
+  currency: string | null;
+};
+
+function formatRefundCents(cents: number, currency: string | null): string {
+  const code = currency && /^[A-Z]{3}$/.test(currency) ? currency : "USD";
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency: code,
+    }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${code}`;
+  }
+}
+
 type DoctorAppointmentItem = {
   id: string;
   patientName: string;
@@ -84,6 +106,10 @@ export default function DoctorAppointmentsClient() {
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DoctorAppointmentItem | null>(null);
   const [cancelReason, setCancelReason] = useState<CancelReason | null>(null);
+  const [refundPreview, setRefundPreview] = useState<RefundPreviewPayload | null>(
+    null,
+  );
+  const [refundPreviewLoading, setRefundPreviewLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestRequestIdRef = useRef(0);
@@ -96,6 +122,52 @@ export default function DoctorAppointmentsClient() {
     setTab(tabFromParam(searchParams.get("tab")));
     setSearch(searchFromParam(searchParams.get("search")));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!cancelTarget) {
+      setRefundPreview(null);
+      setRefundPreviewLoading(false);
+      return;
+    }
+    if (cancelTarget.consultationType !== "ONLINE") {
+      setRefundPreview(null);
+      setRefundPreviewLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRefundPreviewLoading(true);
+    setRefundPreview(null);
+    void fetch(
+      `/api/appointments/refund-preview?appointmentId=${encodeURIComponent(
+        cancelTarget.id,
+      )}`,
+      { cache: "no-store" },
+    )
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json().catch(() => null)) as
+          | { refundPreview?: RefundPreviewPayload | null }
+          | null;
+        return data?.refundPreview ?? null;
+      })
+      .then((preview) => {
+        if (cancelled) return;
+        setRefundPreview(preview);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setRefundPreview(null);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRefundPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cancelTarget]);
 
   const loadAppointments = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
@@ -514,6 +586,62 @@ export default function DoctorAppointmentsClient() {
                 This will cancel the appointment for{" "}
                 <span className="font-medium text-[#333333]">{cancelTarget.patientName}</span>.
               </p>
+              {cancelTarget.consultationType === "ONLINE" && (
+                <div className="mt-4 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-3">
+                  {refundPreviewLoading ? (
+                    <p className="font-montserrat text-sm text-[#5E5E5E]">
+                      Checking refund eligibility…
+                    </p>
+                  ) : refundPreview ? (
+                    cancelReason === "patient_no_show" ? (
+                      <p className="font-montserrat text-sm text-[#333333]">
+                        No refund: cancelled as patient no-show.
+                      </p>
+                    ) : (
+                      <>
+                        <p className="font-montserrat text-sm font-semibold text-[#111111]">
+                          Refund eligibility: {refundPreview.title}
+                        </p>
+                        <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                          {refundPreview.description}
+                        </p>
+                        {typeof refundPreview.originalPaidAmountCents ===
+                          "number" &&
+                          typeof refundPreview.eligibleRefundAmountCents ===
+                            "number" &&
+                          (refundPreview.percentage === 0 ? (
+                            <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                              Patient paid{" "}
+                              {formatRefundCents(
+                                refundPreview.originalPaidAmountCents,
+                                refundPreview.currency,
+                              )}
+                              . No refund will be issued.
+                            </p>
+                          ) : (
+                            <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                              Patient paid{" "}
+                              {formatRefundCents(
+                                refundPreview.originalPaidAmountCents,
+                                refundPreview.currency,
+                              )}
+                              . Eligible refund:{" "}
+                              {formatRefundCents(
+                                refundPreview.eligibleRefundAmountCents,
+                                refundPreview.currency,
+                              )}{" "}
+                              ({refundPreview.percentage}%).
+                            </p>
+                          ))}
+                      </>
+                    )
+                  ) : (
+                    <p className="font-montserrat text-sm text-[#5E5E5E]">
+                      No refund applies (appointment was not paid online).
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button
                   type="button"
