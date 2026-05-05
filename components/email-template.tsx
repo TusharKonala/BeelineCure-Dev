@@ -13,6 +13,10 @@ export interface EmailTemplateProps {
   rescheduleUrl: string;
   /** Google Meet join URL for online consultations when available. */
   meetLink?: string | null;
+  /** Formatted price in the doctor's currency, e.g. "₹1,500.00". */
+  priceLabel?: string | null;
+  /** Optional approx local-currency equivalent, e.g. "(approx $18.07)". */
+  approxLocalPriceLabel?: string | null;
   primaryActionLabel?: string;
   primaryActionUrl?: string;
   secondaryActionLabel?: string;
@@ -40,6 +44,8 @@ export function EmailTemplate({
   cancelUrl,
   rescheduleUrl,
   meetLink,
+  priceLabel,
+  approxLocalPriceLabel,
   primaryActionLabel,
   primaryActionUrl,
   secondaryActionLabel,
@@ -88,6 +94,12 @@ export function EmailTemplate({
             ? "Online Consultation"
             : "Clinic Visit"}
         </p>
+        {priceLabel ? (
+          <p style={{ margin: "0.25rem 0", color: "#111111" }}>
+            <strong>Price:</strong> {priceLabel}
+            {approxLocalPriceLabel ? ` ${approxLocalPriceLabel}` : ""}
+          </p>
+        ) : null}
       </div>
       {consultationType === "ONLINE" && showActionLinks && meetLink && (
         <p style={{ marginTop: "1rem", color: "#333" }}>

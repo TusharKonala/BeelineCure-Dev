@@ -12,8 +12,10 @@ import {
 } from "@/lib/doctor-pricing";
 import {
   coerceSupportedCurrency,
+  currencyForTimezone,
   formatPrice,
 } from "@/lib/currency";
+import { convertCentsAmount } from "@/lib/fx-rates";
 
 type PageProps = {
   params: Promise<{ bookingSessionId: string }>;
@@ -49,6 +51,21 @@ export default async function BookingReviewPage({ params }: PageProps) {
     bookingSession.currencyAtBooking ?? doctor.currency,
   );
   const consultationPriceLabel = formatPrice(priceCents, currency);
+
+  const patientCurrency = currencyForTimezone(bookingSession.patientTimezone);
+  let approxLocalLabel: string | null = null;
+  if (patientCurrency !== currency) {
+    try {
+      const localCents = await convertCentsAmount(
+        priceCents,
+        currency,
+        patientCurrency,
+      );
+      approxLocalLabel = `(approx ${formatPrice(localCents, patientCurrency)})`;
+    } catch (err) {
+      console.error("[review] Failed to convert price to local currency:", err);
+    }
+  }
 
   const isExpired =
     bookingSession.status === BookingSessionStatus.EXPIRED ||
@@ -113,6 +130,7 @@ export default async function BookingReviewPage({ params }: PageProps) {
                 </span>
                 <span className="text-[#5E5E5E] sm:text-right">
                   {consultationPriceLabel}
+                  {approxLocalLabel ? ` ${approxLocalLabel}` : ""}
                 </span>
               </div>
             </div>
