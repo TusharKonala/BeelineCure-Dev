@@ -94,6 +94,7 @@ export function SignUpForm({
           doctor:
             role === "DOCTOR"
               ? {
+                  phone: phone.trim(),
                   specialization: specialization.trim(),
                   licenseNumber: licenseNumber.trim(),
                   yearsExperience:
