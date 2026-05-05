@@ -717,9 +717,13 @@ export default function AdminDoctorsPage() {
                   type="button"
                   className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void handleDeleteConfirm()}
-                  disabled={Boolean(busyDoctorId)}
+                  disabled={Boolean(busyDoctorId) || deactivationImpactLoading}
                 >
-                  {busyDoctorId ? "Deactivating..." : "Deactivate doctor"}
+                  {busyDoctorId
+                    ? "Deactivating..."
+                    : deactivationImpactLoading
+                      ? "Loading impact..."
+                      : "Deactivate doctor"}
                 </button>
               </div>
             </div>
