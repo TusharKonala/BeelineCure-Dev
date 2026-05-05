@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "Notification" ADD COLUMN "actorUserId" TEXT;
+ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "actorUserId" TEXT;

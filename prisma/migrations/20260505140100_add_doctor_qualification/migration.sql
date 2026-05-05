@@ -1,2 +1,2 @@
 -- AlterTable
-ALTER TABLE "Doctor" ADD COLUMN "qualification" TEXT;
+ALTER TABLE "Doctor" ADD COLUMN IF NOT EXISTS "qualification" TEXT;
