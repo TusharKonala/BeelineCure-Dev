@@ -10,9 +10,10 @@ function getAppBaseUrl(): string {
   );
 }
 
-function redirectToOverview(status: string): NextResponse {
-  const url = new URL("/doctor/overview", getAppBaseUrl());
+function redirectToSettings(status: string): NextResponse {
+  const url = new URL("/doctor/settings", getAppBaseUrl());
   url.searchParams.set("calendar", status);
+  url.hash = "google-calendar";
   return NextResponse.redirect(url.toString());
 }
 
@@ -24,10 +25,10 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.warn("[google-calendar] OAuth error:", error);
-    return redirectToOverview("denied");
+    return redirectToSettings("denied");
   }
   if (!code) {
-    return redirectToOverview("error");
+    return redirectToSettings("error");
   }
 
   const verified = verifyOAuthState(state);
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error("[google-calendar] token exchange network error:", err);
-    return redirectToOverview("error");
+    return redirectToSettings("error");
   }
 
   if (!tokenResponse.ok) {
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
       tokenResponse.status,
       text,
     );
-    return redirectToOverview("error");
+    return redirectToSettings("error");
   }
 
   const tokenData = (await tokenResponse.json().catch(() => null)) as {
@@ -89,7 +90,7 @@ export async function GET(request: NextRequest) {
       "[google-calendar] token exchange missing access_token or refresh_token",
       { hasAccess: Boolean(tokenData?.access_token), hasRefresh: Boolean(tokenData?.refresh_token) },
     );
-    return redirectToOverview("error");
+    return redirectToSettings("error");
   }
 
   const expiresInSec = typeof tokenData.expires_in === "number" ? tokenData.expires_in : 3600;
@@ -106,8 +107,8 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error("[google-calendar] failed to persist doctor tokens:", err);
-    return redirectToOverview("error");
+    return redirectToSettings("error");
   }
 
-  return redirectToOverview("connected");
+  return redirectToSettings("connected");
 }

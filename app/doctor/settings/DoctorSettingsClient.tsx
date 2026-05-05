@@ -17,6 +17,8 @@ import {
   DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
 } from "@/lib/doctor-pricing";
 import { uploadDoctorPhoto } from "@/lib/uploads/uploadDoctorPhoto";
+import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
+import { DoctorPhotoCropper } from "@/components/doctor/DoctorPhotoCropper";
 
 const DURATION_KEYS = ["15", "30", "45", "60"] as const;
 type DurationKey = (typeof DURATION_KEYS)[number];
@@ -26,6 +28,7 @@ type DoctorSettings = {
   name: string;
   phone: string | null;
   specialization: string;
+  qualification: string | null;
   licenseNumber: string;
   yearsExperience: number | null;
   bio: string | null;
@@ -61,6 +64,12 @@ export function DoctorSettingsClient({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
+  const [pendingCropImageUrl, setPendingCropImageUrl] = useState<string | null>(
+    null,
+  );
+  const [pendingCropFileName, setPendingCropFileName] = useState<string | null>(
+    null,
+  );
   const [photoUploadPending, setPhotoUploadPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [disconnectError, setDisconnectError] = useState<string | null>(null);
@@ -108,6 +117,16 @@ export function DoctorSettingsClient({
     setSelectedPhotoPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
+
+  // Auto-scroll to the Google Calendar section when arriving here from the
+  // OAuth callback (?calendar=connected|denied|error). The hash alone is not
+  // reliable because the page renders after navigation completes.
+  useEffect(() => {
+    if (!calendarStatus) return;
+    const target = document.getElementById("google-calendar");
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [calendarStatus]);
 
   function handleTimezoneChange(nextTimezone: string) {
     setDoctor((prev) => {
@@ -179,6 +198,7 @@ export function DoctorSettingsClient({
           name: doctor.name,
           phone: doctor.phone?.trim() ?? "",
           specialization: doctor.specialization,
+          qualification: doctor.qualification?.trim() ?? "",
           licenseNumber: doctor.licenseNumber,
           yearsExperience,
           bio: doctor.bio,
@@ -282,12 +302,37 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Specialization
+                Specialization <span className="text-red-600">*</span>
               </label>
-              <input
+              <select
                 value={doctor.specialization}
                 onChange={(e) =>
                   setDoctor((prev) => ({ ...prev, specialization: e.target.value }))
+                }
+                className={inputClassName}
+              >
+                <option value="" disabled>
+                  Select a specialization
+                </option>
+                {DOCTOR_SPECIALIZATIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="font-montserrat text-sm font-medium text-[#333333]">
+                Degree / Qualification <span className="text-red-600">*</span>
+              </label>
+              <input
+                placeholder="e.g. MBBS, MD"
+                value={doctor.qualification ?? ""}
+                onChange={(e) =>
+                  setDoctor((prev) => ({
+                    ...prev,
+                    qualification: e.target.value,
+                  }))
                 }
                 className={inputClassName}
               />
@@ -364,7 +409,15 @@ export function DoctorSettingsClient({
                   if (!file) return;
                   setSaveError(null);
                   setSaveSuccess(null);
-                  setProfilePhotoFile(file);
+                  // Force every uploaded photo through the crop modal so the
+                  // stored image is consistently a 1:1 square.
+                  const url = URL.createObjectURL(file);
+                  setPendingCropImageUrl((prev) => {
+                    if (prev) URL.revokeObjectURL(prev);
+                    return url;
+                  });
+                  setPendingCropFileName(file.name);
+                  e.target.value = "";
                 }}
               />
               {photoUploadPending && (
@@ -454,7 +507,10 @@ export function DoctorSettingsClient({
             </div>
           </div>
 
-          <div className="mt-8 rounded-xl border border-[#e5e5e5] bg-white p-5 md:p-6">
+          <div
+            id="google-calendar"
+            className="mt-8 scroll-mt-24 rounded-xl border border-[#e5e5e5] bg-white p-5 md:p-6"
+          >
             <div className="flex items-start gap-3">
               <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#2555F3]/10 text-[#2555F3]">
                 <Calendar className="size-5" />
@@ -537,6 +593,23 @@ export function DoctorSettingsClient({
           </div>
         </section>
       </Container>
+      {pendingCropImageUrl ? (
+        <DoctorPhotoCropper
+          imageUrl={pendingCropImageUrl}
+          originalFileName={pendingCropFileName ?? undefined}
+          onCancel={() => {
+            if (pendingCropImageUrl) URL.revokeObjectURL(pendingCropImageUrl);
+            setPendingCropImageUrl(null);
+            setPendingCropFileName(null);
+          }}
+          onCrop={(file) => {
+            if (pendingCropImageUrl) URL.revokeObjectURL(pendingCropImageUrl);
+            setPendingCropImageUrl(null);
+            setPendingCropFileName(null);
+            setProfilePhotoFile(file);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
