@@ -16,7 +16,10 @@ import {
 import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
-import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import {
+  onlineT15ReminderAtMs,
+  reminderAtMsFromPatientLocal,
+} from "@/lib/reminder-time";
 import {
   formatDateInDoctorTz,
   formatDateInPatientTz,
@@ -29,6 +32,7 @@ import {
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { createMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
+import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import { coerceSupportedCurrency } from "@/lib/currency";
 import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
 
@@ -218,6 +222,12 @@ export async function POST(request: NextRequest) {
       data: { status: BookingSessionStatus.COMPLETED },
     });
 
+    const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
+      priceCents: priceCentsAtBooking,
+      baseCurrency: currencyAtBooking,
+      patientTimezone: bookingSession.patientTimezone,
+    });
+
     // Reuse existing confirmation email logic
     try {
       const { error } = await resend.emails.send({
@@ -245,6 +255,8 @@ export async function POST(request: NextRequest) {
           cancelUrl,
           rescheduleUrl,
           meetLink,
+          priceLabel,
+          approxLocalPriceLabel,
         }),
       });
 
@@ -301,6 +313,24 @@ export async function POST(request: NextRequest) {
       }
     } catch (err) {
       console.error("[webhooks] Failed to schedule reminder:", err);
+    }
+
+    // 15-minute "join now" reminder for online appointments only.
+    try {
+      const t15Ms = onlineT15ReminderAtMs(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+      );
+      if (t15Ms !== null) {
+        await inngest.send({
+          name: "appointment/online-reminder-t15.scheduled",
+          data: { appointmentId: appointment.id },
+          ts: t15Ms,
+        });
+      }
+    } catch (err) {
+      console.error("[webhooks] Failed to schedule 15-min reminder:", err);
     }
   }
 

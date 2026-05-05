@@ -12,6 +12,18 @@ export function reminderAtMsFromPatientLocal(
   return target;
 }
 
+/** 15 minutes before appointment start in UTC ms — used for online "join now" reminders. */
+export function onlineT15ReminderAtMs(
+  dateParam: string,
+  time: string,
+  timeZone: string,
+): number | null {
+  const utcDate = fromZonedTime(`${dateParam}T${time}:00`, timeZone);
+  const target = utcDate.getTime() - 15 * 60 * 1000;
+  if (target <= Date.now()) return null;
+  return target;
+}
+
 function pad2(value: number): string {
   return String(value).padStart(2, "0");
 }
