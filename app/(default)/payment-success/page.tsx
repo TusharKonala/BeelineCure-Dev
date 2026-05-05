@@ -73,10 +73,10 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
     }
   }
 
-  const confirmationMessage =
-    consultationTypeLabel === "Online consultation"
-      ? "Your online consultation has been confirmed. A confirmation email has been sent to your inbox."
-      : "Your appointment has been confirmed. A confirmation email has been sent to your inbox. Please arrive a few minutes early.";
+  const isOnline = consultationTypeLabel === "Online consultation";
+  const confirmationMessage = isOnline
+    ? "Your online consultation has been confirmed. A confirmation email has been sent to your inbox."
+    : "Your appointment has been confirmed. A confirmation email has been sent to your inbox. Please arrive a few minutes early.";
 
   return (
     <div className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
@@ -92,6 +92,12 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
             <p className="mt-2 font-montserrat text-sm text-[#5E5E5E] md:text-base">
               {confirmationMessage}
             </p>
+            {isOnline && (
+              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E] md:text-base">
+                A Google Meet link has been sent to your email. If you&apos;re
+                signed in, you can also find it in your appointments dashboard.
+              </p>
+            )}
             {hasDetails ? (
               <div className="mt-6 space-y-3 font-montserrat text-sm">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-center">
