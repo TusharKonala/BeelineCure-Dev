@@ -40,6 +40,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.2",
+    "react-image-crop": "^11.0.10",
     "react-infinite-scroll-hook": "^6.0.1",
     "resend": "^6.9.3",
     "stripe": "^20.4.1",
