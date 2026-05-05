@@ -140,7 +140,10 @@ export default function BookAppointmentDoctorPage() {
     formState: { errors, isValid },
   } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
-    mode: "onBlur",
+    // First validation runs on blur; subsequent re-validation happens on every
+    // change so existing errors clear (or update) on the next keystroke.
+    mode: "onTouched",
+    reValidateMode: "onChange",
     defaultValues: { patientName: "", email: "", phone: "", notes: "" },
   });
 
