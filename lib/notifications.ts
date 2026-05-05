@@ -6,6 +6,11 @@ type CreateAppointmentNotificationInput = {
   type: NotificationType;
   title: string;
   message: string;
+  /**
+   * User id who initiated the action that produced this notification.
+   * Used to suppress live toasts when the recipient is also the actor.
+   */
+  actorUserId?: string | null;
 };
 
 type CreateDoctorNotificationInput = {
@@ -13,6 +18,11 @@ type CreateDoctorNotificationInput = {
   type: NotificationType;
   title: string;
   message: string;
+  /**
+   * User id who initiated the action that produced this notification.
+   * Used to suppress live toasts when the recipient is also the actor.
+   */
+  actorUserId?: string | null;
 };
 
 /**
@@ -34,6 +44,7 @@ export async function createAppointmentNotificationForEmail(
       type: input.type,
       title: input.title,
       message: input.message,
+      actorUserId: input.actorUserId ?? null,
     },
   });
 }
@@ -57,6 +68,7 @@ export async function createDoctorNotificationForDoctorId(
       type: input.type,
       title: input.title,
       message: input.message,
+      actorUserId: input.actorUserId ?? null,
     },
   });
 }

@@ -30,6 +30,12 @@ import {
   resolvePaymentIntentId,
   refundEmailSentence,
 } from "@/lib/refunds";
+import {
+  coerceSupportedCurrency,
+  currencyForTimezone,
+} from "@/lib/currency";
+import { convertCentsAmount } from "@/lib/fx-rates";
+import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -103,6 +109,31 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Convert the eligible refund to the patient's local currency (best-effort
+  // — if FX rates aren't available, we silently skip the local approx).
+  let localRefundAmountCents: number | null = null;
+  let localCurrency: string | null = null;
+  if (
+    refundPolicy &&
+    typeof eligibleRefundAmountCents === "number" &&
+    appointment.currencyAtBooking
+  ) {
+    const baseCurrency = coerceSupportedCurrency(appointment.currencyAtBooking);
+    const patientCurrency = currencyForTimezone(appointment.patientTimezone);
+    if (baseCurrency !== patientCurrency) {
+      try {
+        localRefundAmountCents = await convertCentsAmount(
+          eligibleRefundAmountCents,
+          baseCurrency,
+          patientCurrency,
+        );
+        localCurrency = patientCurrency;
+      } catch (err) {
+        console.error("[cancel] Failed to convert refund to local currency:", err);
+      }
+    }
+  }
+
   return NextResponse.json({
     status: "valid" as const,
     refundPolicy: refundPolicy
@@ -113,6 +144,9 @@ export async function GET(request: NextRequest) {
           description: refundPolicy.description,
           originalPaidAmountCents,
           eligibleRefundAmountCents,
+          currency: appointment.currencyAtBooking ?? null,
+          localRefundAmountCents,
+          localCurrency,
         }
       : null,
   });
@@ -217,6 +251,12 @@ export async function POST(request: NextRequest) {
         appointmentId,
       },
     });
+    await inngest.send({
+      name: "appointment/online-reminder-t15.cancelled",
+      data: {
+        appointmentId,
+      },
+    });
   } catch (err) {
     console.error("[cancel] Failed to cancel reminder:", err);
   }
@@ -267,6 +307,12 @@ export async function POST(request: NextRequest) {
       ? React.createElement(React.Fragment, null, baseMessage, refundNode)
       : baseMessage;
 
+    const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
+      priceCents: appointment.priceCentsAtBooking ?? null,
+      baseCurrency: appointment.currencyAtBooking ?? null,
+      patientTimezone: appointment.patientTimezone,
+    });
+
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
       to: appointment.email,
@@ -293,6 +339,8 @@ export async function POST(request: NextRequest) {
         cancelUrl: "",
         rescheduleUrl: "",
         showOnlineContactFallback: false,
+        priceLabel,
+        approxLocalPriceLabel,
       }),
     });
 
@@ -302,6 +350,15 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("[cancel] Cancellation email failed:", err);
   }
+
+  // Resolve the patient user id from the appointment email so we can mark them
+  // as the actor — the toaster will then suppress the live toast for the
+  // patient who just clicked Cancel themselves.
+  const patientUser = await prisma.user.findUnique({
+    where: { email: appointment.email },
+    select: { id: true },
+  });
+  const actorUserId = patientUser?.id ?? null;
 
   try {
     const appointmentDate = appointment.date.toISOString().slice(0, 10);
@@ -331,6 +388,7 @@ export async function POST(request: NextRequest) {
       message: `Your appointment${
         doctorDisplayName ? ` with ${doctorDisplayName}` : ""
       } on ${formattedDate} at ${formattedTime} was cancelled.${refundAppendix}`,
+      actorUserId,
     });
   } catch (err) {
     console.error("[cancel] Failed to create patient notification:", err);
@@ -353,6 +411,7 @@ export async function POST(request: NextRequest) {
       type: NotificationType.APPOINTMENT_CANCELLED,
       title: "Appointment cancelled by patient",
       message: `${appointment.patientName} cancelled their appointment scheduled for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+      actorUserId,
     });
   } catch (err) {
     console.error("[cancel] Failed to create doctor notification:", err);

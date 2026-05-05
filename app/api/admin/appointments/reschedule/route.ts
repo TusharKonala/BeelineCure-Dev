@@ -108,6 +108,10 @@ export async function POST(request: NextRequest) {
     date,
     time,
     requestOrigin,
+    // Admin is the actor; doesn't match patient or doctor recipient so toasts
+    // for them remain (admin's own toast is irrelevant since reschedule
+    // doesn't notify admins).
+    actorUserId: session.user.id,
   });
 
   if (!result.ok) {

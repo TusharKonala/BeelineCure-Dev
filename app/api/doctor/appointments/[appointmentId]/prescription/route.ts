@@ -85,7 +85,7 @@ async function getDoctorFromSession() {
   if (!doctor) {
     return { error: NextResponse.json({ error: "Doctor profile not found" }, { status: 404 }) };
   }
-  return { doctor };
+  return { doctor, userId: session.user.id };
 }
 
 export async function GET(
@@ -354,6 +354,7 @@ export async function PUT(
       type: NotificationType.APPOINTMENT_REMINDER,
       title: notificationTitle,
       message: notificationMessage,
+      actorUserId: doctorResult.userId,
     });
   } catch (err) {
     console.error("[doctor-prescription] Failed direct patient notification delivery:", err);

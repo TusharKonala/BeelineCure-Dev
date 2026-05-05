@@ -189,6 +189,7 @@ export async function PATCH(request: NextRequest) {
     doctorId: doctor.id,
     reason,
     requestOrigin: request.nextUrl.origin,
+    actorUserId: session.user.id,
   });
 
   if (!result.ok) {

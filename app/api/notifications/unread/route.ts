@@ -18,6 +18,7 @@ export async function GET() {
       id: true,
       title: true,
       message: true,
+      actorUserId: true,
       createdAt: true,
     },
   });

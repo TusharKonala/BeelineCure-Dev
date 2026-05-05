@@ -9,7 +9,11 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { updateMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
 import { inngest } from "@/inngest/client";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
-import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import { buildEmailPriceLabels } from "@/lib/email-price-labels";
+import {
+  onlineT15ReminderAtMs,
+  reminderAtMsFromPatientLocal,
+} from "@/lib/reminder-time";
 import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
@@ -44,9 +48,22 @@ export async function reschedulePatientAppointment(input: {
   time: string;
   patientTimezoneOverride?: string;
   requestOrigin: string;
+  /**
+   * User id who initiated the reschedule. Stored on the resulting
+   * notification so the toaster can suppress live toasts when the recipient
+   * is also the actor.
+   */
+  actorUserId?: string | null;
 }): Promise<{ ok: true } | { ok: false; code: "slot_unavailable" }> {
-  const { appointment, dateParam, date, time, patientTimezoneOverride, requestOrigin } =
-    input;
+  const {
+    appointment,
+    dateParam,
+    date,
+    time,
+    patientTimezoneOverride,
+    requestOrigin,
+    actorUserId,
+  } = input;
 
   const conflict = await prisma.appointment.findFirst({
     where: {
@@ -84,6 +101,14 @@ export async function reschedulePatientAppointment(input: {
         appointmentId: updatedAppointment.id,
       },
     });
+    // Cancel any pending 15-min online reminder; we'll schedule a fresh one
+    // below if the new slot is in the future.
+    await inngest.send({
+      name: "appointment/online-reminder-t15.cancelled",
+      data: {
+        appointmentId: updatedAppointment.id,
+      },
+    });
 
     const reminderAtMs = reminderAtMsFromPatientLocal(
       dateParam,
@@ -99,6 +124,21 @@ export async function reschedulePatientAppointment(input: {
         },
         ts: reminderAtMs,
       });
+    }
+
+    if (updatedAppointment.consultationType === ConsultationType.ONLINE) {
+      const t15Ms = onlineT15ReminderAtMs(
+        dateParam,
+        time,
+        appointment.timezone,
+      );
+      if (t15Ms !== null) {
+        await inngest.send({
+          name: "appointment/online-reminder-t15.scheduled",
+          data: { appointmentId: updatedAppointment.id },
+          ts: t15Ms,
+        });
+      }
     }
   } catch (err) {
     console.error("[appointment-reschedule] Failed to re-schedule reminder:", err);
@@ -137,6 +177,12 @@ export async function reschedulePatientAppointment(input: {
         select: { googleMeetUrl: true },
       });
 
+      const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
+        priceCents: updatedAppointment.priceCentsAtBooking ?? null,
+        baseCurrency: updatedAppointment.currencyAtBooking ?? null,
+        patientTimezone: updatedAppointment.patientTimezone,
+      });
+
       const { error } = await resend.emails.send({
         from: "Clinic Appointments <onboarding@resend.dev>",
         to: updatedAppointment.email,
@@ -165,6 +211,8 @@ export async function reschedulePatientAppointment(input: {
           cancelUrl,
           rescheduleUrl,
           meetLink: latestMeet?.googleMeetUrl ?? null,
+          priceLabel,
+          approxLocalPriceLabel,
         }),
       });
 
@@ -203,6 +251,7 @@ export async function reschedulePatientAppointment(input: {
       message: `Your appointment${
         doctorDisplayName ? ` with ${doctorDisplayName}` : ""
       } is now set for ${formattedDate} at ${formattedTime}.`,
+      actorUserId: actorUserId ?? null,
     });
   } catch (err) {
     console.error("[appointment-reschedule] Failed to create notification:", err);

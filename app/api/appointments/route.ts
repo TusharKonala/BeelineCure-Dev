@@ -29,6 +29,7 @@ import {
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
 import { createDoctorNotificationForDoctorId } from "@/lib/notifications";
+import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { fromZonedTime } from "date-fns-tz";
 
@@ -293,6 +294,12 @@ export async function POST(request: NextRequest) {
     appointment.id,
   )}&token=${encodeURIComponent(rescheduleToken)}`;
 
+  const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
+    priceCents: priceCentsAtBooking,
+    baseCurrency: currencyAtBooking,
+    patientTimezone,
+  });
+
   try {
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -306,6 +313,8 @@ export async function POST(request: NextRequest) {
         consultationType,
         cancelUrl,
         rescheduleUrl,
+        priceLabel,
+        approxLocalPriceLabel,
       }),
     });
     if (error) {
@@ -327,6 +336,7 @@ export async function POST(request: NextRequest) {
       type: NotificationType.APPOINTMENT_BOOKED,
       title: "New appointment booked",
       message: `${patientName} booked a ${modality} appointment for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+      actorUserId: session?.user?.id ?? null,
     });
   } catch (err) {
     console.error("[appointments] Failed to create doctor notification:", err);

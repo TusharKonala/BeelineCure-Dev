@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
+import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
 import { inngest } from "@/inngest/client";
 import {
@@ -60,6 +61,12 @@ export async function cancelAppointmentByStaff(input: {
   doctorId?: string;
   reason: CancelReason;
   requestOrigin?: string;
+  /**
+   * User id who initiated the cancellation. Stored on the resulting patient
+   * notification so the toaster can suppress live toasts when the recipient
+   * is also the actor.
+   */
+  actorUserId?: string | null;
 }) {
   const appointment = await prisma.appointment.findFirst({
     where: {
@@ -82,6 +89,8 @@ export async function cancelAppointmentByStaff(input: {
       stripePaymentIntentId: true,
       refundStatus: true,
       googleCalendarEventId: true,
+      priceCentsAtBooking: true,
+      currencyAtBooking: true,
     },
   });
   if (!appointment) return { ok: false as const, code: "NOT_FOUND" as const };
@@ -138,6 +147,12 @@ export async function cancelAppointmentByStaff(input: {
         appointmentId: appointment.id,
       },
     });
+    await inngest.send({
+      name: "appointment/online-reminder-t15.cancelled",
+      data: {
+        appointmentId: appointment.id,
+      },
+    });
   } catch (err) {
     console.error("[doctor-cancellations] Failed to cancel reminder:", err);
   }
@@ -161,6 +176,12 @@ export async function cancelAppointmentByStaff(input: {
         ? " We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it."
         : "";
     const message = `${copy.message}${refundAppendix}`;
+
+    const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
+      priceCents: appointment.priceCentsAtBooking ?? null,
+      baseCurrency: appointment.currencyAtBooking ?? null,
+      patientTimezone: appointment.patientTimezone,
+    });
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -192,6 +213,8 @@ export async function cancelAppointmentByStaff(input: {
         cancelUrl: "",
         rescheduleUrl: "",
         showOnlineContactFallback: false,
+        priceLabel,
+        approxLocalPriceLabel,
       }),
     });
 
@@ -231,6 +254,7 @@ export async function cancelAppointmentByStaff(input: {
       message: `Your appointment${
         doctorDisplayName ? ` with ${doctorDisplayName}` : ""
       } on ${formattedDate} at ${formattedTime} was cancelled by your doctor.`,
+      actorUserId: input.actorUserId ?? null,
     });
   } catch (err) {
     console.error("[doctor-cancellations] Failed to create notification:", err);
@@ -244,6 +268,7 @@ export async function cancelAppointmentByDoctor(input: {
   doctorId: string;
   reason: CancelReason;
   requestOrigin?: string;
+  actorUserId?: string | null;
 }) {
   return cancelAppointmentByStaff(input);
 }

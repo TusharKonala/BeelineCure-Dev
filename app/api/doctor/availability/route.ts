@@ -20,7 +20,16 @@ import {
 } from "@/lib/doctor-local-date";
 import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
+import { Resend } from "resend";
 import { z } from "zod";
+import {
+  formatDateInDoctorTz,
+  formatTimeInDoctorTz,
+} from "@/lib/timezone-display";
+import {
+  DoctorHolidaySummaryEmailTemplate,
+  type DoctorHolidaySummaryItem,
+} from "@/components/doctor-holiday-summary-email-template";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -292,9 +301,15 @@ export async function PUT(request: Request) {
     where: { userId: session.user.id },
     select: {
       id: true,
+      name: true,
       timezone: true,
       slotDurationMinutes: true,
       isActive: true,
+      user: {
+        select: {
+          email: true,
+        },
+      },
     },
   });
   if (!doctor) {
@@ -398,7 +413,16 @@ export async function PUT(request: Request) {
       date: { in: affectedDates },
       status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
     },
-    select: { id: true, date: true, time: true },
+    select: {
+      id: true,
+      date: true,
+      time: true,
+      patientName: true,
+      email: true,
+      phone: true,
+      consultationType: true,
+      timezone: true,
+    },
   });
   const appointmentsByDate = new Map<string, { id: string; time: string }[]>();
   for (const appointment of activeAppointments) {
@@ -511,7 +535,61 @@ export async function PUT(request: Request) {
         doctorId: doctor.id,
         reason: "doctor_holiday",
         requestOrigin,
+        actorUserId: session.user.id,
       });
+    }
+
+    // Send the doctor a single summary email of everything that was
+    // cancelled. Best-effort — failures are logged but don't fail the
+    // availability update.
+    const doctorEmail = doctor.user?.email?.trim();
+    if (doctorEmail && process.env.RESEND_API_KEY) {
+      try {
+        const resend = new Resend(process.env.RESEND_API_KEY);
+        const grouped: Record<string, DoctorHolidaySummaryItem[]> = {};
+        for (const appt of activeAppointments) {
+          const ymdStr = appt.date.toISOString().slice(0, 10);
+          const dateLabel = formatDateInDoctorTz(
+            ymdStr,
+            appt.time,
+            doctor.timezone,
+          );
+          const timeLabel = formatTimeInDoctorTz(
+            ymdStr,
+            appt.time,
+            doctor.timezone,
+          );
+          const list = grouped[dateLabel] ?? (grouped[dateLabel] = []);
+          list.push({
+            patientName: appt.patientName,
+            appointmentTime: timeLabel,
+            consultationLabel:
+              appt.consultationType === "ONLINE" ? "Online" : "In-clinic",
+            patientEmail: appt.email,
+            patientPhone: appt.phone,
+          });
+        }
+        const dateLabels = Object.keys(grouped).sort();
+        const { error: emailError } = await resend.emails.send({
+          from: "Clinic Appointments <onboarding@resend.dev>",
+          to: doctorEmail,
+          subject: `Holiday cancellation summary — ${activeAppointments.length} appointment${activeAppointments.length === 1 ? "" : "s"}`,
+          react: DoctorHolidaySummaryEmailTemplate({
+            doctorName: doctor.name,
+            dateLabels,
+            doctorTimezone: doctor.timezone,
+            appointmentsByDate: grouped,
+          }),
+        });
+        if (emailError) {
+          console.error(
+            "[availability/holiday] Summary email failed:",
+            emailError,
+          );
+        }
+      } catch (err) {
+        console.error("[availability/holiday] Summary email threw:", err);
+      }
     }
   }
 

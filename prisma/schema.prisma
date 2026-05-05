@@ -145,6 +145,9 @@ model Doctor {
   /// Contact phone for clinic / admin search (optional for legacy rows).
   phone            String?
   specialization   String
+  /// Doctor degree / qualification (e.g., "MBBS, MD"). Required at signup
+  /// going forward; nullable to keep older rows valid.
+  qualification    String?
   licenseNumber    String
   yearsExperience  Int?
   bio              String?              @db.Text
@@ -312,6 +315,10 @@ model Notification {
   type      NotificationType
   title     String
   message   String           @db.Text
+  /// User id who initiated the action that produced this notification.
+  /// Null for system-triggered notifications (cron jobs, webhooks, etc.).
+  /// Used to suppress live toasts when the recipient is also the actor.
+  actorUserId String?
   readAt    DateTime?
   createdAt DateTime         @default(now())
 
