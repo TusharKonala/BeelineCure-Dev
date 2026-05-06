@@ -20,6 +20,7 @@ type RescheduleUiState =
   | "invalid_link"
   | "invalid_body"
   | "already_cancelled"
+  | "too_close_to_reschedule"
   | "error";
 
 type AppointmentDetails = {
@@ -45,6 +46,7 @@ async function fetchAppointmentDetails(
   | { status: "success"; appointment: AppointmentDetails }
   | { status: "invalid_link" }
   | { status: "already_cancelled" }
+  | { status: "too_close_to_reschedule" }
 > {
   const res = await fetch(
     `/api/reschedule-appointment?appointmentId=${encodeURIComponent(
@@ -208,7 +210,8 @@ function RescheduleContent() {
       if (
         nextState === "already_cancelled" ||
         nextState === "invalid_link" ||
-        nextState === "invalid_body"
+        nextState === "invalid_body" ||
+        nextState === "too_close_to_reschedule"
       ) {
         setState(nextState);
         return;
@@ -241,6 +244,8 @@ function RescheduleContent() {
         return "Invalid Request";
       case "error":
         return "Reschedule Error";
+      case "too_close_to_reschedule":
+        return "Reschedule Not Available";
       default:
         return "Reschedule Appointment";
     }
@@ -258,6 +263,8 @@ function RescheduleContent() {
         return "Invalid request. Please try again.";
       case "error":
         return "We could not reschedule your appointment. Please try again.";
+      case "too_close_to_reschedule":
+        return "This appointment is less than 24 hours away. Please cancel and rebook instead.";
       default:
         return "Select a new date and time, then confirm rescheduling.";
     }

@@ -6,6 +6,8 @@ import { headers } from "next/headers";
 import { fromZonedTime } from "date-fns-tz";
 import { reschedulePatientAppointment } from "@/lib/appointment-reschedule";
 
+const RESCHEDULE_MIN_LEAD_TIME_MS = 24 * 60 * 60 * 1000;
+
 const rescheduleTokenSchema = z.object({
   appointmentId: z.string().min(1),
   token: z.string().min(1),
@@ -31,10 +33,16 @@ type RescheduleResponse =
   | { status: "invalid_link" }
   | { status: "invalid_body" }
   | { status: "already_cancelled" }
+  | { status: "too_close_to_reschedule" }
   | { status: "slot_unavailable" };
 
 function formatDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
+}
+
+function getAppointmentStartMs(dateParam: string, time: string, timezone: string): number {
+  const timeWithSeconds = time.length === 5 ? `${time}:00` : time;
+  return fromZonedTime(`${dateParam}T${timeWithSeconds}`, timezone).getTime();
 }
 
 export async function GET(request: NextRequest) {
@@ -78,14 +86,19 @@ export async function GET(request: NextRequest) {
   }
 
   const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
-  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
-  const appointmentStartMs = fromZonedTime(
-    `${appointmentDateParam}T${timeWithSeconds}`,
+  const appointmentStartMs = getAppointmentStartMs(
+    appointmentDateParam,
+    appointment.time,
     appointment.timezone,
-  ).getTime();
+  );
   if (appointmentStartMs <= Date.now()) {
     return NextResponse.json({
       status: "invalid_link",
+    } satisfies RescheduleResponse);
+  }
+  if (appointmentStartMs - Date.now() < RESCHEDULE_MIN_LEAD_TIME_MS) {
+    return NextResponse.json({
+      status: "too_close_to_reschedule",
     } satisfies RescheduleResponse);
   }
 
@@ -154,14 +167,19 @@ export async function POST(request: NextRequest) {
   }
 
   const appointmentDateParam = appointment.date.toISOString().slice(0, 10);
-  const timeWithSeconds = appointment.time.length === 5 ? `${appointment.time}:00` : appointment.time;
-  const appointmentStartMs = fromZonedTime(
-    `${appointmentDateParam}T${timeWithSeconds}`,
+  const appointmentStartMs = getAppointmentStartMs(
+    appointmentDateParam,
+    appointment.time,
     appointment.timezone,
-  ).getTime();
+  );
   if (appointmentStartMs <= Date.now()) {
     return NextResponse.json({
       status: "invalid_link",
+    } satisfies RescheduleResponse);
+  }
+  if (appointmentStartMs - Date.now() < RESCHEDULE_MIN_LEAD_TIME_MS) {
+    return NextResponse.json({
+      status: "too_close_to_reschedule",
     } satisfies RescheduleResponse);
   }
 
