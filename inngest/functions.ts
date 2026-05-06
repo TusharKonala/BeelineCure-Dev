@@ -23,6 +23,10 @@ type PrescriptionReminderType = "HALFWAY" | "COMPLETED";
 const OVERDUE_IN_APP_MS = 24 * 60 * 60 * 1000;
 const OVERDUE_EMAIL_MS = 48 * 60 * 60 * 1000;
 
+function isReminderEligibleAppointmentStatus(status: AppointmentStatus): boolean {
+  return status === AppointmentStatus.CONFIRMED;
+}
+
 function formatDaysValue(days: number): string {
   return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(1)));
 }
@@ -81,11 +85,8 @@ export const sendAppointmentReminder = inngest.createFunction(
     });
 
     if (!appointment) return { skipped: true, reason: "not_found" };
-    if (appointment.status === AppointmentStatus.CANCELLED) {
-      return { skipped: true, reason: "cancelled" };
-    }
-    if (appointment.status === AppointmentStatus.COMPLETED) {
-      return { skipped: true, reason: "completed" };
+    if (!isReminderEligibleAppointmentStatus(appointment.status)) {
+      return { skipped: true, reason: "inactive_status" };
     }
     if (!appointment.cancelToken || !appointment.rescheduleToken) {
       return { skipped: true, reason: "missing_tokens" };
@@ -220,11 +221,8 @@ export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
     if (appointment.consultationType !== "ONLINE") {
       return { skipped: true, reason: "not_online" };
     }
-    if (appointment.status === AppointmentStatus.CANCELLED) {
-      return { skipped: true, reason: "cancelled" };
-    }
-    if (appointment.status === AppointmentStatus.COMPLETED) {
-      return { skipped: true, reason: "completed" };
+    if (!isReminderEligibleAppointmentStatus(appointment.status)) {
+      return { skipped: true, reason: "inactive_status" };
     }
 
     const dateStr = appointment.date.toISOString().slice(0, 10);
