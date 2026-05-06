@@ -15,6 +15,7 @@ import {
 } from "@/lib/timezone-display";
 import { filterReschedulableSlots } from "@/lib/reschedule-slots";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { currencyForTimezone } from "@/lib/currency";
 
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -30,6 +31,8 @@ type RefundPreviewPayload = {
   originalPaidAmountCents: number | null;
   eligibleRefundAmountCents: number | null;
   currency: string | null;
+  equivalentAmountCents?: number | null;
+  equivalentCurrency?: string | null;
 };
 
 function formatRefundCents(cents: number, currency: string | null): string {
@@ -42,6 +45,11 @@ function formatRefundCents(cents: number, currency: string | null): string {
   } catch {
     return `${(cents / 100).toFixed(2)} ${code}`;
   }
+}
+
+function browserCurrencyGuess(): string {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
+  return currencyForTimezone(timezone);
 }
 
 type AdminAppointmentItem = {
@@ -138,6 +146,7 @@ export default function AdminAppointmentsClient() {
   const [refundPreviewLoading, setRefundPreviewLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [browserCurrency] = useState<string>(() => browserCurrencyGuess());
   const latestRequestIdRef = useRef(0);
 
   const [rescheduleTarget, setRescheduleTarget] = useState<AdminAppointmentItem | null>(
@@ -173,7 +182,7 @@ export default function AdminAppointmentsClient() {
     void fetch(
       `/api/appointments/refund-preview?appointmentId=${encodeURIComponent(
         cancelTarget.id,
-      )}`,
+      )}&targetCurrency=${encodeURIComponent(browserCurrency)}`,
       { cache: "no-store" },
     )
       .then(async (res) => {
@@ -199,7 +208,7 @@ export default function AdminAppointmentsClient() {
     return () => {
       cancelled = true;
     };
-  }, [cancelTarget]);
+  }, [cancelTarget, browserCurrency]);
 
   const loadAppointments = useCallback(
     async (nextPage: number, append: boolean) => {
@@ -312,6 +321,14 @@ export default function AdminAppointmentsClient() {
           doctorTimezone: doctorTz,
         })
       : [];
+  const hasSelectableSlots = filteredSlots.some(
+    (time) =>
+      !(
+        rescheduleTarget &&
+        time === rescheduleTarget.time &&
+        selectedDate === rescheduleTarget.date
+      ),
+  );
 
   const isCurrentAppointmentSlot =
     !!rescheduleTarget &&
@@ -738,6 +755,18 @@ export default function AdminAppointmentsClient() {
                                 refundPreview.eligibleRefundAmountCents,
                                 refundPreview.currency,
                               )}{" "}
+                              {typeof refundPreview.equivalentAmountCents ===
+                                "number" &&
+                              refundPreview.equivalentCurrency ? (
+                                <>
+                                  (
+                                  {formatRefundCents(
+                                    refundPreview.equivalentAmountCents,
+                                    refundPreview.equivalentCurrency,
+                                  )}
+                                  )
+                                </>
+                              ) : null}{" "}
                               ({refundPreview.percentage}%).
                             </p>
                           ))}
@@ -758,7 +787,11 @@ export default function AdminAppointmentsClient() {
                     setCancelTarget(null);
                     setCancelReason(null);
                   }}
-                  disabled={isCanceling}
+                  disabled={
+                    isCanceling ||
+                    (cancelTarget.consultationType === "ONLINE" &&
+                      refundPreviewLoading)
+                  }
                 >
                   Keep appointment
                 </button>
@@ -766,7 +799,11 @@ export default function AdminAppointmentsClient() {
                   type="button"
                   className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void confirmCancelAppointment()}
-                  disabled={isCanceling}
+                  disabled={
+                    isCanceling ||
+                    (cancelTarget.consultationType === "ONLINE" &&
+                      refundPreviewLoading)
+                  }
                 >
                   {isCanceling ? "Cancelling..." : "Confirm cancel"}
                 </button>
@@ -879,9 +916,9 @@ export default function AdminAppointmentsClient() {
                         ))}
                       </div>
                     )}
-                    {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
+                    {!slotsLoadingOrFetching && !hasSelectableSlots && (
                       <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
-                        No matching slots for this date.
+                        No slots available for this date.
                       </p>
                     )}
                     {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
@@ -910,15 +947,23 @@ export default function AdminAppointmentsClient() {
                                 setRescheduleError(null);
                               }}
                             >
-                              {slotTzView === "patient"
-                                ? formatTimeInPatientTz(
-                                    selectedDate,
-                                    time,
-                                    doctorTz,
-                                    rescheduleTarget.patientTimezone,
-                                  )
-                                : formatTimeInDoctorTz(selectedDate, time, doctorTz)}
-                              {isCurrent ? " · Current Slot" : ""}
+                              <span className="inline-flex flex-col items-center leading-tight">
+                                <span>
+                                  {slotTzView === "patient"
+                                    ? formatTimeInPatientTz(
+                                        selectedDate,
+                                        time,
+                                        doctorTz,
+                                        rescheduleTarget.patientTimezone,
+                                      )
+                                    : formatTimeInDoctorTz(selectedDate, time, doctorTz)}
+                                </span>
+                                {isCurrent ? (
+                                  <span className="text-[10px] uppercase tracking-wide">
+                                    Current
+                                  </span>
+                                ) : null}
+                              </span>
                             </Button>
                           );
                         })}

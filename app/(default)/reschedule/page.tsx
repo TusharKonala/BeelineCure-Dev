@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 import { PostAppointmentActions } from "@/components/PostAppointmentActions";
+import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConsultationType, AppointmentStatus } from "@/generated/prisma/client";
 import {
@@ -169,6 +170,14 @@ function RescheduleContent() {
           doctorTimezone: doctorTz,
         })
       : [];
+  const hasSelectableSlots = filteredSlots.some(
+    (time) =>
+      !(
+        appointment &&
+        time === appointment.time &&
+        selectedDate === appointment.date
+      ),
+  );
 
   const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setHasSelectionInteraction(true);
@@ -276,7 +285,11 @@ function RescheduleContent() {
         <section className="mx-auto max-w-xl">
           <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
             <h1 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-              {title}
+              {state === "too_close_to_reschedule" ? (
+                <MontagaCapitalN text={title} />
+              ) : (
+                title
+              )}
             </h1>
             <p className="mt-4 font-montserrat text-sm text-[#5E5E5E] md:text-base">
               {message}
@@ -366,7 +379,7 @@ function RescheduleContent() {
                           </div>
                         )}
 
-                        {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
+                        {!slotsLoadingOrFetching && !hasSelectableSlots && (
                           <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
                             No slots available for this date.
                           </p>
@@ -400,8 +413,14 @@ function RescheduleContent() {
                                     setSubmitError(null);
                                   }}
                                 >
-                                  {formatTimeInPatientTz(selectedDate, time, doctorTz)}
-                                  {isCurrent ? " · Current Slot" : ""}
+                                  <span className="inline-flex flex-col items-center leading-tight">
+                                    <span>{formatTimeInPatientTz(selectedDate, time, doctorTz)}</span>
+                                    {isCurrent ? (
+                                      <span className="text-[10px] uppercase tracking-wide">
+                                        Current
+                                      </span>
+                                    ) : null}
+                                  </span>
                                 </Button>
                               );
                             })}

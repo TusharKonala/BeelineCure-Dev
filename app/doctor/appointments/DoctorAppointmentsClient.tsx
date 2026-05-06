@@ -650,7 +650,11 @@ export default function DoctorAppointmentsClient() {
                     setCancelTarget(null);
                     setCancelReason(null);
                   }}
-                  disabled={isCanceling}
+                  disabled={
+                    isCanceling ||
+                    (cancelTarget.consultationType === "ONLINE" &&
+                      refundPreviewLoading)
+                  }
                 >
                   Keep appointment
                 </button>
@@ -658,7 +662,11 @@ export default function DoctorAppointmentsClient() {
                   type="button"
                   className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void confirmCancelAppointment()}
-                  disabled={isCanceling}
+                  disabled={
+                    isCanceling ||
+                    (cancelTarget.consultationType === "ONLINE" &&
+                      refundPreviewLoading)
+                  }
                 >
                   {isCanceling ? "Cancelling..." : "Confirm cancel"}
                 </button>
