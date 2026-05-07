@@ -13,7 +13,15 @@ import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-type ListDay = { date: string; slotStarts: string[] };
+type ListDay = {
+  date: string;
+  slotStarts: string[];
+  slotDetails?: {
+    startTime: string;
+    consultationType: "CLINIC" | "ONLINE" | "BOTH";
+    booked: boolean;
+  }[];
+};
 const ALL_MONTHS_VALUE = "__all_months__";
 
 function formatScheduleDayHeading(isoDate: string): string {
@@ -52,6 +60,125 @@ function formatMonthOptionLabel(ym: string): string {
   }).format(dt);
 }
 
+/** Booked row chip: compact type in parentheses. */
+function bookedConsultationAbbrev(type: "CLINIC" | "ONLINE" | "BOTH"): string {
+  if (type === "CLINIC") return "(C)";
+  if (type === "ONLINE") return "(O)";
+  return "(C/O)";
+}
+
+type SlotDetail = {
+  startTime: string;
+  consultationType: "CLINIC" | "ONLINE" | "BOTH";
+  booked: boolean;
+};
+
+function normalizeDaySlots(day: ListDay): SlotDetail[] {
+  return (
+    day.slotDetails ??
+    day.slotStarts.map((startTime) => ({
+      startTime,
+      consultationType: "BOTH" as const,
+      booked: false,
+    }))
+  );
+}
+
+/** Lexicographic sort works for "HH:MM" / "H:MM" style slot starts used in scheduling. */
+function compareSlotStart(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true });
+}
+
+function groupScheduleDaySlots(slots: SlotDetail[]) {
+  const clinicOnlyAvail: string[] = [];
+  const onlineOnlyAvail: string[] = [];
+  const clinicOnlineAvail: string[] = [];
+  const booked: { startTime: string; consultationType: SlotDetail["consultationType"] }[] =
+    [];
+
+  for (const s of slots) {
+    if (s.booked) {
+      booked.push({
+        startTime: s.startTime,
+        consultationType: s.consultationType,
+      });
+      continue;
+    }
+    if (s.consultationType === "CLINIC") clinicOnlyAvail.push(s.startTime);
+    else if (s.consultationType === "ONLINE") onlineOnlyAvail.push(s.startTime);
+    else clinicOnlineAvail.push(s.startTime);
+  }
+
+  clinicOnlyAvail.sort(compareSlotStart);
+  onlineOnlyAvail.sort(compareSlotStart);
+  clinicOnlineAvail.sort(compareSlotStart);
+  booked.sort((x, y) => compareSlotStart(x.startTime, y.startTime));
+
+  return { clinicOnlyAvail, onlineOnlyAvail, clinicOnlineAvail, booked };
+}
+
+function SlotSummaryFromDetails({ slots }: { slots: SlotDetail[] }) {
+  const { clinicOnlyAvail, onlineOnlyAvail, clinicOnlineAvail, booked } =
+    groupScheduleDaySlots(slots);
+  const hasAny =
+    clinicOnlyAvail.length > 0 ||
+    onlineOnlyAvail.length > 0 ||
+    clinicOnlineAvail.length > 0 ||
+    booked.length > 0;
+
+  if (!hasAny) {
+    return (
+      <span className="text-[#5E5E5E]">No slots</span>
+    );
+  }
+
+  return (
+    <div className="mt-1 space-y-1 font-montserrat text-sm text-[#333333]">
+      {clinicOnlyAvail.length > 0 ? (
+        <p>
+          <span className="font-semibold">Clinic:</span>{" "}
+          <span className="text-[#333333]">{clinicOnlyAvail.join(", ")}</span>
+        </p>
+      ) : null}
+      {onlineOnlyAvail.length > 0 ? (
+        <p>
+          <span className="font-semibold">Online:</span>{" "}
+          <span className="text-[#333333]">{onlineOnlyAvail.join(", ")}</span>
+        </p>
+      ) : null}
+      {clinicOnlineAvail.length > 0 ? (
+        <p>
+          <span className="font-semibold">Clinic/Online:</span>{" "}
+          <span className="text-[#333333]">{clinicOnlineAvail.join(", ")}</span>
+        </p>
+      ) : null}
+      {booked.length > 0 ? (
+        <p>
+          <span className="font-semibold">Booked:</span>{" "}
+          <span className="text-[#333333]">
+            {booked
+              .map(
+                (b) =>
+                  `${b.startTime} ${bookedConsultationAbbrev(b.consultationType)}`,
+              )
+              .join(", ")}
+          </span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ScheduleDaySlotSummary({ day }: { day: ListDay }) {
+  const slots = normalizeDaySlots(day);
+  if (slots.length === 0) {
+    return (
+      <span className="text-[#5E5E5E]">No slots</span>
+    );
+  }
+  return <SlotSummaryFromDetails slots={slots} />;
+}
+
 /** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` inset — same as patient appointments. */
 const SELECT_CHEVRON =
   'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
@@ -73,7 +200,7 @@ function ViewScheduleQuickCheck({
   inputRef,
   quickCheckDate,
   setQuickCheckDate,
-  quickCheckSlots,
+  quickCheckSlotDetails,
   quickCheckLoading,
   quickCheckError,
 }: {
@@ -81,7 +208,7 @@ function ViewScheduleQuickCheck({
   inputRef: RefObject<HTMLInputElement | null>;
   quickCheckDate: string;
   setQuickCheckDate: (v: string) => void;
-  quickCheckSlots: string[] | null;
+  quickCheckSlotDetails: SlotDetail[] | null;
   quickCheckLoading: boolean;
   quickCheckError: string | null;
 }) {
@@ -128,8 +255,8 @@ function ViewScheduleQuickCheck({
             <Skeleton className="h-4 w-full max-w-md" />
           ) : quickCheckError ? (
             <span className="text-red-600">{quickCheckError}</span>
-          ) : quickCheckSlots && quickCheckSlots.length > 0 ? (
-            <span>{quickCheckSlots.join(", ")}</span>
+          ) : quickCheckSlotDetails && quickCheckSlotDetails.length > 0 ? (
+            <SlotSummaryFromDetails slots={quickCheckSlotDetails} />
           ) : (
             <span className="text-[#5E5E5E]">
               No availability set for {formatScheduleDayHeading(d)}
@@ -167,6 +294,10 @@ export function ViewSchedulePanel({
   const [holidayCancelCount, setHolidayCancelCount] = useState<number | null>(
     null,
   );
+  const [holidayCancelBreakdown, setHolidayCancelBreakdown] = useState<{
+    inClinic: number;
+    online: number;
+  } | null>(null);
   const [holidayCancelCountLoading, setHolidayCancelCountLoading] =
     useState(false);
   const [holidayCancelCountError, setHolidayCancelCountError] = useState<
@@ -174,15 +305,24 @@ export function ViewSchedulePanel({
   >(null);
   const [mounted, setMounted] = useState(false);
 
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<
+    typeof ALL_MONTHS_VALUE | string
+  >(ALL_MONTHS_VALUE);
   const [selectedDateFilter, setSelectedDateFilter] = useState<"all" | string>(
     "all",
   );
+  const [scheduleMonthsWithAvailability, setScheduleMonthsWithAvailability] =
+    useState<string[]>([]);
+  const [scheduleDatesByMonth, setScheduleDatesByMonth] = useState<
+    Record<string, string[]>
+  >({});
 
   const quickCheckInputRef = useRef<HTMLInputElement>(null);
   const latestListRequestIdRef = useRef(0);
   const [quickCheckDate, setQuickCheckDate] = useState("");
-  const [quickCheckSlots, setQuickCheckSlots] = useState<string[] | null>(null);
+  const [quickCheckSlotDetails, setQuickCheckSlotDetails] = useState<
+    SlotDetail[] | null
+  >(null);
   const [quickCheckLoading, setQuickCheckLoading] = useState(false);
   const [quickCheckError, setQuickCheckError] = useState<string | null>(null);
 
@@ -194,7 +334,7 @@ export function ViewSchedulePanel({
     let cancelled = false;
     const d = quickCheckDate.trim();
     if (!d) {
-      setQuickCheckSlots(null);
+      setQuickCheckSlotDetails(null);
       setQuickCheckError(null);
       setQuickCheckLoading(false);
       return;
@@ -211,16 +351,27 @@ export function ViewSchedulePanel({
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? "Could not load");
         }
-        const data = (await res.json()) as { slotStarts: string[] };
+        const data = (await res.json()) as {
+          slotDetails?: {
+            startTime: string;
+            consultationType: SlotDetail["consultationType"];
+            booked: boolean;
+          }[];
+        };
         if (!cancelled) {
-          setQuickCheckSlots(
-            Array.isArray(data.slotStarts) ? data.slotStarts : [],
+          const raw = Array.isArray(data.slotDetails) ? data.slotDetails : [];
+          setQuickCheckSlotDetails(
+            raw.map((s) => ({
+              startTime: s.startTime,
+              consultationType: s.consultationType,
+              booked: Boolean(s.booked),
+            })),
           );
         }
       } catch (e) {
         if (!cancelled) {
           setQuickCheckError(e instanceof Error ? e.message : "Could not load");
-          setQuickCheckSlots(null);
+          setQuickCheckSlotDetails(null);
         }
       } finally {
         if (!cancelled) setQuickCheckLoading(false);
@@ -231,44 +382,71 @@ export function ViewSchedulePanel({
     };
   }, [quickCheckDate]);
 
-  const loadList = useCallback(async (nextPage: number, append: boolean) => {
-    const requestId = ++latestListRequestIdRef.current;
-    setIsListLoading(true);
-    const res = await fetch(
-      `/api/doctor/availability?view=list&page=${nextPage}&limit=10`,
-      {
-        cache: "no-store",
-      },
-    );
-    if (!res.ok) {
+  const loadList = useCallback(
+    async (
+      nextPage: number,
+      append: boolean,
+      monthFilter: typeof ALL_MONTHS_VALUE | string,
+    ) => {
+      const requestId = ++latestListRequestIdRef.current;
+      setIsListLoading(true);
+      const params = new URLSearchParams({
+        view: "list",
+        page: String(nextPage),
+        limit: "10",
+      });
+      if (monthFilter !== ALL_MONTHS_VALUE) {
+        params.set("month", monthFilter);
+      }
+      const res = await fetch(
+        `/api/doctor/availability?${params.toString()}`,
+        {
+          cache: "no-store",
+        },
+      );
+      if (!res.ok) {
+        if (latestListRequestIdRef.current !== requestId) return;
+        setIsListLoading(false);
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Failed to load schedule");
+      }
+      const data = (await res.json()) as {
+        days: ListDay[];
+        today: string;
+        hasMore?: boolean;
+        page?: number;
+        monthsWithAvailability?: string[];
+        datesByMonth?: Record<string, string[]>;
+      };
       if (latestListRequestIdRef.current !== requestId) return;
+      const nextDays = Array.isArray(data.days) ? data.days : [];
+      setTodayFromApi(data.today);
+      setScheduleMonthsWithAvailability(
+        Array.isArray(data.monthsWithAvailability)
+          ? data.monthsWithAvailability
+          : [],
+      );
+      setScheduleDatesByMonth(
+        data.datesByMonth && typeof data.datesByMonth === "object"
+          ? data.datesByMonth
+          : {},
+      );
+      setDays((current) =>
+        append ? [...(current ?? []), ...nextDays] : nextDays,
+      );
+      setHasMore(Boolean(data.hasMore));
+      setPage(typeof data.page === "number" ? data.page : nextPage);
+      setError(null);
       setIsListLoading(false);
-      const data = (await res.json()) as { error?: string };
-      throw new Error(data.error ?? "Failed to load schedule");
-    }
-    const data = (await res.json()) as {
-      days: ListDay[];
-      today: string;
-      hasMore?: boolean;
-      page?: number;
-    };
-    if (latestListRequestIdRef.current !== requestId) return;
-    const nextDays = Array.isArray(data.days) ? data.days : [];
-    setTodayFromApi(data.today);
-    setDays((current) =>
-      append ? [...(current ?? []), ...nextDays] : nextDays,
-    );
-    setHasMore(Boolean(data.hasMore));
-    setPage(typeof data.page === "number" ? data.page : nextPage);
-    setError(null);
-    setIsListLoading(false);
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        await loadList(1, false);
+        await loadList(1, false, selectedMonth);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load");
@@ -278,48 +456,58 @@ export function ViewSchedulePanel({
     return () => {
       cancelled = true;
     };
-  }, [loadList, listRefreshVersion]);
+  }, [loadList, listRefreshVersion, selectedMonth]);
+
+  /** Single-date view is short; the sentinel stays in view and would page until `hasMore` is false. */
+  const allowScheduleListPagination = selectedDateFilter === "all";
 
   const [sentryRef] = useInfiniteScroll({
     loading: isListLoading,
-    hasNextPage: hasMore,
-    onLoadMore: () => void loadList(page + 1, true),
+    hasNextPage: hasMore && allowScheduleListPagination,
+    onLoadMore: () => void loadList(page + 1, true, selectedMonth),
     disabled: false,
     rootMargin: "0px 0px 300px 0px",
   });
 
   useEffect(() => {
-    if (!days?.length || !todayFromApi) {
-      if (days && days.length === 0) setSelectedMonth(null);
-      return;
-    }
-    const months = uniqueSortedMonths(days);
-
+    if (scheduleMonthsWithAvailability.length === 0) return;
     setSelectedMonth((prev) => {
       if (prev === ALL_MONTHS_VALUE) return prev;
-      if (prev !== null && months.includes(prev)) return prev;
+      if (scheduleMonthsWithAvailability.includes(prev)) return prev;
       return ALL_MONTHS_VALUE;
     });
-  }, [days, todayFromApi]);
+  }, [scheduleMonthsWithAvailability]);
 
   useEffect(() => {
     setSelectedDateFilter("all");
   }, [selectedMonth]);
 
   const monthOptions = useMemo(() => {
+    if (scheduleMonthsWithAvailability.length > 0) {
+      return scheduleMonthsWithAvailability;
+    }
     if (!days?.length) return [];
     return uniqueSortedMonths(days);
-  }, [days]);
+  }, [scheduleMonthsWithAvailability, days]);
 
   const dateOptionsInMonth = useMemo(() => {
-    if (!days?.length || !selectedMonth) return [];
-    if (selectedMonth === ALL_MONTHS_VALUE)
-      return [...days.map((d) => d.date)].sort();
-    return sortedDatesInMonth(days, selectedMonth);
-  }, [days, selectedMonth]);
+    if (selectedMonth === ALL_MONTHS_VALUE) {
+      if (Object.keys(scheduleDatesByMonth).length > 0) {
+        return Object.values(scheduleDatesByMonth)
+          .flat()
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      }
+      return [...(days ?? []).map((d) => d.date)].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true }),
+      );
+    }
+    const fromMeta = scheduleDatesByMonth[selectedMonth];
+    if (fromMeta?.length) return fromMeta;
+    return sortedDatesInMonth(days ?? [], selectedMonth);
+  }, [days, selectedMonth, scheduleDatesByMonth]);
 
   const filteredDays = useMemo(() => {
-    if (!days?.length || selectedMonth === null) return [];
+    if (!days?.length) return [];
     let out =
       selectedMonth === ALL_MONTHS_VALUE
         ? [...days]
@@ -348,6 +536,7 @@ export function ViewSchedulePanel({
     let cancelled = false;
     if (!holidayConfirmDate) {
       setHolidayCancelCount(null);
+      setHolidayCancelBreakdown(null);
       setHolidayCancelCountError(null);
       setHolidayCancelCountLoading(false);
       return;
@@ -356,6 +545,7 @@ export function ViewSchedulePanel({
       setHolidayCancelCountLoading(true);
       setHolidayCancelCountError(null);
       setHolidayCancelCount(null);
+      setHolidayCancelBreakdown(null);
       try {
         const res = await fetch(
           `/api/doctor/availability?date=${encodeURIComponent(holidayConfirmDate)}`,
@@ -365,12 +555,19 @@ export function ViewSchedulePanel({
           const data = (await res.json()) as { error?: string };
           throw new Error(data.error ?? "Could not load appointment count");
         }
-        const data = (await res.json()) as { bookedSlotStarts?: string[] };
+        const data = (await res.json()) as {
+          bookedSlotStarts?: string[];
+          bookedAppointmentsByType?: { inClinic?: number; online?: number };
+        };
         if (!cancelled) {
           const count = Array.isArray(data.bookedSlotStarts)
             ? data.bookedSlotStarts.length
             : 0;
           setHolidayCancelCount(count);
+          setHolidayCancelBreakdown({
+            inClinic: data.bookedAppointmentsByType?.inClinic ?? 0,
+            online: data.bookedAppointmentsByType?.online ?? 0,
+          });
         }
       } catch (e) {
         if (!cancelled) {
@@ -406,7 +603,7 @@ export function ViewSchedulePanel({
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Could not update");
       }
-      await loadList(1, false);
+      await loadList(1, false, selectedMonth);
     } catch (e) {
       setHolidayError(
         e instanceof Error ? e.message : "Could not mark holiday",
@@ -464,6 +661,22 @@ export function ViewSchedulePanel({
                     : "appointments"}
                 </span>{" "}
                 will be cancelled.
+                {(holidayCancelBreakdown?.inClinic ?? 0) +
+                (holidayCancelBreakdown?.online ?? 0) >
+                0 ? (
+                  <>
+                    {" "}
+                    (
+                    <span className="font-medium text-[#333333]">
+                      {holidayCancelBreakdown?.inClinic ?? 0} in-clinic
+                    </span>
+                    ,{" "}
+                    <span className="font-medium text-[#333333]">
+                      {holidayCancelBreakdown?.online ?? 0} online
+                    </span>
+                    )
+                  </>
+                ) : null}
               </span>
             )}{" "}
             Paid online bookings will be fully refunded, and patients will be
@@ -472,15 +685,17 @@ export function ViewSchedulePanel({
           <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
             <button
               type="button"
-              className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5]"
+              className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-2.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={holidayCancelCountLoading}
               onClick={() => setHolidayConfirmDate(null)}
             >
               Cancel
             </button>
             <button
               type="button"
-              className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c]"
+              className="cursor-pointer rounded-xl bg-[#dc2626] px-4 py-2.5 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => void executeMarkHoliday(holidayConfirmDate)}
+              disabled={holidayCancelCountLoading}
             >
               Remove availability
             </button>
@@ -557,70 +772,12 @@ export function ViewSchedulePanel({
               inputRef={quickCheckInputRef}
               quickCheckDate={quickCheckDate}
               setQuickCheckDate={setQuickCheckDate}
-              quickCheckSlots={quickCheckSlots}
+              quickCheckSlotDetails={quickCheckSlotDetails}
               quickCheckLoading={quickCheckLoading}
               quickCheckError={quickCheckError}
             />
           </div>
         ) : null}
-      </div>
-    );
-  }
-
-  if (selectedMonth === null) {
-    return (
-      <div
-        className="mt-6 space-y-4"
-        aria-busy="true"
-        aria-label="Loading schedule"
-      >
-        <div className="space-y-2">
-          <Skeleton className="h-3 w-full max-w-md" />
-          <Skeleton className="h-3 w-full max-w-lg" />
-        </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="w-full max-w-[min(100%,14rem)]">
-            <Skeleton className="h-3 w-12" />
-            <Skeleton className="mt-1.5 h-11 w-full rounded-xl" />
-          </div>
-          <div className="w-full max-w-[min(100%,14rem)]">
-            <Skeleton className="h-3 w-10" />
-            <Skeleton className="mt-1.5 h-11 w-full rounded-xl" />
-          </div>
-          {todayFromApi ? (
-            <ViewScheduleQuickCheck
-              minDate={todayFromApi}
-              inputRef={quickCheckInputRef}
-              quickCheckDate={quickCheckDate}
-              setQuickCheckDate={setQuickCheckDate}
-              quickCheckSlots={quickCheckSlots}
-              quickCheckLoading={quickCheckLoading}
-              quickCheckError={quickCheckError}
-            />
-          ) : (
-            <div className="w-full max-w-[min(100%,14rem)]">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="mt-1.5 h-11 w-full rounded-xl" />
-            </div>
-          )}
-        </div>
-        <ul className="space-y-3">
-          {[0, 1].map((i) => (
-            <li
-              key={i}
-              className="flex flex-col gap-3 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="min-w-0 flex-1 space-y-2">
-                <Skeleton className="h-4 w-40" />
-                <Skeleton className="h-4 w-full max-w-sm" />
-              </div>
-              <div className="flex shrink-0 gap-2">
-                <Skeleton className="h-8 w-14 rounded-lg" />
-                <Skeleton className="h-8 w-28 rounded-lg" />
-              </div>
-            </li>
-          ))}
-        </ul>
       </div>
     );
   }
@@ -634,7 +791,7 @@ export function ViewSchedulePanel({
 
       {todayFromApi ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          {monthOptions.length > 0 && selectedMonth !== null ? (
+          {monthOptions.length > 0 ? (
             <>
               <div className="w-full max-w-[min(100%,14rem)]">
                 <label
@@ -690,7 +847,7 @@ export function ViewSchedulePanel({
             inputRef={quickCheckInputRef}
             quickCheckDate={quickCheckDate}
             setQuickCheckDate={setQuickCheckDate}
-            quickCheckSlots={quickCheckSlots}
+            quickCheckSlotDetails={quickCheckSlotDetails}
             quickCheckLoading={quickCheckLoading}
             quickCheckError={quickCheckError}
           />
@@ -715,11 +872,8 @@ export function ViewSchedulePanel({
               className="flex flex-col gap-3 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="min-w-0 font-montserrat text-sm text-[#333333]">
-                <span className="font-semibold">
-                  {formatScheduleDayHeading(day.date)}
-                </span>
-                <span className="text-[#5E5E5E]"> — </span>
-                <span>{day.slotStarts.join(", ")}</span>
+                <p className="font-semibold">{formatScheduleDayHeading(day.date)}</p>
+                <ScheduleDaySlotSummary day={day} />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button
@@ -749,7 +903,7 @@ export function ViewSchedulePanel({
           ))}
         </ul>
       )}
-      {(hasMore || isListLoading) && (
+      {(hasMore || isListLoading) && allowScheduleListPagination && (
         <div
           ref={sentryRef}
           className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
