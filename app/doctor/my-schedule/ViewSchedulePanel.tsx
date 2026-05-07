@@ -12,16 +12,14 @@ import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import {
+  ScheduleDaySlotSummary,
+  SlotSummaryFromDetails,
+  normalizeDaySlots,
+  type ScheduleListDay as ListDay,
+  type SlotDetail,
+} from "./scheduleDaySlots";
 
-type ListDay = {
-  date: string;
-  slotStarts: string[];
-  slotDetails?: {
-    startTime: string;
-    consultationType: "CLINIC" | "ONLINE" | "BOTH";
-    booked: boolean;
-  }[];
-};
 const ALL_MONTHS_VALUE = "__all_months__";
 
 function formatScheduleDayHeading(isoDate: string): string {
@@ -58,125 +56,6 @@ function formatMonthOptionLabel(ym: string): string {
     month: "long",
     year: "numeric",
   }).format(dt);
-}
-
-/** Booked row chip: compact type in parentheses. */
-function bookedConsultationAbbrev(type: "CLINIC" | "ONLINE" | "BOTH"): string {
-  if (type === "CLINIC") return "(C)";
-  if (type === "ONLINE") return "(O)";
-  return "(C/O)";
-}
-
-type SlotDetail = {
-  startTime: string;
-  consultationType: "CLINIC" | "ONLINE" | "BOTH";
-  booked: boolean;
-};
-
-function normalizeDaySlots(day: ListDay): SlotDetail[] {
-  return (
-    day.slotDetails ??
-    day.slotStarts.map((startTime) => ({
-      startTime,
-      consultationType: "BOTH" as const,
-      booked: false,
-    }))
-  );
-}
-
-/** Lexicographic sort works for "HH:MM" / "H:MM" style slot starts used in scheduling. */
-function compareSlotStart(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true });
-}
-
-function groupScheduleDaySlots(slots: SlotDetail[]) {
-  const clinicOnlyAvail: string[] = [];
-  const onlineOnlyAvail: string[] = [];
-  const clinicOnlineAvail: string[] = [];
-  const booked: { startTime: string; consultationType: SlotDetail["consultationType"] }[] =
-    [];
-
-  for (const s of slots) {
-    if (s.booked) {
-      booked.push({
-        startTime: s.startTime,
-        consultationType: s.consultationType,
-      });
-      continue;
-    }
-    if (s.consultationType === "CLINIC") clinicOnlyAvail.push(s.startTime);
-    else if (s.consultationType === "ONLINE") onlineOnlyAvail.push(s.startTime);
-    else clinicOnlineAvail.push(s.startTime);
-  }
-
-  clinicOnlyAvail.sort(compareSlotStart);
-  onlineOnlyAvail.sort(compareSlotStart);
-  clinicOnlineAvail.sort(compareSlotStart);
-  booked.sort((x, y) => compareSlotStart(x.startTime, y.startTime));
-
-  return { clinicOnlyAvail, onlineOnlyAvail, clinicOnlineAvail, booked };
-}
-
-function SlotSummaryFromDetails({ slots }: { slots: SlotDetail[] }) {
-  const { clinicOnlyAvail, onlineOnlyAvail, clinicOnlineAvail, booked } =
-    groupScheduleDaySlots(slots);
-  const hasAny =
-    clinicOnlyAvail.length > 0 ||
-    onlineOnlyAvail.length > 0 ||
-    clinicOnlineAvail.length > 0 ||
-    booked.length > 0;
-
-  if (!hasAny) {
-    return (
-      <span className="text-[#5E5E5E]">No slots</span>
-    );
-  }
-
-  return (
-    <div className="mt-1 space-y-1 font-montserrat text-sm text-[#333333]">
-      {clinicOnlyAvail.length > 0 ? (
-        <p>
-          <span className="font-semibold">Clinic:</span>{" "}
-          <span className="text-[#333333]">{clinicOnlyAvail.join(", ")}</span>
-        </p>
-      ) : null}
-      {onlineOnlyAvail.length > 0 ? (
-        <p>
-          <span className="font-semibold">Online:</span>{" "}
-          <span className="text-[#333333]">{onlineOnlyAvail.join(", ")}</span>
-        </p>
-      ) : null}
-      {clinicOnlineAvail.length > 0 ? (
-        <p>
-          <span className="font-semibold">Clinic/Online:</span>{" "}
-          <span className="text-[#333333]">{clinicOnlineAvail.join(", ")}</span>
-        </p>
-      ) : null}
-      {booked.length > 0 ? (
-        <p>
-          <span className="font-semibold">Booked:</span>{" "}
-          <span className="text-[#333333]">
-            {booked
-              .map(
-                (b) =>
-                  `${b.startTime} ${bookedConsultationAbbrev(b.consultationType)}`,
-              )
-              .join(", ")}
-          </span>
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-function ScheduleDaySlotSummary({ day }: { day: ListDay }) {
-  const slots = normalizeDaySlots(day);
-  if (slots.length === 0) {
-    return (
-      <span className="text-[#5E5E5E]">No slots</span>
-    );
-  }
-  return <SlotSummaryFromDetails slots={slots} />;
 }
 
 /** Hide native select arrow; custom chevron at `right: 0.75rem` with `pr-10` inset — same as patient appointments. */
@@ -273,12 +152,20 @@ type ViewSchedulePanelProps = {
   onEditDate: (isoDate: string) => void;
   /** Parent bumps after a successful Set-tab save so the list refetches; not tied to Set date picker. */
   listRefreshVersion: number;
+  /**
+   * Notifies the parent (`MyScheduleClient`) whenever availability is mutated
+   * here (e.g. the doctor marks a holiday) so the parent's
+   * `existingAvailabilityDates` set — which drives the disabled dates on the
+   * Set Availability calendar — reloads immediately, no page refresh required.
+   */
+  onAvailabilityChanged?: (changedDate?: string) => void;
 };
 
 export function ViewSchedulePanel({
   timezone,
   onEditDate,
   listRefreshVersion,
+  onAvailabilityChanged,
 }: ViewSchedulePanelProps) {
   const [days, setDays] = useState<ListDay[] | null>(null);
   const [page, setPage] = useState(1);
@@ -311,6 +198,13 @@ export function ViewSchedulePanel({
   const [selectedDateFilter, setSelectedDateFilter] = useState<"all" | string>(
     "all",
   );
+  /**
+   * "Booked only" filter — when on, the list narrows to days that have at
+   * least one booked slot (within whatever month/date scope is selected) and
+   * each day's summary collapses to just the Booked line. Combines naturally
+   * with the existing month/date filters.
+   */
+  const [bookedOnly, setBookedOnly] = useState(false);
   const [scheduleMonthsWithAvailability, setScheduleMonthsWithAvailability] =
     useState<string[]>([]);
   const [scheduleDatesByMonth, setScheduleDatesByMonth] = useState<
@@ -515,8 +409,13 @@ export function ViewSchedulePanel({
     if (selectedDateFilter !== "all") {
       out = out.filter((d) => d.date === selectedDateFilter);
     }
+    if (bookedOnly) {
+      out = out.filter((d) =>
+        normalizeDaySlots(d).some((slot) => slot.booked),
+      );
+    }
     return out;
-  }, [days, selectedMonth, selectedDateFilter]);
+  }, [days, selectedMonth, selectedDateFilter, bookedOnly]);
 
   useEffect(() => {
     if (!holidayConfirmDate) return;
@@ -604,6 +503,7 @@ export function ViewSchedulePanel({
         throw new Error(data.error ?? "Could not update");
       }
       await loadList(1, false, selectedMonth);
+      onAvailabilityChanged?.(isoDate);
     } catch (e) {
       setHolidayError(
         e instanceof Error ? e.message : "Could not mark holiday",
@@ -851,7 +751,35 @@ export function ViewSchedulePanel({
             quickCheckLoading={quickCheckLoading}
             quickCheckError={quickCheckError}
           />
+          <div className="flex items-end">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={bookedOnly}
+              onClick={() => setBookedOnly((v) => !v)}
+              className={cn(
+                "cursor-pointer rounded-xl border px-4 py-2.5 font-montserrat text-sm font-medium transition-colors",
+                bookedOnly
+                  ? "border-[#2555F3] bg-[#2555F3] text-white hover:bg-[#1e44c7]"
+                  : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f5f5]",
+              )}
+              title="Show only days with booked slots, scoped to the selected month/date."
+            >
+              Booked only
+            </button>
+          </div>
         </div>
+      ) : null}
+
+      {bookedOnly ? (
+        <p className="font-montserrat text-xs text-[#5E5E5E]">
+          Showing booked slots only
+          {selectedDateFilter !== "all"
+            ? ` for ${formatScheduleDayHeading(selectedDateFilter)}.`
+            : selectedMonth !== ALL_MONTHS_VALUE
+              ? ` for ${formatMonthOptionLabel(selectedMonth)}.`
+              : " across all upcoming dates."}
+        </p>
       ) : null}
 
       {holidayError && (
@@ -861,7 +789,9 @@ export function ViewSchedulePanel({
       {filteredDays.length === 0 ? (
         <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] px-4 py-6 text-center">
           <p className="font-montserrat text-sm text-[#5E5E5E]">
-            No availability in this selection.
+            {bookedOnly
+              ? "No booked slots in this selection."
+              : "No availability in this selection."}
           </p>
         </div>
       ) : (
@@ -873,7 +803,7 @@ export function ViewSchedulePanel({
             >
               <div className="min-w-0 font-montserrat text-sm text-[#333333]">
                 <p className="font-semibold">{formatScheduleDayHeading(day.date)}</p>
-                <ScheduleDaySlotSummary day={day} />
+                <ScheduleDaySlotSummary day={day} bookedOnly={bookedOnly} />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <button

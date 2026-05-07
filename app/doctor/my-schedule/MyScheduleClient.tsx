@@ -20,6 +20,11 @@ import { addOneDayYmd } from "@/lib/doctor-local-date";
 import { isDoctorTimeInPast } from "@/lib/timezone-display";
 import { cn } from "@/lib/utils";
 import { ViewSchedulePanel } from "./ViewSchedulePanel";
+import { SetAvailabilityCalendar } from "./SetAvailabilityCalendar";
+import {
+  SlotSummaryFromDetails,
+  type SlotDetail,
+} from "./scheduleDaySlots";
 
 type Meta = {
   timezone: string;
@@ -60,6 +65,23 @@ export function MyScheduleClient() {
   const [saveOk, setSaveOk] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [existingAvailabilityDates, setExistingAvailabilityDates] = useState<
+    Set<string>
+  >(() => new Set());
+  const [existingAvailabilityDatesLoading, setExistingAvailabilityDatesLoading] =
+    useState(true);
+  const [editableDateFromView, setEditableDateFromView] = useState<string | null>(
+    null,
+  );
+  /**
+   * Slot details for the currently viewed single date — used to render the
+   * read-only "current schedule" summary above the slot grid when the doctor
+   * arrives via View Schedule -> Edit, so they keep full context of what's
+   * already saved while they make changes.
+   */
+  const [currentDaySlotDetails, setCurrentDaySlotDetails] = useState<
+    SlotDetail[]
+  >([]);
   /** Bumps only after a successful Save so View Schedule list reloads; decoupled from Set-tab date changes. */
   const [viewScheduleListVersion, setViewScheduleListVersion] = useState(0);
 
@@ -70,7 +92,6 @@ export function MyScheduleClient() {
   const [slotDurationMinutes, setSlotDurationMinutes] =
     useState<AllowedSlotDurationMinutes>(DEFAULT_SLOT_DURATION_MINUTES);
 
-  const singleDateInputRef = useRef<HTMLInputElement>(null);
   const rangeStartInputRef = useRef<HTMLInputElement>(null);
   const rangeEndInputRef = useRef<HTMLInputElement>(null);
   const slotWindowStartInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +143,31 @@ export function MyScheduleClient() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!meta) return;
+    let cancelled = false;
+    async function loadExistingAvailabilityDates() {
+      setExistingAvailabilityDatesLoading(true);
+      try {
+        const res = await fetch("/api/doctor/availability?view=dates", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { dates?: string[] };
+        const collected = new Set(
+          (Array.isArray(data.dates) ? data.dates : []).filter(Boolean),
+        );
+        if (!cancelled) setExistingAvailabilityDates(collected);
+      } finally {
+        if (!cancelled) setExistingAvailabilityDatesLoading(false);
+      }
+    }
+    void loadExistingAvailabilityDates();
+    return () => {
+      cancelled = true;
+    };
+  }, [meta, viewScheduleListVersion]);
+
   const displaySlots = useMemo(
     () =>
       generateSlots(
@@ -155,12 +201,21 @@ export function MyScheduleClient() {
       }
       const data = (await res.json()) as {
         slotStarts: string[];
+        slotDetails?: SlotDetail[];
         consultationType?: "CLINIC" | "ONLINE" | "BOTH";
         bookedSlotStarts?: string[];
         today: string;
         timezone: string;
         slotDurationMinutes?: number;
       };
+      const rawSlotDetails: SlotDetail[] = Array.isArray(data.slotDetails)
+        ? data.slotDetails.map((s) => ({
+            startTime: s.startTime,
+            consultationType: s.consultationType,
+            booked: Boolean(s.booked),
+          }))
+        : [];
+      setCurrentDaySlotDetails(rawSlotDetails);
 
       const rawStarts = [...data.slotStarts].sort();
       const apiDurationValid =
@@ -237,6 +292,7 @@ export function MyScheduleClient() {
       setInitialSelected(new Set());
       setExplicitlyRemoved(new Set());
       setBookedSlots(new Set());
+      setCurrentDaySlotDetails([]);
     } finally {
       setLoadingSlots(false);
     }
@@ -261,6 +317,19 @@ export function MyScheduleClient() {
     setSaveOk(null);
     setSaveError(null);
     setSingleDate(isoDate);
+    setEditableDateFromView(isoDate);
+  }, []);
+
+  /** Bumped by ViewSchedulePanel after a holiday is marked so existingAvailabilityDates picks up the cleared day instantly. */
+  const handleAvailabilityChanged = useCallback((changedDate?: string) => {
+    if (changedDate) {
+      setExistingAvailabilityDates((prev) => {
+        const next = new Set(prev);
+        next.delete(changedDate);
+        return next;
+      });
+    }
+    setViewScheduleListVersion((v) => v + 1);
   }, []);
 
   useEffect(() => {
@@ -566,6 +635,7 @@ export function MyScheduleClient() {
               timezone={meta.timezone}
               onEditDate={handleEditDateFromView}
               listRefreshVersion={viewScheduleListVersion}
+              onAvailabilityChanged={handleAvailabilityChanged}
             />
           </div>
           <div
@@ -581,7 +651,6 @@ export function MyScheduleClient() {
                 Times snap to the grid for the selected length. Dates before
                 today are not available.
               </p>
-
               <div className="mt-5">
                 <label
                   htmlFor="schedule-slot-duration"
@@ -747,29 +816,44 @@ export function MyScheduleClient() {
 
           {mode === "single" ? (
             <div className="mt-6">
-              <label
-                htmlFor="schedule-single-date"
+              <p
+                id="schedule-single-date-label"
                 className="font-montserrat text-sm font-medium text-[#333333]"
               >
                 Date
-              </label>
-              <div
-                className="mt-2 w-full max-w-[min(100%,10rem)] cursor-pointer"
-                onClick={() => singleDateInputRef.current?.showPicker?.()}
-              >
-                <input
-                  ref={singleDateInputRef}
-                  id="schedule-single-date"
-                  type="date"
-                  min={minDate}
+              </p>
+              <div className="mt-2" aria-labelledby="schedule-single-date-label">
+                <SetAvailabilityCalendar
                   value={singleDate}
-                  onChange={(e) => {
+                  minDate={minDate}
+                  disabledDates={existingAvailabilityDates}
+                  loadingDisabledDates={existingAvailabilityDatesLoading}
+                  exceptionDates={
+                    editableDateFromView
+                      ? new Set([editableDateFromView])
+                      : undefined
+                  }
+                  onSelect={(nextDate) => {
                     setSaveOk(null);
-                    setSingleDate(e.target.value);
+                    if (nextDate !== editableDateFromView) {
+                      setEditableDateFromView(null);
+                    }
+                    setSingleDate(nextDate);
                   }}
-                  className={dateInputClassName}
-                  aria-label="Select schedule date"
                 />
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-montserrat text-xs text-[#5E5E5E]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-3 w-3 rounded border border-[#e5e5e5] bg-[#ECECEC]"
+                  />
+                  Already configured
+                </span>
+                <span>
+                  Greyed-out dates already have availability configured — go to
+                  View Schedule → Edit to modify them.
+                </span>
               </div>
               {loadError && (
                 <p className="mt-2 font-montserrat text-sm text-red-600">
@@ -842,6 +926,21 @@ export function MyScheduleClient() {
               </p>
             </>
           )}
+
+          {mode === "single" &&
+          editableDateFromView === singleDate &&
+          !loadingSlots &&
+          currentDaySlotDetails.length > 0 ? (
+            <div className="mt-8 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3">
+              <p className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5E5E5E]">
+                Current schedule
+              </p>
+              <SlotSummaryFromDetails slots={currentDaySlotDetails} />
+              <p className="mt-2 font-montserrat text-[11px] text-[#5E5E5E]">
+                This is your current saved schedule. You can edit slots below.
+              </p>
+            </div>
+          ) : null}
 
           <div className="mt-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

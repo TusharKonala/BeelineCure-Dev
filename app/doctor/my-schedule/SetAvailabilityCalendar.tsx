@@ -1,0 +1,220 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type Props = {
+  /** Currently selected day, YYYY-MM-DD. */
+  value: string;
+  /** Earliest selectable day, YYYY-MM-DD (typically doctor-local "today"). */
+  minDate: string;
+  /** Set of YYYY-MM-DD strings already configured — rendered as disabled. */
+  disabledDates: Set<string>;
+  /**
+   * Dates that should remain selectable even if present in `disabledDates`
+   * (e.g. the date the doctor came from via View Schedule -> Edit).
+   */
+  exceptionDates?: Set<string>;
+  /** While true, prevent date picks until configured-date metadata is loaded. */
+  loadingDisabledDates?: boolean;
+  onSelect: (ymd: string) => void;
+};
+
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function toYmd(year: number, month0: number, day: number): string {
+  return `${year}-${pad2(month0 + 1)}-${pad2(day)}`;
+}
+
+function parseYmd(ymd: string): { year: number; month0: number; day: number } {
+  const [y, m, d] = ymd.split("-").map(Number);
+  return { year: y, month0: m - 1, day: d };
+}
+
+function daysInMonth(year: number, month0: number): number {
+  return new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+}
+
+function firstWeekdayOfMonth(year: number, month0: number): number {
+  return new Date(Date.UTC(year, month0, 1)).getUTCDay();
+}
+
+function monthLabel(year: number, month0: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month0, 1)));
+}
+
+export function SetAvailabilityCalendar({
+  value,
+  minDate,
+  disabledDates,
+  exceptionDates,
+  loadingDisabledDates = false,
+  onSelect,
+}: Props) {
+  const initialAnchor = parseYmd(value || minDate);
+  const [viewYear, setViewYear] = useState(initialAnchor.year);
+  const [viewMonth0, setViewMonth0] = useState(initialAnchor.month0);
+
+  // Keep the visible month aligned with the externally controlled value
+  // (e.g. doctor clicks Edit from View Schedule for a date in another month).
+  useEffect(() => {
+    if (!value) return;
+    const { year, month0 } = parseYmd(value);
+    // Keep month view in sync with controlled value updates from parent.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setViewYear(year);
+    setViewMonth0(month0);
+  }, [value]);
+
+  const cells = useMemo(() => {
+    const total = daysInMonth(viewYear, viewMonth0);
+    const leadingBlanks = firstWeekdayOfMonth(viewYear, viewMonth0);
+    const list: ({ ymd: string; day: number } | null)[] = [];
+    for (let i = 0; i < leadingBlanks; i++) list.push(null);
+    for (let d = 1; d <= total; d++) {
+      list.push({ ymd: toYmd(viewYear, viewMonth0, d), day: d });
+    }
+    while (list.length % 7 !== 0) list.push(null);
+    return list;
+  }, [viewYear, viewMonth0]);
+
+  function goPrevMonth() {
+    if (viewMonth0 === 0) {
+      setViewYear((y) => y - 1);
+      setViewMonth0(11);
+    } else {
+      setViewMonth0((m) => m - 1);
+    }
+  }
+
+  function goNextMonth() {
+    if (viewMonth0 === 11) {
+      setViewYear((y) => y + 1);
+      setViewMonth0(0);
+    } else {
+      setViewMonth0((m) => m + 1);
+    }
+  }
+
+  // Disable navigating to months entirely before the min-date month.
+  const minAnchor = parseYmd(minDate);
+  const canGoPrev =
+    viewYear > minAnchor.year ||
+    (viewYear === minAnchor.year && viewMonth0 > minAnchor.month0);
+
+  return (
+    <div className="w-full max-w-sm rounded-xl border border-[#e5e5e5] bg-white p-3 shadow-sm">
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={goPrevMonth}
+          disabled={!canGoPrev || loadingDisabledDates}
+          aria-label="Previous month"
+          className={cn(
+            "inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[#e5e5e5] bg-white text-[#333333] transition-colors hover:bg-[#f5f5f5]",
+            "disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white",
+          )}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <p
+          className="font-montserrat text-sm font-semibold text-[#333333]"
+          aria-live="polite"
+        >
+          {monthLabel(viewYear, viewMonth0)}
+        </p>
+        <button
+          type="button"
+          onClick={goNextMonth}
+          disabled={loadingDisabledDates}
+          aria-label="Next month"
+          className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg border border-[#e5e5e5] bg-white text-[#333333] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-7 gap-1 text-center font-montserrat text-[11px] font-semibold uppercase tracking-wide text-[#5E5E5E]">
+        {WEEKDAY_LABELS.map((d) => (
+          <div key={d} className="py-1">
+            {d}
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="mt-1 grid grid-cols-7 gap-1"
+        role="grid"
+        aria-label="Select availability date"
+        aria-busy={loadingDisabledDates}
+      >
+        {cells.map((cell, idx) => {
+          if (!cell) {
+            return <div key={`pad-${idx}`} className="h-9" aria-hidden="true" />;
+          }
+          const isPast = cell.ymd < minDate;
+          const isExisting =
+            disabledDates.has(cell.ymd) && !exceptionDates?.has(cell.ymd);
+          const isDisabled = loadingDisabledDates || isPast || isExisting;
+          const isSelected = cell.ymd === value;
+
+          return (
+            <button
+              key={cell.ymd}
+              type="button"
+              role="gridcell"
+              disabled={isDisabled}
+              aria-disabled={isDisabled}
+              aria-selected={isSelected}
+              aria-label={
+                isExisting
+                  ? `${cell.ymd} (already configured)`
+                  : loadingDisabledDates
+                    ? `${cell.ymd} (checking configured dates)`
+                    : isPast
+                    ? `${cell.ymd} (past)`
+                    : cell.ymd
+              }
+              onClick={() => !isDisabled && onSelect(cell.ymd)}
+              className={cn(
+                "h-9 rounded-lg border font-montserrat text-sm transition-colors",
+                isSelected
+                  ? cn(
+                      "border-[#2555F3] bg-[#2555F3] font-semibold text-white",
+                      loadingDisabledDates ? "cursor-wait opacity-80" : "cursor-pointer",
+                    )
+                  : isExisting
+                    ? "cursor-not-allowed border-[#e5e5e5] bg-[#ECECEC] text-[#9A9A9A] line-through"
+                    : loadingDisabledDates
+                      ? "cursor-wait border-[#e5e5e5] bg-[#fafafa] text-[#9A9A9A]"
+                    : isPast
+                      ? "cursor-not-allowed border-transparent bg-transparent text-[#C8C8C8]"
+                      : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f8ff] hover:border-[#2555F3]/40",
+              )}
+              title={
+                isExisting
+                  ? "Already configured. Use View Schedule -> Edit to modify."
+                  : undefined
+              }
+            >
+              {cell.day}
+            </button>
+          );
+        })}
+      </div>
+      {loadingDisabledDates ? (
+        <p className="mt-2 font-montserrat text-xs text-[#5E5E5E]">
+          Checking configured dates...
+        </p>
+      ) : null}
+    </div>
+  );
+}
