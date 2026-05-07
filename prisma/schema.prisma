@@ -72,6 +72,8 @@ enum RefundStatus {
 model User {
   id        String   @id @default(cuid())
   name      String?
+  phone     String?
+  address   String?
   email     String   @unique
   /// When set, the user can sign in with credentials.
   emailVerifiedAt DateTime?
@@ -142,12 +144,11 @@ model Doctor {
   userId           String?              @unique
   user             User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
-  /// Contact phone for clinic / admin search (optional for legacy rows).
-  phone            String?
+  /// Contact phone for clinic / admin search.
+  phone            String
   specialization   String
-  /// Doctor degree / qualification (e.g., "MBBS, MD"). Required at signup
-  /// going forward; nullable to keep older rows valid.
-  qualification    String?
+  /// Doctor degree / qualification (e.g., "MBBS, MD").
+  qualification    String
   licenseNumber    String
   yearsExperience  Int?
   bio              String?              @db.Text

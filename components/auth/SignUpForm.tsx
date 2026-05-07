@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { Button } from "@/components/ui/button";
 import { uploadDoctorPhoto } from "@/lib/uploads/uploadDoctorPhoto";
 import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
@@ -22,6 +23,8 @@ export function SignUpForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [address, setAddress] = useState("");
   const [specialization, setSpecialization] = useState("");
   const [qualification, setQualification] = useState("");
   const [licenseNumber, setLicenseNumber] = useState("");
@@ -53,6 +56,14 @@ export function SignUpForm({
     setSelectedPhotoPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
+
+  function validatePhone(nextPhone: string, nextRole: "PATIENT" | "DOCTOR") {
+    const value = nextPhone.trim();
+    if (!value) {
+      return nextRole === "DOCTOR" ? "Phone is required." : null;
+    }
+    return isValidPhoneNumber(value) ? null : "Please enter a valid phone number.";
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,20 +99,17 @@ export function SignUpForm({
         return;
       }
       if (role === "DOCTOR") {
-        const phoneValue = phone.trim();
-        if (phoneValue.length < 7) {
-          setError("Phone number is too short.");
-          return;
-        }
-        if (phoneValue.length > 32) {
-          setError("Phone number is too long.");
-          return;
-        }
-        if (!/^[+0-9()\-\s]+$/.test(phoneValue)) {
-          setError("Invalid phone number.");
+        const doctorPhoneError = validatePhone(phone, role);
+        if (doctorPhoneError) {
+          setPhoneError(doctorPhoneError);
+          setError(doctorPhoneError);
           return;
         }
         const qualificationValue = qualification.trim();
+        if (!specialization.trim()) {
+          setError("Please select your specialization.");
+          return;
+        }
         if (qualificationValue.length < 2) {
           setError("Please enter your degree / qualification.");
           return;
@@ -113,6 +121,8 @@ export function SignUpForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: role === "DOCTOR" ? name.trim() : name.trim() || undefined,
+          phone: role === "PATIENT" ? phone.trim() || undefined : undefined,
+          address: address.trim() || undefined,
           email: email.trim(),
           password,
           role,
@@ -155,6 +165,8 @@ export function SignUpForm({
 
   const inputClassName =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm outline-none placeholder:text-[#5E5E5E]/70 focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20";
+  const phoneInputClassName =
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm placeholder:text-[#5E5E5E]/70 focus-within:border-[#2555F3] focus-within:ring-[3px] focus-within:ring-[#2555F3]/20 [&_.PhoneInputInput]:outline-none";
 
   return (
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
@@ -208,17 +220,14 @@ export function SignUpForm({
           htmlFor="signup-name"
           className="font-montserrat text-sm font-medium text-[#333333]"
         >
-          Name{" "}
-          {role !== "DOCTOR" && (
-            <span className="font-normal text-[#5E5E5E]">(optional)</span>
-          )}
+          Name <span className="text-red-600">*</span>
         </label>
         <input
           id="signup-name"
           name="name"
           type="text"
           autoComplete="name"
-          required={role === "DOCTOR"}
+          required
           value={name}
           onChange={(e) => setName(e.target.value)}
           className={inputClassName}
@@ -230,7 +239,7 @@ export function SignUpForm({
           htmlFor="signup-email"
           className="font-montserrat text-sm font-medium text-[#333333]"
         >
-          Email
+          Email <span className="text-red-600">*</span>
         </label>
         <input
           id="signup-email"
@@ -249,7 +258,7 @@ export function SignUpForm({
           htmlFor="signup-password"
           className="font-montserrat text-sm font-medium text-[#333333]"
         >
-          Password
+          Password <span className="text-red-600">*</span>
         </label>
         <div className="relative">
           <input
@@ -282,6 +291,52 @@ export function SignUpForm({
         </p>
       </div>
 
+      {role === "PATIENT" && (
+        <>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-patient-phone"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Phone <span className="font-normal text-[#5E5E5E]">(optional)</span>
+            </label>
+            <PhoneInput
+              id="signup-patient-phone"
+              international
+              defaultCountry="US"
+              value={phone || undefined}
+              onChange={(value) => {
+                const nextPhone = value ?? "";
+                setPhone(nextPhone);
+                setPhoneError(null);
+              }}
+              onBlur={() => setPhoneError(validatePhone(phone, role))}
+              className={phoneInputClassName}
+            />
+            {phoneError ? (
+              <p className="font-montserrat text-xs text-red-600">{phoneError}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-patient-address"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Address <span className="font-normal text-[#5E5E5E]">(optional)</span>
+            </label>
+            <input
+              id="signup-patient-address"
+              name="address"
+              type="text"
+              autoComplete="street-address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              className={inputClassName}
+            />
+          </div>
+        </>
+      )}
+
       {role === "DOCTOR" && (
         <>
           <div className="flex flex-col gap-2">
@@ -291,19 +346,23 @@ export function SignUpForm({
             >
               Phone <span className="text-red-600">*</span>
             </label>
-            <input
+            <PhoneInput
               id="signup-phone"
-              name="phone"
-              type="tel"
-              autoComplete="tel"
+              international
+              defaultCountry="US"
               required
-              minLength={7}
-              maxLength={32}
-              pattern="[+0-9()\-\s]+"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className={inputClassName}
+              value={phone || undefined}
+              onChange={(value) => {
+                const nextPhone = value ?? "";
+                setPhone(nextPhone);
+                setPhoneError(null);
+              }}
+              onBlur={() => setPhoneError(validatePhone(phone, role))}
+              className={phoneInputClassName}
             />
+            {phoneError ? (
+              <p className="font-montserrat text-xs text-red-600">{phoneError}</p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -324,11 +383,11 @@ export function SignUpForm({
               <option value="" disabled>
                 Select a specialization
               </option>
-              {DOCTOR_SPECIALIZATIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
+                {DOCTOR_SPECIALIZATIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -358,7 +417,7 @@ export function SignUpForm({
               htmlFor="signup-timezone"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
-              Clinic timezone
+              Clinic timezone <span className="text-red-600">*</span>
             </label>
             <select
               id="signup-timezone"
@@ -389,7 +448,7 @@ export function SignUpForm({
               htmlFor="signup-license"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
-              License number
+              License number <span className="text-red-600">*</span>
             </label>
             <input
               id="signup-license"
@@ -427,7 +486,7 @@ export function SignUpForm({
               htmlFor="signup-doctor-photo-upload"
               className="font-montserrat text-sm font-medium text-[#333333]"
             >
-              Upload profile photo
+              Upload profile photo <span className="text-red-600">*</span>
             </label>
             {selectedPhotoPreviewUrl && (
               <div className="mb-1">

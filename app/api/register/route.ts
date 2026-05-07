@@ -13,9 +13,9 @@ import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
 const doctorSignupSchema = z.object({
   phone: z
     .string()
-    .min(7, "Phone number is too short")
-    .max(32, "Phone number is too long")
-    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+    .min(8, "Phone number is too short")
+    .max(20, "Phone number is too long")
+    .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   specialization: z.enum(
     DOCTOR_SPECIALIZATIONS as unknown as readonly [string, ...string[]],
     { message: "Please choose a valid specialization." },
@@ -36,7 +36,12 @@ const doctorSignupSchema = z.object({
 
 const registerSchema = z
   .object({
-    name: z.string().min(1).max(255).optional(),
+    name: z.string().min(1).max(255),
+    phone: z
+      .string()
+      .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number")
+      .optional(),
+    address: z.string().max(500).optional(),
     email: z.string().email(),
     password: z.string().min(8, "Password must be at least 8 characters"),
     role: z.enum(["PATIENT", "DOCTOR"]).optional().default("PATIENT"),
@@ -50,10 +55,10 @@ const registerSchema = z
         path: ["doctor"],
       });
     }
-    if (value.role === "DOCTOR" && !value.name?.trim()) {
+    if (!value.name?.trim()) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "Name is required for doctor signup",
+        message: "Name is required",
         path: ["name"],
       });
     }
@@ -75,7 +80,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { name, email, password, role, doctor: doctorSignup } = parsed.data;
+  const { name, email, password, role, doctor: doctorSignup, phone, address } =
+    parsed.data;
   const normalizedEmail = email.trim().toLowerCase();
   const emailLocal = normalizedEmail.split("@")[0] || "Doctor";
 
@@ -118,6 +124,8 @@ export async function POST(request: Request) {
       name: resolvedUserName,
       role: role === "DOCTOR" ? UserRole.DOCTOR : UserRole.PATIENT,
       profileComplete: true,
+      phone: role === "PATIENT" ? phone?.trim() || null : null,
+      address: role === "PATIENT" ? address?.trim() || null : null,
       emailVerifiedAt: null,
       emailVerificationTokenHash: verificationTokenHash,
       emailVerificationTokenExpiresAt: verificationTokenExpiresAt,
