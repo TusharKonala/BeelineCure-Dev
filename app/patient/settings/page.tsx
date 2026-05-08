@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import PhoneInput from "react-phone-number-input";
+import { useEffect, useMemo, useState } from "react";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { Button } from "@/components/ui/button";
 
 type Profile = {
@@ -9,13 +9,32 @@ type Profile = {
   email: string;
   phone: string | null;
   address: string | null;
+  hasPassword: boolean;
 };
+
+type PatientSettingsValues = {
+  name: string;
+  phone: string;
+  address: string;
+};
+
+function normaliseValues(values: PatientSettingsValues): PatientSettingsValues {
+  return {
+    name: values.name.trim(),
+    phone: values.phone.trim(),
+    address: values.address.trim(),
+  };
+}
 
 export default function PatientSettingsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [initialValues, setInitialValues] = useState<PatientSettingsValues | null>(
+    null,
+  );
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -30,6 +49,13 @@ export default function PatientSettingsPage() {
         setName(data.name ?? "");
         setPhone(data.phone ?? "");
         setAddress(data.address ?? "");
+        setInitialValues(
+          normaliseValues({
+            name: data.name ?? "",
+            phone: data.phone ?? "",
+            address: data.address ?? "",
+          }),
+        );
       })
       .catch(() => {
         if (!cancelled) setError("Could not load profile.");
@@ -56,6 +82,11 @@ export default function PatientSettingsPage() {
         setError(data.error ?? "Could not save profile.");
         return;
       }
+      const nextValues = normaliseValues({ name, phone, address });
+      setInitialValues(nextValues);
+      setName(nextValues.name);
+      setPhone(nextValues.phone);
+      setAddress(nextValues.address);
       setOk("Profile updated.");
     } catch {
       setError("Could not save profile.");
@@ -75,13 +106,32 @@ export default function PatientSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: profile.email }),
       });
-      setOk("Password reset link sent to your email.");
+      setOk(
+        profile.hasPassword
+          ? "Password reset link sent to your email."
+          : "Password setup link sent to your email.",
+      );
     } catch {
       setError("Could not send password reset email.");
     } finally {
       setPending(false);
     }
   }
+
+  const isDirty = useMemo(() => {
+    if (!initialValues) return false;
+    const currentValues = normaliseValues({ name, phone, address });
+    return (
+      currentValues.name !== initialValues.name ||
+      currentValues.phone !== initialValues.phone ||
+      currentValues.address !== initialValues.address
+    );
+  }, [initialValues, name, phone, address]);
+
+  const isPhoneInvalid = Boolean(phoneError);
+
+  const phoneInputClassName =
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm placeholder:text-[#5E5E5E]/70 focus-within:border-[#2555F3] focus-within:ring-[3px] focus-within:ring-[#2555F3]/20 [&_.PhoneInputInput]:outline-none";
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-6">
@@ -122,9 +172,27 @@ export default function PatientSettingsPage() {
             international
             defaultCountry="US"
             value={phone || undefined}
-            onChange={(value) => setPhone(value ?? "")}
-            className="mt-1 h-11 rounded-xl border border-[#e5e5e5] px-3 font-montserrat text-sm"
+            onChange={(value) => {
+              setPhone(value ?? "");
+              setPhoneError(null);
+            }}
+            onBlur={() => {
+              const trimmed = phone.trim();
+              if (!trimmed) {
+                setPhoneError(null);
+                return;
+              }
+              setPhoneError(
+                isValidPhoneNumber(trimmed)
+                  ? null
+                  : "Please enter a valid phone number.",
+              );
+            }}
+            className={`mt-1 ${phoneInputClassName}`}
           />
+          {phoneError ? (
+            <p className="mt-1 font-montserrat text-xs text-red-600">{phoneError}</p>
+          ) : null}
         </div>
         <div>
           <label className="font-montserrat text-sm font-medium text-[#333333]">
@@ -145,7 +213,7 @@ export default function PatientSettingsPage() {
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => void save()}
-            disabled={pending}
+            disabled={pending || !isDirty || isPhoneInvalid}
             className="cursor-pointer"
           >
             Save changes
@@ -156,7 +224,7 @@ export default function PatientSettingsPage() {
             disabled={pending}
             className="cursor-pointer"
           >
-            Change password
+            {profile?.hasPassword ? "Reset password" : "Set password"}
           </Button>
         </div>
       </div>
