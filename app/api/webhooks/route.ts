@@ -267,8 +267,35 @@ export async function POST(request: NextRequest) {
       console.error("[webhooks] Confirmation email failed:", emailError);
     }
 
-    // No in-app patient notification after Stripe checkout: email + payment-success
-    // page already confirm; avoids toast duplication from notification polling.
+    try {
+      const patientDateLabel = formatDateInPatientTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+        bookingSession.patientTimezone,
+      );
+      const patientTimeLabel = formatTimeInPatientTz(
+        bookingSession.date,
+        bookingSession.time,
+        bookingSession.timezone,
+        bookingSession.patientTimezone,
+      );
+      await createAppointmentNotificationForEmail({
+        patientEmail: bookingSession.email,
+        type: NotificationType.APPOINTMENT_BOOKED,
+        title: "Appointment booked",
+        message: `Your online appointment with Dr. ${doctor.name} is confirmed for ${patientDateLabel} at ${patientTimeLabel}.`,
+        actorUserId:
+          (
+            await prisma.user.findUnique({
+              where: { email: bookingSession.email.toLowerCase() },
+              select: { id: true },
+            })
+          )?.id ?? null,
+      });
+    } catch (err) {
+      console.error("[webhooks] Failed to create patient notification:", err);
+    }
 
     try {
       const doctorDateLabel = formatDateInDoctorTz(

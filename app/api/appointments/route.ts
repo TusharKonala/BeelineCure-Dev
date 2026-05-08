@@ -28,7 +28,10 @@ import {
   formatTimeInDoctorTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
-import { createDoctorNotificationForDoctorId } from "@/lib/notifications";
+import {
+  createAppointmentNotificationForEmail,
+  createDoctorNotificationForDoctorId,
+} from "@/lib/notifications";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { fromZonedTime } from "date-fns-tz";
@@ -43,9 +46,7 @@ const appointmentSchema = z.object({
   email: z.string().email(),
   phone: z
     .string()
-    .min(7, "Phone number is too short")
-    .max(15, "Phone number is too long")
-    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+    .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   notes: z.string().optional(),
   /** In-clinic only; online bookings use Stripe + webhook. */
   consultationType: z.literal("CLINIC").default("CLINIC"),
@@ -340,6 +341,29 @@ export async function POST(request: NextRequest) {
     });
   } catch (err) {
     console.error("[appointments] Failed to create doctor notification:", err);
+  }
+  try {
+    const doctorDateLabel = formatDateInPatientTz(
+      dateParam,
+      time,
+      doctorTimezone,
+      patientTimezone,
+    );
+    const doctorTimeLabel = formatTimeInPatientTz(
+      dateParam,
+      time,
+      doctorTimezone,
+      patientTimezone,
+    );
+    await createAppointmentNotificationForEmail({
+      patientEmail: email,
+      type: NotificationType.APPOINTMENT_BOOKED,
+      title: "Appointment booked",
+      message: `Your in-clinic appointment with Dr. ${doctor.name} is confirmed for ${doctorDateLabel} at ${doctorTimeLabel}.`,
+      actorUserId: session?.user?.id ?? null,
+    });
+  } catch (err) {
+    console.error("[appointments] Failed to create patient notification:", err);
   }
 
   try {

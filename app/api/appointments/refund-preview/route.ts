@@ -2,10 +2,24 @@ import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
+import {
+  coerceSupportedCurrency,
+  isSupportedCurrency,
+  type SupportedCurrency,
+} from "@/lib/currency";
 import { prisma } from "@/lib/db";
+import { convertCentsAmount } from "@/lib/fx-rates";
 import { getRefundPreviewForAppointment } from "@/lib/refund-preview";
 
 export async function GET(request: NextRequest) {
+  const requestedCurrency = request.nextUrl.searchParams
+    .get("targetCurrency")
+    ?.trim()
+    .toUpperCase();
+  const targetCurrency: SupportedCurrency | null =
+    requestedCurrency && isSupportedCurrency(requestedCurrency)
+      ? coerceSupportedCurrency(requestedCurrency)
+      : null;
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -59,6 +73,29 @@ export async function GET(request: NextRequest) {
   }
 
   const refundPreview = await getRefundPreviewForAppointment(appointment);
+  if (
+    refundPreview &&
+    targetCurrency &&
+    refundPreview.currency &&
+    typeof refundPreview.eligibleRefundAmountCents === "number"
+  ) {
+    try {
+      const converted = await convertCentsAmount(
+        refundPreview.eligibleRefundAmountCents,
+        refundPreview.currency,
+        targetCurrency,
+      );
+      return NextResponse.json({
+        refundPreview: {
+          ...refundPreview,
+          equivalentAmountCents: converted,
+          equivalentCurrency: targetCurrency,
+        },
+      });
+    } catch {
+      return NextResponse.json({ refundPreview });
+    }
+  }
 
   return NextResponse.json({ refundPreview });
 }
