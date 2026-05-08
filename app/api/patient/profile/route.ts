@@ -25,9 +25,24 @@ export async function GET() {
   }
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { name: true, email: true, phone: true, address: true },
+    select: {
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      password: true,
+    },
   });
-  return NextResponse.json(user);
+  if (!user) {
+    return NextResponse.json({ error: "Profile not found" }, { status: 404 });
+  }
+  return NextResponse.json({
+    name: user.name,
+    email: user.email,
+    phone: user.phone,
+    address: user.address,
+    hasPassword: Boolean(user.password),
+  });
 }
 
 export async function PATCH(request: Request) {

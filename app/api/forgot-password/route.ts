@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true, name: true, email: true },
+    select: { id: true, name: true, email: true, password: true },
   });
 
   if (!user) return genericSuccess;
@@ -62,9 +62,10 @@ export async function POST(request: Request) {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
     "http://localhost:3000";
 
+  const isSetPasswordFlow = !user.password;
   const resetUrl = `${origin}/auth/reset-password?token=${encodeURIComponent(
     rawToken,
-  )}`;
+  )}&mode=${isSetPasswordFlow ? "set" : "reset"}`;
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
@@ -73,10 +74,11 @@ export async function POST(request: Request) {
     const { error } = await resend.emails.send({
       from,
       to: user.email,
-      subject: "Reset your password",
+      subject: isSetPasswordFlow ? "Set your password" : "Reset your password",
       react: PasswordResetTemplate({
         recipientName: user.name ?? "there",
         resetUrl,
+        mode: isSetPasswordFlow ? "set" : "reset",
       }),
     });
 

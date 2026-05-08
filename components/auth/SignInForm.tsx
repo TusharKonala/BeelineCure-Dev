@@ -16,6 +16,7 @@ export function SignInForm() {
   const registeredRole = searchParams.get("role");
   const verified = searchParams.get("verified") === "1";
   const reset = searchParams.get("reset") === "1";
+  const resetMode = searchParams.get("mode") === "set" ? "set" : "reset";
   const oauthError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -128,7 +129,9 @@ export function SignInForm() {
 
       {reset && (
         <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 font-montserrat text-sm text-emerald-900">
-          Password reset successfully. You can sign in now.
+          {resetMode === "set"
+            ? "Password set successfully. You can sign in now."
+            : "Password reset successfully. You can sign in now."}
         </p>
       )}
 

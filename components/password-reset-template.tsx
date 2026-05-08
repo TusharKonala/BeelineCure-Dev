@@ -1,12 +1,15 @@
 export interface PasswordResetTemplateProps {
   recipientName: string;
   resetUrl: string;
+  mode?: "reset" | "set";
 }
 
 export function PasswordResetTemplate({
   recipientName,
   resetUrl,
+  mode = "reset",
 }: PasswordResetTemplateProps) {
+  const isSet = mode === "set";
   return (
     <div
       style={{
@@ -16,13 +19,16 @@ export function PasswordResetTemplate({
         color: "#111111",
       }}
     >
-      <h1 style={{ marginBottom: "1rem" }}>Reset your password</h1>
+      <h1 style={{ marginBottom: "1rem" }}>
+        {isSet ? "Set your password" : "Reset your password"}
+      </h1>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         Hello {recipientName},
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
-        We received a request to reset your password. Click the button below to
-        set a new one. This link expires in 1 hour.
+        {isSet
+          ? "Click the button below to set your password for the first time. This link expires in 1 hour."
+          : "We received a request to reset your password. Click the button below to set a new one. This link expires in 1 hour."}
       </p>
       <div style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
         <a
@@ -37,7 +43,7 @@ export function PasswordResetTemplate({
             fontWeight: 600,
           }}
         >
-          Reset password
+          {isSet ? "Set password" : "Reset password"}
         </a>
       </div>
       <p style={{ color: "#5E5E5E", fontSize: "0.875rem", lineHeight: 1.6 }}>

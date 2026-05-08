@@ -9,8 +9,15 @@ import { Container } from "@/components/layout/Container";
 
 type TokenStatus = "checking" | "valid" | "invalid" | "expired" | "server_error";
 
-export default function ResetPasswordClient({ token }: { token: string }) {
+export default function ResetPasswordClient({
+  token,
+  mode = "reset",
+}: {
+  token: string;
+  mode?: "reset" | "set";
+}) {
   const router = useRouter();
+  const isSetMode = mode === "set";
   const [tokenStatus, setTokenStatus] = useState<TokenStatus>("checking");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -89,7 +96,7 @@ export default function ResetPasswordClient({ token }: { token: string }) {
         return;
       }
 
-      router.push("/auth/signin?reset=1");
+      router.push(`/auth/signin?reset=1&mode=${isSetMode ? "set" : "reset"}`);
       router.refresh();
     } finally {
       setPending(false);
@@ -210,7 +217,7 @@ export default function ResetPasswordClient({ token }: { token: string }) {
           disabled={pending || passwordsMismatch}
           className="h-11 w-full cursor-pointer rounded-xl bg-[#2555F3] font-montserrat text-sm font-medium hover:bg-[#1e44c7] md:h-12 md:text-base"
         >
-          {pending ? "Updating…" : "Reset password"}
+          {pending ? "Updating…" : isSetMode ? "Set password" : "Reset password"}
         </Button>
       </form>
     ) : tokenStatus === "expired" ? (
@@ -257,7 +264,7 @@ export default function ResetPasswordClient({ token }: { token: string }) {
         <section className="mx-auto max-w-xl">
           <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
             <h1 className="mb-4 font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-              Reset password
+              {isSetMode ? "Set your password" : "Reset password"}
             </h1>
             {body}
           </div>
