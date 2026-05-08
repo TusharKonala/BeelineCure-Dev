@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, Calendar, CheckCircle2 } from "lucide-react";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
+import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import {
   CURRENCY_LABELS,
   SUPPORTED_CURRENCIES,
@@ -25,6 +27,8 @@ type DurationKey = (typeof DURATION_KEYS)[number];
 
 type DoctorSettings = {
   id: string;
+  email: string;
+  hasPassword: boolean;
   name: string;
   phone: string | null;
   specialization: string;
@@ -39,6 +43,19 @@ type DoctorSettings = {
 };
 
 type PriceInputs = Record<DurationKey, string>;
+type DoctorSnapshot = {
+  name: string;
+  phone: string;
+  specialization: string;
+  qualification: string;
+  licenseNumber: string;
+  yearsExperience: string;
+  bio: string;
+  profilePhotoUrl: string;
+  timezone: string;
+  currency: SupportedCurrency;
+  priceInputs: PriceInputs;
+};
 
 function priceMapToInputs(map: ConsultationPriceCentsByDuration): PriceInputs {
   return {
@@ -46,6 +63,32 @@ function priceMapToInputs(map: ConsultationPriceCentsByDuration): PriceInputs {
     "30": (map["30"] / 100).toFixed(2),
     "45": (map["45"] / 100).toFixed(2),
     "60": (map["60"] / 100).toFixed(2),
+  };
+}
+
+function normaliseDoctorSnapshot(
+  doctor: DoctorSettings,
+  priceInputs: PriceInputs,
+  profilePhotoUrlOverride?: string,
+): DoctorSnapshot {
+  return {
+    name: doctor.name.trim(),
+    phone: (doctor.phone ?? "").trim(),
+    specialization: doctor.specialization.trim(),
+    qualification: (doctor.qualification ?? "").trim(),
+    licenseNumber: doctor.licenseNumber.trim(),
+    yearsExperience:
+      doctor.yearsExperience == null ? "" : String(doctor.yearsExperience),
+    bio: (doctor.bio ?? "").trim(),
+    profilePhotoUrl: (profilePhotoUrlOverride ?? doctor.profilePhotoUrl).trim(),
+    timezone: doctor.timezone.trim(),
+    currency: doctor.currency,
+    priceInputs: {
+      "15": priceInputs["15"].trim(),
+      "30": priceInputs["30"].trim(),
+      "45": priceInputs["45"].trim(),
+      "60": priceInputs["60"].trim(),
+    },
   };
 }
 
@@ -63,6 +106,7 @@ export function DoctorSettingsClient({
   const [savePending, setSavePending] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [pendingCropImageUrl, setPendingCropImageUrl] = useState<string | null>(
     null,
@@ -80,13 +124,19 @@ export function DoctorSettingsClient({
   const [selectedPhotoPreviewUrl, setSelectedPhotoPreviewUrl] = useState<
     string | null
   >(null);
+  const [initialSnapshot, setInitialSnapshot] = useState<DoctorSnapshot>(() =>
+    normaliseDoctorSnapshot(
+      initialDoctor,
+      priceMapToInputs(initialDoctor.consultationPriceCentsByDuration),
+    ),
+  );
   const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
   // Sticky flag — once the doctor edits the currency manually, we never
   // overwrite it from a timezone change.
   const isCurrencyManuallySetRef = useRef(false);
 
   const banner = useMemo(() => {
-    if (calendarStatus === "connected") {
+    if (calendarStatus === "connected" && isCalendarConnected) {
       return {
         tone: "success" as const,
         message:
@@ -96,17 +146,32 @@ export function DoctorSettingsClient({
     if (calendarStatus === "denied") {
       return {
         tone: "warning" as const,
-        message: "Google Calendar connection was cancelled. You can try again any time.",
+        message:
+          "Google Calendar connection was cancelled. You can try again any time.",
       };
     }
     if (calendarStatus === "error") {
       return {
         tone: "error" as const,
-        message: "We could not finish connecting Google Calendar. Please try again.",
+        message:
+          "We could not finish connecting Google Calendar. Please try again.",
       };
     }
     return null;
-  }, [calendarStatus]);
+  }, [calendarStatus, isCalendarConnected]);
+
+  const currentSnapshot = useMemo(() => {
+    const profilePhotoUrl = profilePhotoFile
+      ? (selectedPhotoPreviewUrl ?? doctor.profilePhotoUrl)
+      : doctor.profilePhotoUrl;
+    return normaliseDoctorSnapshot(doctor, priceInputs, profilePhotoUrl);
+  }, [doctor, priceInputs, profilePhotoFile, selectedPhotoPreviewUrl]);
+
+  const isDirty =
+    JSON.stringify(currentSnapshot) !== JSON.stringify(initialSnapshot);
+
+  const selectedCurrencyLabel = CURRENCY_LABELS[doctor.currency];
+  const hasDarkNCurrencyText = selectedCurrencyLabel.includes("N");
 
   useEffect(() => {
     if (!profilePhotoFile) {
@@ -118,7 +183,13 @@ export function DoctorSettingsClient({
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
 
+  useEffect(() => {
+    setIsCalendarConnected(connected);
+  }, [connected]);
+
   function handleTimezoneChange(nextTimezone: string) {
+    setSaveError(null);
+    setSaveSuccess(null);
     setDoctor((prev) => {
       const next: DoctorSettings = { ...prev, timezone: nextTimezone };
       if (!isCurrencyManuallySetRef.current) {
@@ -130,15 +201,21 @@ export function DoctorSettingsClient({
 
   function handleCurrencyChange(nextCurrency: SupportedCurrency) {
     isCurrencyManuallySetRef.current = true;
+    setSaveError(null);
+    setSaveSuccess(null);
     setDoctor((prev) => ({ ...prev, currency: nextCurrency }));
   }
 
   function updatePriceInput(duration: DurationKey, value: string) {
+    setSaveError(null);
+    setSaveSuccess(null);
     setPriceInputs((prev) => ({ ...prev, [duration]: value }));
   }
 
   function normalisePriceInput(duration: DurationKey) {
     const parsed = Number(priceInputs[duration].trim());
+    setSaveError(null);
+    setSaveSuccess(null);
     if (Number.isFinite(parsed) && parsed > 0) {
       setPriceInputs((prev) => ({ ...prev, [duration]: parsed.toFixed(2) }));
     }
@@ -181,6 +258,33 @@ export function DoctorSettingsClient({
           setPhotoUploadPending(false);
         }
       }
+      const requiredError = !doctor.name.trim()
+        ? "Name is required."
+        : !doctor.phone?.trim()
+          ? "Phone is required."
+          : !doctor.specialization.trim()
+            ? "Specialization is required."
+            : !(doctor.qualification ?? "").trim()
+              ? "Degree / qualification is required."
+              : !doctor.licenseNumber.trim()
+                ? "License number is required."
+                : !doctor.timezone.trim()
+                  ? "Clinic timezone is required."
+                  : !doctor.currency.trim()
+                    ? "Currency is required."
+                    : !resolvedProfilePhotoUrl.trim()
+                      ? "Profile photo is required."
+                      : null;
+      if (requiredError) {
+        setSaveError(requiredError);
+        return;
+      }
+      const trimmedPhone = (doctor.phone ?? "").trim();
+      if (!isValidPhoneNumber(trimmedPhone)) {
+        setPhoneError("Please enter a valid phone number.");
+        setSaveError("Please enter a valid phone number.");
+        return;
+      }
       const res = await fetch("/api/doctor/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -207,22 +311,35 @@ export function DoctorSettingsClient({
         return;
       }
       if (json.doctor) {
-        setDoctor(json.doctor);
+        const nextDoctor = {
+          ...json.doctor,
+          email: doctor.email,
+          hasPassword: doctor.hasPassword,
+        };
+        const nextPrices = priceMapToInputs(
+          json.doctor.consultationPriceCentsByDuration ??
+            DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
+        );
+        setDoctor(nextDoctor);
         setProfilePhotoFile(null);
         if (profilePhotoInputRef.current) {
           profilePhotoInputRef.current.value = "";
         }
-        setPriceInputs(
-          priceMapToInputs(
-            json.doctor.consultationPriceCentsByDuration ??
-              DEFAULT_CONSULTATION_PRICE_CENTS_BY_DURATION,
+        setPriceInputs(nextPrices);
+        setInitialSnapshot(
+          normaliseDoctorSnapshot(
+            nextDoctor,
+            nextPrices,
+            resolvedProfilePhotoUrl,
           ),
         );
       }
       setSaveSuccess("Settings saved.");
       router.refresh();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Failed to save settings.");
+      setSaveError(
+        err instanceof Error ? err.message : "Failed to save settings.",
+      );
     } finally {
       setSavePending(false);
     }
@@ -237,20 +354,51 @@ export function DoctorSettingsClient({
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
-        setDisconnectError(data.error ?? "Unable to disconnect. Please try again.");
+        setDisconnectError(
+          data.error ?? "Unable to disconnect. Please try again.",
+        );
         return;
       }
       setIsCalendarConnected(false);
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("calendar");
+      const queryString = nextParams.toString();
+      router.replace(
+        queryString ? `/doctor/settings?${queryString}` : "/doctor/settings",
+      );
       router.refresh();
     } finally {
       setDisconnectPending(false);
     }
   }
 
+  async function onSendPasswordReset() {
+    setSaveError(null);
+    setSaveSuccess(null);
+    try {
+      await fetch("/api/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: doctor.email }),
+      });
+      setSaveSuccess(
+        doctor.hasPassword
+          ? "Password reset link sent to your email."
+          : "Password setup link sent to your email.",
+      );
+    } catch {
+      setSaveError("Could not send password email.");
+    }
+  }
+
   const inputClassName =
     "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm outline-none placeholder:text-[#5E5E5E]/70 focus-visible:border-[#2555F3] focus-visible:ring-[3px] focus-visible:ring-[#2555F3]/20";
+  const phoneInputClassName =
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm placeholder:text-[#5E5E5E]/70 focus-within:border-[#2555F3] focus-within:ring-[3px] focus-within:ring-[#2555F3]/20 [&_.PhoneInputInput]:outline-none";
   const selectClassName = `${inputClassName} cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat pr-10`;
-  const profilePhotoPreviewSrc = selectedPhotoPreviewUrl ?? doctor.profilePhotoUrl;
+  const profilePhotoPreviewSrc =
+    selectedPhotoPreviewUrl ?? doctor.profilePhotoUrl;
+  const isPhoneInvalid = Boolean(phoneError);
 
   return (
     <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -282,13 +430,31 @@ export function DoctorSettingsClient({
           <div className="mt-8 grid gap-5 md:grid-cols-2">
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Name
+                Name <span className="text-red-600">*</span>
               </label>
               <input
                 value={doctor.name}
-                onChange={(e) => setDoctor((prev) => ({ ...prev, name: e.target.value }))}
+                onChange={(e) =>
+                  (setSaveError(null),
+                  setSaveSuccess(null),
+                  setDoctor((prev) => ({ ...prev, name: e.target.value })))
+                }
                 className={inputClassName}
               />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="font-montserrat text-sm font-medium text-[#333333]">
+                Email
+              </label>
+              <input
+                value={doctor.email}
+                disabled
+                className={`${inputClassName} bg-[#fafafa] text-[#5E5E5E]`}
+              />
+              <p className="font-montserrat text-xs text-[#5E5E5E]">
+                Email is linked to your appointment history and cannot be
+                changed.
+              </p>
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
@@ -297,7 +463,12 @@ export function DoctorSettingsClient({
               <select
                 value={doctor.specialization}
                 onChange={(e) =>
-                  setDoctor((prev) => ({ ...prev, specialization: e.target.value }))
+                  (setSaveError(null),
+                  setSaveSuccess(null),
+                  setDoctor((prev) => ({
+                    ...prev,
+                    specialization: e.target.value,
+                  })))
                 }
                 className={inputClassName}
               >
@@ -319,45 +490,72 @@ export function DoctorSettingsClient({
                 placeholder="e.g. MBBS, MD"
                 value={doctor.qualification ?? ""}
                 onChange={(e) =>
+                  (setSaveError(null),
+                  setSaveSuccess(null),
                   setDoctor((prev) => ({
                     ...prev,
                     qualification: e.target.value,
-                  }))
+                  })))
                 }
                 className={inputClassName}
               />
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                License number
+                License number <span className="text-red-600">*</span>
               </label>
               <input
                 value={doctor.licenseNumber}
                 onChange={(e) =>
-                  setDoctor((prev) => ({ ...prev, licenseNumber: e.target.value }))
+                  (setSaveError(null),
+                  setSaveSuccess(null),
+                  setDoctor((prev) => ({
+                    ...prev,
+                    licenseNumber: e.target.value,
+                  })))
                 }
                 className={inputClassName}
               />
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Phone{" "}
-                <span className="font-normal text-[#5E5E5E]">(optional)</span>
+                Phone <span className="text-red-600">*</span>
               </label>
-              <input
-                type="tel"
-                autoComplete="tel"
-                value={doctor.phone ?? ""}
-                onChange={(e) =>
-                  setDoctor((prev) => ({ ...prev, phone: e.target.value || null }))
-                }
-                className={inputClassName}
-                placeholder="Clinic or mobile number"
+              <PhoneInput
+                international
+                defaultCountry="US"
+                value={doctor.phone ?? undefined}
+                onChange={(value) => {
+                  setDoctor((prev) => ({
+                    ...prev,
+                    phone: value ?? null,
+                  }));
+                  setPhoneError(null);
+                  setSaveError(null);
+                  setSaveSuccess(null);
+                }}
+                onBlur={() => {
+                  const trimmed = (doctor.phone ?? "").trim();
+                  if (!trimmed) {
+                    setPhoneError(null);
+                    return;
+                  }
+                  setPhoneError(
+                    isValidPhoneNumber(trimmed)
+                      ? null
+                      : "Please enter a valid phone number.",
+                  );
+                }}
+                className={phoneInputClassName}
               />
+              {phoneError ? (
+                <p className="font-montserrat text-xs text-red-600">{phoneError}</p>
+              ) : null}
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Years of experience
+                Years of experience{" "}
+                <span className="font-normal text-[#5E5E5E]">(optional)</span>
               </label>
               <input
                 type="number"
@@ -365,17 +563,21 @@ export function DoctorSettingsClient({
                 max={80}
                 value={doctor.yearsExperience ?? ""}
                 onChange={(e) =>
+                  (setSaveError(null),
+                  setSaveSuccess(null),
                   setDoctor((prev) => ({
                     ...prev,
-                    yearsExperience: e.target.value ? Number(e.target.value) : null,
-                  }))
+                    yearsExperience: e.target.value
+                      ? Number(e.target.value)
+                      : null,
+                  })))
                 }
                 className={inputClassName}
               />
             </div>
             <div className="flex flex-col gap-2 md:col-span-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Upload profile photo
+                Upload profile photo <span className="text-red-600">*</span>
               </label>
               {profilePhotoPreviewSrc && (
                 <div className="mb-1">
@@ -418,18 +620,23 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2 md:col-span-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Short bio
+                Short bio{" "}
+                <span className="font-normal text-[#5E5E5E]">(optional)</span>
               </label>
               <textarea
                 rows={4}
                 value={doctor.bio ?? ""}
-                onChange={(e) => setDoctor((prev) => ({ ...prev, bio: e.target.value }))}
+                onChange={(e) => {
+                  setSaveError(null);
+                  setSaveSuccess(null);
+                  setDoctor((prev) => ({ ...prev, bio: e.target.value }));
+                }}
                 className={`${inputClassName} h-auto py-2`}
               />
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Clinic timezone
+                Clinic timezone <span className="text-red-600">*</span>
               </label>
               <select
                 value={doctor.timezone}
@@ -450,7 +657,7 @@ export function DoctorSettingsClient({
             </div>
             <div className="flex flex-col gap-2">
               <label className="font-montserrat text-sm font-medium text-[#333333]">
-                Currency
+                Currency <span className="text-red-600">*</span>
               </label>
               <select
                 value={doctor.currency}
@@ -466,23 +673,45 @@ export function DoctorSettingsClient({
                 ))}
               </select>
               <p className="font-montserrat text-xs text-[#5E5E5E]">
-                Used for displaying prices and charging Stripe payments. Auto-suggested from your timezone — change it any time.
+                Used for displaying prices and charging Stripe payments.
+                Auto-suggested from your timezone — change it any time.
+              </p>
+              <p className="font-montserrat text-xs text-[#5E5E5E]">
+                Selected currency:{" "}
+                <span className="text-[#333333]">
+                  {hasDarkNCurrencyText ? (
+                    <MontagaCapitalN text={selectedCurrencyLabel} />
+                  ) : (
+                    selectedCurrencyLabel
+                  )}
+                </span>
               </p>
             </div>
           </div>
 
           <div className="mt-8">
             <h2 className="font-montaga text-lg font-semibold text-[#333333] md:text-xl">
-              Consultation prices ({doctor.currency})
+              Consultation prices{" "}
+              <span className="font-montserrat text-base">
+                (
+                {doctor.currency.includes("N") ? (
+                  <MontagaCapitalN text={doctor.currency} />
+                ) : (
+                  doctor.currency
+                )}
+                )
+              </span>
             </h2>
             <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-              Set the price for each available appointment length. All four are required.
+              Set the price for each available appointment length. All four are
+              required.
             </p>
             <div className="mt-4 grid gap-5 md:grid-cols-2">
               {DURATION_KEYS.map((duration) => (
                 <div key={duration} className="flex flex-col gap-2">
                   <label className="font-montserrat text-sm font-medium text-[#333333]">
-                    {duration}-minute consultation
+                    {duration}-minute consultation{" "}
+                    <span className="text-red-600">*</span>
                   </label>
                   <input
                     type="text"
@@ -546,7 +775,8 @@ export function DoctorSettingsClient({
                     <Button
                       type="button"
                       onClick={() => {
-                        window.location.href = "/api/auth/google/calendar/connect";
+                        window.location.href =
+                          "/api/auth/google/calendar/connect";
                       }}
                       className="cursor-pointer"
                     >
@@ -559,7 +789,9 @@ export function DoctorSettingsClient({
           </div>
 
           {saveError && (
-            <p className="mt-6 font-montserrat text-sm text-red-600">{saveError}</p>
+            <p className="mt-6 font-montserrat text-sm text-red-600">
+              {saveError}
+            </p>
           )}
           {saveSuccess && (
             <p className="mt-6 font-montserrat text-sm text-emerald-700">
@@ -568,18 +800,31 @@ export function DoctorSettingsClient({
           )}
 
           <div className="mt-6">
-            <Button
-              type="button"
-              onClick={() => void onSave()}
-              disabled={savePending || photoUploadPending}
-              className="cursor-pointer"
-            >
-              {savePending
-                ? "Saving..."
-                : photoUploadPending
-                  ? "Uploading photo..."
-                  : "Save settings"}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => void onSave()}
+                disabled={
+                  savePending || photoUploadPending || !isDirty || isPhoneInvalid
+                }
+                className="cursor-pointer"
+              >
+                {savePending
+                  ? "Saving..."
+                  : photoUploadPending
+                    ? "Uploading photo..."
+                    : "Save settings"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void onSendPasswordReset()}
+                disabled={savePending || photoUploadPending}
+                className="cursor-pointer"
+              >
+                {doctor.hasPassword ? "Reset password" : "Set password"}
+              </Button>
+            </div>
           </div>
         </section>
       </Container>

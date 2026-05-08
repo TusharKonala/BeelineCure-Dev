@@ -36,10 +36,17 @@ export default async function DoctorSettingsPage() {
     redirect("/doctor/overview");
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { email: true, password: true },
+  });
+
   return (
     <DoctorSettingsClient
       initialDoctor={{
         id: doctor.id,
+        email: user?.email ?? session.user.email ?? "",
+        hasPassword: Boolean(user?.password),
         name: doctor.name,
         phone: doctor.phone,
         specialization: doctor.specialization,

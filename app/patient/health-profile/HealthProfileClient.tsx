@@ -7,6 +7,7 @@ import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Pencil } from "lucide-react";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 import { computeAgeYears, computeBmi } from "@/lib/health-profile-metrics";
@@ -63,6 +64,8 @@ const SELECT_CHEVRON =
 const selectClassName = `${inputClassName} pr-10 ${SELECT_CHEVRON}`;
 
 const textareaClassName = `${inputClassName} min-h-[88px] resize-y`;
+const phoneInputClassName =
+  "min-h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 text-sm font-montserrat text-[#333333] shadow-sm placeholder:text-[#5E5E5E]/70 focus-within:border-[#2555F3] focus-within:ring-[3px] focus-within:ring-[#2555F3]/20 [&_.PhoneInputInput]:outline-none";
 
 function toDateInputValue(d: Date | string | null | undefined): string {
   if (d == null) return "";
@@ -215,6 +218,12 @@ export function HealthProfileClient({ initialProfile }: Props) {
     initialProfile ? "summary" : "form",
   );
   const [error, setError] = useState<string | null>(null);
+  const [emergencyContactPhoneError, setEmergencyContactPhoneError] = useState<
+    string | null
+  >(null);
+  const [emergencyContact2PhoneError, setEmergencyContact2PhoneError] = useState<
+    string | null
+  >(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -289,6 +298,16 @@ export function HealthProfileClient({ initialProfile }: Props) {
   const heightWatch = useWatch({ control: form.control, name: "heightCm" }) ?? "";
   const weightWatch = useWatch({ control: form.control, name: "weightKg" }) ?? "";
   const dobWatch = useWatch({ control: form.control, name: "dateOfBirth" }) ?? "";
+  const emergencyContactPhoneWatch =
+    useWatch({ control: form.control, name: "emergencyContactPhone" }) ?? "";
+  const emergencyContact2PhoneWatch =
+    useWatch({ control: form.control, name: "emergencyContact2Phone" }) ?? "";
+
+  function validateOptionalPhone(value: string): string | null {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    return isValidPhoneNumber(trimmed) ? null : "Please enter a valid phone number.";
+  }
 
   const hNum = parseFloat(String(heightWatch).replace(",", "."));
   const wNum = parseFloat(String(weightWatch).replace(",", "."));
@@ -304,6 +323,14 @@ export function HealthProfileClient({ initialProfile }: Props) {
 
   async function onSubmit(values: FormValues) {
     setError(null);
+    const primaryPhoneError = validateOptionalPhone(values.emergencyContactPhone);
+    const secondaryPhoneError = validateOptionalPhone(values.emergencyContact2Phone);
+    setEmergencyContactPhoneError(primaryPhoneError);
+    setEmergencyContact2PhoneError(secondaryPhoneError);
+    if (primaryPhoneError || secondaryPhoneError) {
+      setError("Please enter valid phone number(s) for emergency contacts.");
+      return;
+    }
     const res = await fetch("/api/health-profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -367,6 +394,9 @@ export function HealthProfileClient({ initialProfile }: Props) {
             : profile.dateOfBirth,
         )
       : null;
+  const hasPhoneError = Boolean(
+    emergencyContactPhoneError || emergencyContact2PhoneError,
+  );
 
   return (
     <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -931,13 +961,29 @@ export function HealthProfileClient({ initialProfile }: Props) {
                   >
                     Phone
                   </label>
-                  <input
+                  <PhoneInput
                     id="emergencyContactPhone"
-                    type="tel"
-                    autoComplete="tel"
-                    className={inputClassName}
-                    {...form.register("emergencyContactPhone")}
+                    international
+                    defaultCountry="US"
+                    value={emergencyContactPhoneWatch || undefined}
+                    onChange={(value) => {
+                      form.setValue("emergencyContactPhone", value ?? "", {
+                        shouldDirty: true,
+                      });
+                      setEmergencyContactPhoneError(null);
+                    }}
+                    onBlur={() =>
+                      setEmergencyContactPhoneError(
+                        validateOptionalPhone(emergencyContactPhoneWatch),
+                      )
+                    }
+                    className={phoneInputClassName}
                   />
+                  {emergencyContactPhoneError ? (
+                    <p className="font-montserrat text-xs text-red-600">
+                      {emergencyContactPhoneError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <p className="pt-2 font-montserrat text-xs font-medium uppercase tracking-wide text-[#5E5E5E]">
@@ -979,19 +1025,39 @@ export function HealthProfileClient({ initialProfile }: Props) {
                   >
                     Phone
                   </label>
-                  <input
+                  <PhoneInput
                     id="emergencyContact2Phone"
-                    type="tel"
-                    autoComplete="off"
-                    className={inputClassName}
-                    {...form.register("emergencyContact2Phone")}
+                    international
+                    defaultCountry="US"
+                    value={emergencyContact2PhoneWatch || undefined}
+                    onChange={(value) => {
+                      form.setValue("emergencyContact2Phone", value ?? "", {
+                        shouldDirty: true,
+                      });
+                      setEmergencyContact2PhoneError(null);
+                    }}
+                    onBlur={() =>
+                      setEmergencyContact2PhoneError(
+                        validateOptionalPhone(emergencyContact2PhoneWatch),
+                      )
+                    }
+                    className={phoneInputClassName}
                   />
+                  {emergencyContact2PhoneError ? (
+                    <p className="font-montserrat text-xs text-red-600">
+                      {emergencyContact2PhoneError}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
               <Button
                 type="submit"
-                disabled={form.formState.isSubmitting}
+                disabled={
+                  form.formState.isSubmitting ||
+                  !form.formState.isDirty ||
+                  hasPhoneError
+                }
                 className="mt-10 h-11 w-full max-w-xs cursor-pointer rounded-xl bg-[#2555F3] font-montserrat text-sm font-medium hover:bg-[#1e44c7]"
               >
                 {form.formState.isSubmitting ? "Saving…" : "Save profile"}
