@@ -470,7 +470,7 @@ export function DoctorSettingsClient({
                     specialization: e.target.value,
                   })))
                 }
-                className={inputClassName}
+                className={selectClassName}
               >
                 <option value="" disabled>
                   Select a specialization
