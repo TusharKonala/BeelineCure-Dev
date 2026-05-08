@@ -9,6 +9,7 @@ import {
   CalendarDays,
   HeartPulse,
   LayoutDashboard,
+  Settings,
   Menu,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
@@ -36,6 +37,11 @@ const navItems: PatientNavItem[] = [
     href: "/patient/notifications",
     label: "Notifications",
     icon: Bell,
+  },
+  {
+    href: "/patient/settings",
+    label: "Settings",
+    icon: Settings,
   },
 ];
 
