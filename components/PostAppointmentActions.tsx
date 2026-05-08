@@ -7,7 +7,11 @@ import { Button } from "@/components/ui/button";
 const APPOINTMENTS_HREF = "/patient/appointments";
 const AUTH_SIGNIN_HREF = "/auth/signin";
 
-export function PostAppointmentActions() {
+export function PostAppointmentActions({
+  emailHint,
+}: {
+  emailHint?: string | null;
+}) {
   const { status } = useSession();
 
   if (status === "loading") {
@@ -29,7 +33,13 @@ export function PostAppointmentActions() {
 
   return (
     <p className="mt-8 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
-      Want to track your appointments?{" "}
+      Sign up/Sign in with{" "}
+      {emailHint ? (
+        <span className="font-medium text-[#333333]">{emailHint}</span>
+      ) : (
+        "the email used during booking"
+      )}{" "}
+      to track your appointments.{" "}
       <Link
         href={AUTH_SIGNIN_HREF}
         className="font-medium text-[#2555F3] underline underline-offset-2 hover:text-[#1a45d9]"

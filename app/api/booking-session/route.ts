@@ -30,9 +30,7 @@ const bookingSessionSchema = z.object({
   email: z.string().email(),
   phone: z
     .string()
-    .min(7, "Phone number is too short")
-    .max(15, "Phone number is too long")
-    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+    .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   notes: z.string().optional(),
   timezone: z.string().min(1).max(128).default("UTC"),
   patientTimezone: z.string().min(1).max(128).default("UTC"),

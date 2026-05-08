@@ -7,7 +7,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import PhoneInput from "react-phone-number-input";
 import { z } from "zod";
 import { Container } from "@/components/layout/Container";
 import { PostAppointmentActions } from "@/components/PostAppointmentActions";
@@ -39,9 +40,7 @@ const patientFormSchema = z.object({
     .email("Please enter a valid email"),
   phone: z
     .string()
-    .min(7, "Phone number is too short")
-    .max(15, "Phone number is too long")
-    .regex(/^[+0-9()\-\s]+$/, "Invalid phone number"),
+    .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   notes: z.string().optional(),
 });
 
@@ -134,6 +133,7 @@ export default function BookAppointmentDoctorPage() {
 
   const {
     register,
+    control,
     handleSubmit,
     reset,
     getValues,
@@ -169,6 +169,7 @@ export default function BookAppointmentDoctorPage() {
     appointmentDate: string;
     appointmentTime: string;
     patientName: string;
+    patientEmail: string;
     consultationType: "CLINIC" | "ONLINE";
     doctorTimezone: string;
   } | null>(null);
@@ -287,6 +288,7 @@ export default function BookAppointmentDoctorPage() {
             appointmentDate: selectedDate,
             appointmentTime: selectedSlot ?? "",
             patientName: data.patientName,
+            patientEmail: data.email,
             consultationType,
             doctorTimezone,
           });
@@ -490,7 +492,7 @@ export default function BookAppointmentDoctorPage() {
                   <span className="text-[#333333]">Clinic Visit</span>
                 </p>
               </div>
-              <PostAppointmentActions />
+              <PostAppointmentActions emailHint={bookedConfirmation.patientEmail} />
             </div>
           </section>
         ) : (
@@ -714,12 +716,19 @@ export default function BookAppointmentDoctorPage() {
                     >
                       Phone Number
                     </label>
-                    <input
-                      id="phone"
-                      type="tel"
-                      {...register("phone")}
-                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                      placeholder="+1 555-0000"
+                    <Controller
+                      control={control}
+                      name="phone"
+                      render={({ field }) => (
+                        <PhoneInput
+                          id="phone"
+                          international
+                          defaultCountry="US"
+                          value={field.value || undefined}
+                          onChange={(value) => field.onChange(value ?? "")}
+                          className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus-within:border-[#2555F3] focus-within:ring-2 focus-within:ring-[#2555F3]/30 md:py-2.5"
+                        />
+                      )}
                     />
                     {errors.phone && (
                       <p className="font-montserrat text-sm text-red-600">
