@@ -118,16 +118,6 @@ export function DoctorSettingsClient({
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
 
-  // Auto-scroll to the Google Calendar section when arriving here from the
-  // OAuth callback (?calendar=connected|denied|error). The hash alone is not
-  // reliable because the page renders after navigation completes.
-  useEffect(() => {
-    if (!calendarStatus) return;
-    const target = document.getElementById("google-calendar");
-    if (!target) return;
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [calendarStatus]);
-
   function handleTimezoneChange(nextTimezone: string) {
     setDoctor((prev) => {
       const next: DoctorSettings = { ...prev, timezone: nextTimezone };

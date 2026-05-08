@@ -25,9 +25,11 @@ type Props = {
 };
 
 function buildInitialCrop(width: number, height: number): Crop {
+  // Keep a visible gutter around the crop handles so drag affordances do not
+  // sit directly on the image edge.
   return centerCrop(
     makeAspectCrop(
-      { unit: "%", width: 80 },
+      { unit: "%", width: 72 },
       1,
       width,
       height,

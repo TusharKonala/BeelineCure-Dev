@@ -276,6 +276,16 @@ export function HealthProfileClient({ initialProfile }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitSystem]);
 
+  useEffect(() => {
+    if (unitSystem !== "metric") return;
+    const lbs = parseNumField(imperialLbs);
+    if (lbs == null) return;
+    const kg = lbsToKg(lbs);
+    form.setValue("weightKg", (Math.round(kg * 10) / 10).toString(), {
+      shouldDirty: true,
+    });
+  }, [imperialLbs, unitSystem, form]);
+
   const heightWatch = useWatch({ control: form.control, name: "heightCm" }) ?? "";
   const weightWatch = useWatch({ control: form.control, name: "weightKg" }) ?? "";
   const dobWatch = useWatch({ control: form.control, name: "dateOfBirth" }) ?? "";
@@ -570,7 +580,7 @@ export function HealthProfileClient({ initialProfile }: Props) {
                 </div>
 
                 {unitSystem === "metric" ? (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div key="metric-fields" className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
                       <label
                         htmlFor="heightCm"
@@ -607,7 +617,7 @@ export function HealthProfileClient({ initialProfile }: Props) {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div key="imperial-fields" className="grid gap-4 sm:grid-cols-2">
                     <div className="flex flex-col gap-2">
                       <span className="font-montserrat text-sm font-medium text-[#333333]">
                         Height (ft / in)

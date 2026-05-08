@@ -13,7 +13,6 @@ function getAppBaseUrl(): string {
 function redirectToSettings(status: string): NextResponse {
   const url = new URL("/doctor/settings", getAppBaseUrl());
   url.searchParams.set("calendar", status);
-  url.hash = "google-calendar";
   return NextResponse.redirect(url.toString());
 }
 
@@ -33,10 +32,7 @@ export async function GET(request: NextRequest) {
 
   const verified = verifyOAuthState(state);
   if (!verified) {
-    return NextResponse.json(
-      { error: "Invalid or expired OAuth state" },
-      { status: 400 },
-    );
+    return redirectToSettings("error");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
