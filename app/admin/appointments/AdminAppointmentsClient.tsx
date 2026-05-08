@@ -52,6 +52,10 @@ function browserCurrencyGuess(): string {
   return currencyForTimezone(timezone);
 }
 
+function normaliseCurrencyCode(value: string | null | undefined): string {
+  return (value ?? "").trim().toUpperCase();
+}
+
 type AdminAppointmentItem = {
   id: string;
   doctorId: string;
@@ -757,7 +761,11 @@ export default function AdminAppointmentsClient() {
                               )}{" "}
                               {typeof refundPreview.equivalentAmountCents ===
                                 "number" &&
-                              refundPreview.equivalentCurrency ? (
+                              refundPreview.equivalentCurrency &&
+                              normaliseCurrencyCode(refundPreview.currency) !==
+                                normaliseCurrencyCode(
+                                  refundPreview.equivalentCurrency,
+                                ) ? (
                                 <>
                                   (
                                   {formatRefundCents(
