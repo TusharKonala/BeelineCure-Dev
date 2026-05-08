@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils";
 import {
   ScheduleDaySlotSummary,
   SlotSummaryFromDetails,
-  normalizeDaySlots,
   type ScheduleListDay as ListDay,
   type SlotDetail,
 } from "./scheduleDaySlots";
@@ -281,6 +280,7 @@ export function ViewSchedulePanel({
       nextPage: number,
       append: boolean,
       monthFilter: typeof ALL_MONTHS_VALUE | string,
+      bookedOnlyFilter: boolean,
     ) => {
       const requestId = ++latestListRequestIdRef.current;
       setIsListLoading(true);
@@ -292,12 +292,12 @@ export function ViewSchedulePanel({
       if (monthFilter !== ALL_MONTHS_VALUE) {
         params.set("month", monthFilter);
       }
-      const res = await fetch(
-        `/api/doctor/availability?${params.toString()}`,
-        {
-          cache: "no-store",
-        },
-      );
+      if (bookedOnlyFilter) {
+        params.set("bookedOnly", "true");
+      }
+      const res = await fetch(`/api/doctor/availability?${params.toString()}`, {
+        cache: "no-store",
+      });
       if (!res.ok) {
         if (latestListRequestIdRef.current !== requestId) return;
         setIsListLoading(false);
@@ -340,7 +340,7 @@ export function ViewSchedulePanel({
     let cancelled = false;
     void (async () => {
       try {
-        await loadList(1, false, selectedMonth);
+        await loadList(1, false, selectedMonth, bookedOnly);
       } catch (e) {
         if (!cancelled) {
           setError(e instanceof Error ? e.message : "Failed to load");
@@ -350,7 +350,7 @@ export function ViewSchedulePanel({
     return () => {
       cancelled = true;
     };
-  }, [loadList, listRefreshVersion, selectedMonth]);
+  }, [loadList, listRefreshVersion, selectedMonth, bookedOnly]);
 
   /** Single-date view is short; the sentinel stays in view and would page until `hasMore` is false. */
   const allowScheduleListPagination = selectedDateFilter === "all";
@@ -358,7 +358,7 @@ export function ViewSchedulePanel({
   const [sentryRef] = useInfiniteScroll({
     loading: isListLoading,
     hasNextPage: hasMore && allowScheduleListPagination,
-    onLoadMore: () => void loadList(page + 1, true, selectedMonth),
+    onLoadMore: () => void loadList(page + 1, true, selectedMonth, bookedOnly),
     disabled: false,
     rootMargin: "0px 0px 300px 0px",
   });
@@ -402,20 +402,16 @@ export function ViewSchedulePanel({
 
   const filteredDays = useMemo(() => {
     if (!days?.length) return [];
-    let out =
-      selectedMonth === ALL_MONTHS_VALUE
-        ? [...days]
-        : days.filter((d) => d.date.slice(0, 7) === selectedMonth);
+    // bookedOnly is applied server-side (so `hasMore` stays accurate for
+    // infinite scroll), and `selectedMonth` is also a server param. Only the
+    // single-date narrowing happens locally — it's a cheap UI-only refinement
+    // that doesn't interact with pagination.
+    let out = [...days];
     if (selectedDateFilter !== "all") {
       out = out.filter((d) => d.date === selectedDateFilter);
     }
-    if (bookedOnly) {
-      out = out.filter((d) =>
-        normalizeDaySlots(d).some((slot) => slot.booked),
-      );
-    }
     return out;
-  }, [days, selectedMonth, selectedDateFilter, bookedOnly]);
+  }, [days, selectedDateFilter]);
 
   useEffect(() => {
     if (!holidayConfirmDate) return;
@@ -502,7 +498,7 @@ export function ViewSchedulePanel({
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Could not update");
       }
-      await loadList(1, false, selectedMonth);
+      await loadList(1, false, selectedMonth, bookedOnly);
       onAvailabilityChanged?.(isoDate);
     } catch (e) {
       setHolidayError(
@@ -562,7 +558,7 @@ export function ViewSchedulePanel({
                 </span>{" "}
                 will be cancelled.
                 {(holidayCancelBreakdown?.inClinic ?? 0) +
-                (holidayCancelBreakdown?.online ?? 0) >
+                  (holidayCancelBreakdown?.online ?? 0) >
                 0 ? (
                   <>
                     {" "}
@@ -802,7 +798,9 @@ export function ViewSchedulePanel({
               className="flex flex-col gap-3 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
             >
               <div className="min-w-0 font-montserrat text-sm text-[#333333]">
-                <p className="font-semibold">{formatScheduleDayHeading(day.date)}</p>
+                <p className="font-semibold">
+                  {formatScheduleDayHeading(day.date)}
+                </p>
                 <ScheduleDaySlotSummary day={day} bookedOnly={bookedOnly} />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">

@@ -1,5 +1,6 @@
 import {
   AppointmentStatus,
+  ConsultationType,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -7,7 +8,6 @@ import { cancelAppointmentByDoctor } from "@/lib/doctor-cancellations";
 import { prisma } from "@/lib/db";
 import {
   coerceAllowedSlotDurationMinutes,
-  expandAvailabilityRows,
   expandAvailabilityRowsDetailed,
   inferSlotDurationMinutesFromRows,
   isValidSlotStartForDuration,
@@ -113,7 +113,41 @@ export async function GET(request: NextRequest) {
   );
 
   const view = request.nextUrl.searchParams.get("view");
+  if (view === "dates") {
+    const rows = await prisma.doctorAvailability.findMany({
+      where: {
+        doctorId: doctor.id,
+        date: { gte: ymdToPrismaDate(today) },
+      },
+      select: { date: true },
+      distinct: ["date"],
+      orderBy: { date: "asc" },
+    });
+
+    return NextResponse.json({
+      timezone: tz,
+      today,
+      dates: rows.map((row) => row.date.toISOString().slice(0, 10)),
+    });
+  }
+
   if (view === "list") {
+    const monthParamRaw = request.nextUrl.searchParams.get("month")?.trim();
+    let monthFilterYm: string | null = null;
+    if (monthParamRaw) {
+      if (!/^\d{4}-\d{2}$/.test(monthParamRaw)) {
+        return NextResponse.json({ error: "Invalid month" }, { status: 400 });
+      }
+      monthFilterYm = monthParamRaw;
+    }
+    /**
+     * When true, the response is narrowed to days that have at least one
+     * booked slot. Done server-side (before pagination) so `hasMore` reflects
+     * the filtered dataset and the client's infinite scroll terminates at the
+     * correct page.
+     */
+    const bookedOnly =
+      request.nextUrl.searchParams.get("bookedOnly") === "true";
     const page = Math.max(
       1,
       Number(request.nextUrl.searchParams.get("page") ?? "1") || 1,
@@ -140,6 +174,22 @@ export async function GET(request: NextRequest) {
       orderBy: [{ date: "asc" }, { startTime: "asc" }],
     });
 
+    const upcomingAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: doctor.id,
+        date: { gte: ymdToPrismaDate(today) },
+        status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+      },
+      select: { date: true, time: true },
+    });
+    const bookedByDate = new Map<string, Set<string>>();
+    for (const appt of upcomingAppointments) {
+      const dateKey = appt.date.toISOString().slice(0, 10);
+      const daySet = bookedByDate.get(dateKey) ?? new Set<string>();
+      daySet.add(appt.time);
+      bookedByDate.set(dateKey, daySet);
+    }
+
     const byDate = new Map<
       string,
       {
@@ -161,24 +211,71 @@ export async function GET(request: NextRequest) {
       byDate.set(key, list);
     }
 
-    const days: { date: string; slotStarts: string[] }[] = [];
+    const days: {
+      date: string;
+      slotStarts: string[];
+      slotDetails: {
+        startTime: string;
+        consultationType: "CLINIC" | "ONLINE" | "BOTH";
+        booked: boolean;
+      }[];
+    }[] = [];
     for (const [dateStr, windows] of byDate) {
-      const slotStarts = expandAvailabilityRows(windows, fallbackDuration);
-      if (slotStarts.length === 0) continue;
-      days.push({ date: dateStr, slotStarts });
+      const details = expandAvailabilityRowsDetailed(windows, fallbackDuration);
+      if (details.length === 0) continue;
+      const booked = bookedByDate.get(dateStr) ?? new Set<string>();
+      const slotDetails = details.map((slot) => ({
+        startTime: slot.startTime,
+        consultationType: slot.consultationType,
+        booked: booked.has(slot.startTime),
+      }));
+      days.push({
+        date: dateStr,
+        slotStarts: slotDetails.map((slot) => slot.startTime),
+        slotDetails,
+      });
     }
     days.sort((a, b) => a.date.localeCompare(b.date));
+
+    const monthKeys = new Set<string>();
+    const datesByMonth: Record<string, string[]> = {};
+    for (const d of days) {
+      const ym = d.date.slice(0, 7);
+      monthKeys.add(ym);
+      const bucket = datesByMonth[ym] ?? [];
+      bucket.push(d.date);
+      datesByMonth[ym] = bucket;
+    }
+    for (const key of Object.keys(datesByMonth)) {
+      datesByMonth[key] = [...datesByMonth[key]!].sort();
+    }
+    const monthsWithAvailability = [...monthKeys].sort();
+
+    let daysWindow = days;
+    if (monthFilterYm) {
+      daysWindow = daysWindow.filter(
+        (d) => d.date.slice(0, 7) === monthFilterYm,
+      );
+    }
+    if (bookedOnly) {
+      daysWindow = daysWindow.filter((d) =>
+        d.slotDetails.some((slot) => slot.booked),
+      );
+    }
+
     const start = (page - 1) * limit;
-    const paginatedDays = days.slice(start, start + limit);
+    const paginatedDays = daysWindow.slice(start, start + limit);
 
     return NextResponse.json({
       timezone: tz,
       today,
       slotDurationMinutes: fallbackDuration,
       days: paginatedDays,
-      hasMore: start + limit < days.length,
-      total: days.length,
+      hasMore: start + limit < daysWindow.length,
+      total: daysWindow.length,
       page,
+      monthsWithAvailability,
+      datesByMonth,
     });
   }
 
@@ -218,25 +315,72 @@ export async function GET(request: NextRequest) {
       date: ymdToPrismaDate(dateParam),
       status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
     },
-    select: { time: true },
+    select: { time: true, consultationType: true },
   });
 
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(
     rows,
     fallbackDuration,
   );
-  const slotDetails = expandAvailabilityRowsDetailed(rows, fallbackDuration);
-  const slotStarts = slotDetails.map((slot) => slot.startTime);
+  const expandedSlots = expandAvailabilityRowsDetailed(rows, fallbackDuration);
+  const slotStarts = expandedSlots.map((slot) => slot.startTime);
   const consultationType = rows[0]?.consultationType ?? "BOTH";
+
+  /** Map booked start times → how the appointment was booked (video vs clinic). */
+  const appointmentsByTime = new Map<string, ConsultationType>();
+  for (const a of appointments) {
+    appointmentsByTime.set(a.time, a.consultationType);
+  }
+
+  const seenTimes = new Set<string>();
+  const slotDetailsWithBooked: {
+    startTime: string;
+    consultationType: ConsultationType | "BOTH";
+    booked: boolean;
+  }[] = [];
+
+  for (const slot of expandedSlots) {
+    const apptType = appointmentsByTime.get(slot.startTime);
+    const booked = apptType !== undefined;
+    slotDetailsWithBooked.push({
+      startTime: slot.startTime,
+      consultationType: booked ? apptType : slot.consultationType,
+      booked,
+    });
+    seenTimes.add(slot.startTime);
+  }
+
+  /** Appointments on times with no persisted availability row (edge case). */
+  for (const a of appointments) {
+    if (seenTimes.has(a.time)) continue;
+    slotDetailsWithBooked.push({
+      startTime: a.time,
+      consultationType: a.consultationType,
+      booked: true,
+    });
+    seenTimes.add(a.time);
+  }
+
+  slotDetailsWithBooked.sort((x, y) =>
+    x.startTime.localeCompare(y.startTime, undefined, { numeric: true }),
+  );
 
   return NextResponse.json({
     timezone: tz,
     today,
     slotDurationMinutes,
     slotStarts,
-    slotDetails,
+    slotDetails: slotDetailsWithBooked,
     consultationType,
     bookedSlotStarts: appointments.map((appointment) => appointment.time).sort(),
+    bookedAppointmentsByType: {
+      inClinic: appointments.filter(
+        (appointment) => appointment.consultationType === "CLINIC",
+      ).length,
+      online: appointments.filter(
+        (appointment) => appointment.consultationType === "ONLINE",
+      ).length,
+    },
   });
 }
 
