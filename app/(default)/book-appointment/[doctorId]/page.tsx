@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
-import PhoneInput from "react-phone-number-input";
+import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
 import { Container } from "@/components/layout/Container";
 import { PostAppointmentActions } from "@/components/PostAppointmentActions";
@@ -162,6 +162,35 @@ export default function BookAppointmentDoctorPage() {
     });
   }, [sessionStatus, session?.user, reset, getValues]);
 
+  useEffect(() => {
+    if (sessionStatus !== "authenticated") return;
+    let cancelled = false;
+    void fetch("/api/patient/profile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { phone?: string | null } | null) => {
+        if (cancelled || !data?.phone) return;
+        const profilePhone = data.phone.trim();
+        if (!profilePhone) return;
+        const current = getValues();
+        if (current.phone.trim()) return;
+        reset({
+          patientName: current.patientName,
+          email: current.email,
+          phone: profilePhone,
+          notes: current.notes ?? "",
+        });
+        setPhoneError(
+          isValidPhoneNumber(profilePhone)
+            ? null
+            : "Please enter a valid phone number.",
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionStatus, getValues, reset]);
+
   const [submitError, setSubmitError] = useState<SubmitErrorState>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookedConfirmation, setBookedConfirmation] = useState<{
@@ -176,6 +205,7 @@ export default function BookAppointmentDoctorPage() {
   const [approxEquivalentLabel, setApproxEquivalentLabel] = useState<string | null>(
     null,
   );
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
     queryKey: ["doctor", doctorId],
@@ -436,6 +466,8 @@ export default function BookAppointmentDoctorPage() {
   }, []);
 
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
+  const phoneInputClassName =
+    "h-11 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 text-sm font-montserrat text-[#333333] shadow-sm placeholder:text-[#5E5E5E]/70 focus-within:border-[#2555F3] focus-within:ring-[3px] focus-within:ring-[#2555F3]/20 [&_.PhoneInputInput]:outline-none";
 
   const confirmationMessage =
     "Your appointment has been confirmed. A confirmation email has been sent to your inbox. Please arrive a few minutes early.";
@@ -725,12 +757,31 @@ export default function BookAppointmentDoctorPage() {
                           international
                           defaultCountry="US"
                           value={field.value || undefined}
-                          onChange={(value) => field.onChange(value ?? "")}
-                          className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus-within:border-[#2555F3] focus-within:ring-2 focus-within:ring-[#2555F3]/30 md:py-2.5"
+                          onChange={(value) => {
+                            field.onChange(value ?? "");
+                            setPhoneError(null);
+                          }}
+                          onBlur={() => {
+                            field.onBlur();
+                            const trimmed = (getValues("phone") ?? "").trim();
+                            if (!trimmed) {
+                              setPhoneError("Phone number is required.");
+                              return;
+                            }
+                            setPhoneError(
+                              isValidPhoneNumber(trimmed)
+                                ? null
+                                : "Please enter a valid phone number.",
+                            );
+                          }}
+                          className={phoneInputClassName}
                         />
                       )}
                     />
-                    {errors.phone && (
+                    {phoneError ? (
+                      <p className="font-montserrat text-sm text-red-600">{phoneError}</p>
+                    ) : null}
+                    {errors.phone && !phoneError && (
                       <p className="font-montserrat text-sm text-red-600">
                         {errors.phone.message}
                       </p>
@@ -763,7 +814,10 @@ export default function BookAppointmentDoctorPage() {
                   )}
                   <Button
                     disabled={
-                      !isValid || isSubmitting || !selectedConsultationAllowed
+                      !isValid ||
+                      isSubmitting ||
+                      !selectedConsultationAllowed ||
+                      Boolean(phoneError)
                     }
                     type="submit"
                     className="mt-2 w-full cursor-pointer rounded-xl font-montserrat text-sm font-medium sm:px-8"
