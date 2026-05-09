@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { Eye, EyeOff } from "lucide-react";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,17 @@ export function SignUpForm({
   initialRole?: "PATIENT" | "DOCTOR";
 }) {
   const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
+
+  // Google-OAuth user completing the doctor profile: signed in, role already
+  // upgraded to DOCTOR by /api/onboarding/doctor-intent, but profile not yet
+  // complete. In this mode we hide email/password (already known) and post to
+  // /api/onboarding/doctor-complete instead of /api/register.
+  const isOAuthDoctorCompletion =
+    sessionStatus === "authenticated" &&
+    !!session?.user &&
+    session.user.role === "DOCTOR" &&
+    session.user.profileComplete === false;
 
   const [role, setRole] = useState<"PATIENT" | "DOCTOR">(initialRole);
   const [name, setName] = useState("");
@@ -56,6 +68,17 @@ export function SignUpForm({
     setSelectedPhotoPreviewUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [profilePhotoFile]);
+
+  // When the user is finishing a Google-doctor signup, force the role and
+  // prefill name/email from the active session.
+  useEffect(() => {
+    if (!isOAuthDoctorCompletion) return;
+    setRole("DOCTOR");
+    const sessionName = (session?.user?.name ?? "").trim();
+    const sessionEmail = (session?.user?.email ?? "").trim();
+    setName((current) => (current.trim() ? current : sessionName));
+    setEmail((current) => (current.trim() ? current : sessionEmail));
+  }, [isOAuthDoctorCompletion, session?.user?.name, session?.user?.email]);
 
   function validatePhone(nextPhone: string, nextRole: "PATIENT" | "DOCTOR") {
     const value = nextPhone.trim();
@@ -116,6 +139,40 @@ export function SignUpForm({
         }
       }
 
+      if (isOAuthDoctorCompletion) {
+        const res = await fetch("/api/onboarding/doctor-complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(),
+            phone: phone.trim(),
+            specialization: specialization.trim(),
+            qualification: qualification.trim(),
+            licenseNumber: licenseNumber.trim(),
+            yearsExperience:
+              parsedYearsExperience != null
+                ? Math.max(0, Math.floor(parsedYearsExperience))
+                : undefined,
+            bio: bio.trim() || undefined,
+            profilePhotoUrl: resolvedProfilePhotoUrl,
+            timezone: timezone.trim(),
+          }),
+        });
+
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+
+        if (!res.ok) {
+          setError(data.error ?? "Something went wrong.");
+          return;
+        }
+
+        // Doctors need admin approval before they can sign in again. Sign
+        // them out of the active Google session and route them to the
+        // pending-approval screen.
+        await signOut({ callbackUrl: "/auth/doctor-pending-approval" });
+        return;
+      }
+
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,10 +229,14 @@ export function SignUpForm({
     <form onSubmit={onSubmit} className="flex w-full flex-col gap-5">
       <div>
         <h1 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-          Create account
+          {isOAuthDoctorCompletion
+            ? "Complete your doctor profile"
+            : "Create account"}
         </h1>
         <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E] md:text-base">
-          Choose patient or doctor signup to get started.
+          {isOAuthDoctorCompletion
+            ? `Signed in as ${session?.user?.email ?? ""}. Fill in your professional details below.`
+            : "Choose patient or doctor signup to get started."}
         </p>
       </div>
 
@@ -185,35 +246,37 @@ export function SignUpForm({
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
-        <p className="font-montserrat text-sm font-medium text-[#333333]">
-          I am signing up as
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
-              role === "PATIENT"
-                ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
-                : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
-            }`}
-            onClick={() => setRole("PATIENT")}
-          >
-            Patient
-          </button>
-          <button
-            type="button"
-            className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
-              role === "DOCTOR"
-                ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
-                : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
-            }`}
-            onClick={() => setRole("DOCTOR")}
-          >
-            Doctor
-          </button>
+      {!isOAuthDoctorCompletion && (
+        <div className="flex flex-col gap-2">
+          <p className="font-montserrat text-sm font-medium text-[#333333]">
+            I am signing up as
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
+                role === "PATIENT"
+                  ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
+                  : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+              }`}
+              onClick={() => setRole("PATIENT")}
+            >
+              Patient
+            </button>
+            <button
+              type="button"
+              className={`h-11 cursor-pointer rounded-xl border font-montserrat text-sm font-medium transition-colors ${
+                role === "DOCTOR"
+                  ? "border-[#2555F3] bg-[#2555F3]/10 text-[#2555F3]"
+                  : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+              }`}
+              onClick={() => setRole("DOCTOR")}
+            >
+              Doctor
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label
@@ -234,62 +297,66 @@ export function SignUpForm({
         />
       </div>
 
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor="signup-email"
-          className="font-montserrat text-sm font-medium text-[#333333]"
-        >
-          Email <span className="text-red-600">*</span>
-        </label>
-        <input
-          id="signup-email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={inputClassName}
-        />
-      </div>
+      {!isOAuthDoctorCompletion && (
+        <>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-email"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Email <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="signup-email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClassName}
+            />
+          </div>
 
-      <div className="flex flex-col gap-2">
-        <label
-          htmlFor="signup-password"
-          className="font-montserrat text-sm font-medium text-[#333333]"
-        >
-          Password <span className="text-red-600">*</span>
-        </label>
-        <div className="relative">
-          <input
-            id="signup-password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            autoComplete="new-password"
-            required
-            minLength={8}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className={`${inputClassName} pr-11`}
-          />
-          <button
-            type="button"
-            className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[#5E5E5E] outline-none hover:bg-[#f5f5f5] hover:text-[#333333] focus-visible:ring-2 focus-visible:ring-[#2555F3]/30"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            aria-pressed={showPassword}
-          >
-            {showPassword ? (
-              <EyeOff className="size-4 shrink-0" />
-            ) : (
-              <Eye className="size-4 shrink-0" />
-            )}
-          </button>
-        </div>
-        <p className="font-montserrat text-xs text-[#5E5E5E]">
-          At least 8 characters.
-        </p>
-      </div>
+          <div className="flex flex-col gap-2">
+            <label
+              htmlFor="signup-password"
+              className="font-montserrat text-sm font-medium text-[#333333]"
+            >
+              Password <span className="text-red-600">*</span>
+            </label>
+            <div className="relative">
+              <input
+                id="signup-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${inputClassName} pr-11`}
+              />
+              <button
+                type="button"
+                className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-[#5E5E5E] outline-none hover:bg-[#f5f5f5] hover:text-[#333333] focus-visible:ring-2 focus-visible:ring-[#2555F3]/30"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4 shrink-0" />
+                ) : (
+                  <Eye className="size-4 shrink-0" />
+                )}
+              </button>
+            </div>
+            <p className="font-montserrat text-xs text-[#5E5E5E]">
+              At least 8 characters.
+            </p>
+          </div>
+        </>
+      )}
 
       {role === "PATIENT" && (
         <>

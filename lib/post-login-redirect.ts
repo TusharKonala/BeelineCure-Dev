@@ -9,7 +9,10 @@ export function getPostLoginPath({
   doctorApprovalStatus,
   profileComplete,
 }: RedirectInput): string {
-  if (profileComplete === false) return "/onboarding";
+  if (profileComplete === false) {
+    if (role === "DOCTOR") return "/auth/signup?role=doctor";
+    return "/onboarding";
+  }
   if (role === "DOCTOR") {
     return doctorApprovalStatus === "APPROVED"
       ? "/doctor/overview"

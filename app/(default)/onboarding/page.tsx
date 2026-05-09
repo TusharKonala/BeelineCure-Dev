@@ -19,5 +19,11 @@ export default async function OnboardingPage() {
     redirect(nextPath);
   }
 
+  // Doctors who have already chosen the doctor path but haven't finished the
+  // doctor signup form should land on that form, not the patient/doctor toggle.
+  if (session.user.role === "DOCTOR") {
+    redirect("/auth/signup?role=doctor");
+  }
+
   return <OnboardingChoiceClient />;
 }

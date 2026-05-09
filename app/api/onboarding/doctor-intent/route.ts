@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { UserRole } from "@/generated/prisma/client";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -12,7 +13,7 @@ export async function POST() {
 
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { profileComplete: true },
+    select: { profileComplete: true, role: true },
   });
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -24,8 +25,15 @@ export async function POST() {
     );
   }
 
-  await prisma.user.delete({
+  // Promote the OAuth user from PATIENT to DOCTOR but keep the account so we
+  // don't lose the verified Google identity. profileComplete stays false until
+  // they finish the doctor signup form.
+  await prisma.user.update({
     where: { id: session.user.id },
+    data: {
+      role: UserRole.DOCTOR,
+      profileComplete: false,
+    },
   });
 
   const headersList = await headers();

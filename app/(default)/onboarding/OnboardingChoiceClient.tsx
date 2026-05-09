@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/layout/Container";
 
@@ -45,7 +45,11 @@ export function OnboardingChoiceClient() {
         setError(data.error ?? "Unable to continue to doctor signup.");
         return;
       }
-      await signOut({ callbackUrl: data.redirectUrl });
+      // Keep the Google session active; just refresh the JWT so the role
+      // change made server-side propagates into the session.
+      await update();
+      router.replace("/auth/signup?role=doctor");
+      router.refresh();
     } finally {
       setPending(null);
     }
