@@ -22,6 +22,7 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
   let appointmentDate = "-";
   let appointmentTime = "-";
   let patientName = "-";
+  let patientEmail: string | null = null;
   let consultationTypeLabel = "Clinic visit";
   let hasDetails = false;
 
@@ -53,6 +54,7 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
           bookingSession.patientTimezone,
         );
         patientName = bookingSession.patientName;
+        patientEmail = bookingSession.email;
         consultationTypeLabel =
           bookingSession.consultationType === "ONLINE"
             ? "Online consultation"
@@ -61,6 +63,7 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
         if (metadata.date) appointmentDate = metadata.date;
         if (metadata.time) appointmentTime = metadata.time;
         if (metadata.patientName) patientName = metadata.patientName;
+        if (metadata.email) patientEmail = metadata.email;
         consultationTypeLabel =
           metadata.consultationType === "ONLINE"
             ? "Online consultation"
@@ -144,7 +147,7 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
               </p>
             )}
 
-            <PostAppointmentActions />
+            <PostAppointmentActions emailHint={patientEmail} />
           </div>
         </section>
       </Container>
