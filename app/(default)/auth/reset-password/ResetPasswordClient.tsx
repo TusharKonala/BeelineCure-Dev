@@ -23,6 +23,7 @@ export default function ResetPasswordClient({
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirmPasswordMismatch, setConfirmPasswordMismatch] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -66,8 +67,7 @@ export default function ResetPasswordClient({
     };
   }, [token]);
 
-  const passwordsMismatch =
-    confirmPassword.length > 0 && password !== confirmPassword;
+  const passwordsMismatch = confirmPasswordMismatch;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -79,6 +79,7 @@ export default function ResetPasswordClient({
     }
 
     if (password !== confirmPassword) {
+      setConfirmPasswordMismatch(true);
       return;
     }
 
@@ -177,7 +178,14 @@ export default function ResetPasswordClient({
               value={confirmPassword}
               onChange={(e) => {
                 setConfirmPassword(e.target.value);
+                setConfirmPasswordMismatch(false);
                 setError(null);
+              }}
+              onBlur={(e) => {
+                const nextValue = e.target.value;
+                setConfirmPasswordMismatch(
+                  nextValue.length > 0 && password !== nextValue,
+                );
               }}
               className={confirmInputClassName}
               aria-invalid={passwordsMismatch}
