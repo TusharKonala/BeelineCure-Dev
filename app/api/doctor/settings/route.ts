@@ -13,7 +13,7 @@ import { z } from "zod";
 
 const updateDoctorSettingsSchema = z.object({
   name: z.string().min(1).max(255),
-  phone: z.string().max(32).optional(),
+  phone: z.string().min(5, "Phone is required").max(32),
   specialization: z.enum(
     DOCTOR_SPECIALIZATIONS as unknown as readonly [string, ...string[]],
     { message: "Please choose a valid specialization." },
@@ -21,8 +21,7 @@ const updateDoctorSettingsSchema = z.object({
   qualification: z
     .string()
     .min(2, "Qualification is required")
-    .max(255)
-    .optional(),
+    .max(255),
   licenseNumber: z.string().min(3).max(255),
   yearsExperience: z.number().int().min(0).max(80).nullable().optional(),
   bio: z.string().max(3000).nullable().optional(),
@@ -124,29 +123,27 @@ export async function PATCH(request: Request) {
   }
 
   const data = parsed.data;
-  const phoneRaw = data.phone !== undefined ? data.phone.trim() : undefined;
-  let phoneUpdate: string | null | undefined = undefined;
-  if (phoneRaw !== undefined) {
-    if (phoneRaw.length === 0) {
-      phoneUpdate = null;
-    } else if (phoneRaw.length < 5) {
-      return NextResponse.json(
-        { error: "Phone must be at least 5 characters if provided" },
-        { status: 400 },
-      );
-    } else {
-      phoneUpdate = phoneRaw;
-    }
+  const phoneRaw = data.phone.trim();
+  if (phoneRaw.length < 5) {
+    return NextResponse.json(
+      { error: "Phone must be at least 5 characters." },
+      { status: 400 },
+    );
+  }
+  const qualification = data.qualification.trim();
+  if (!qualification) {
+    return NextResponse.json(
+      { error: "Qualification is required." },
+      { status: 400 },
+    );
   }
   const updated = await prisma.doctor.update({
     where: { id: doctor.id },
     data: {
       name: data.name.trim(),
-      ...(phoneUpdate !== undefined ? { phone: phoneUpdate } : {}),
+      phone: phoneRaw,
       specialization: data.specialization.trim(),
-      ...(data.qualification !== undefined
-        ? { qualification: data.qualification.trim() || null }
-        : {}),
+      qualification,
       licenseNumber: data.licenseNumber.trim(),
       yearsExperience: data.yearsExperience ?? null,
       bio: data.bio?.trim() || null,
