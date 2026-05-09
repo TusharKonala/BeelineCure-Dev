@@ -31,6 +31,7 @@ import {
   type ConsultationPriceCentsByDuration,
 } from "@/lib/doctor-pricing";
 import { convertCentsAmount } from "@/lib/fx-rates";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -38,9 +39,7 @@ const patientFormSchema = z.object({
     .string()
     .min(1, "Email is required")
     .email("Please enter a valid email"),
-  phone: z
-    .string()
-    .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
+  phone: z.string().regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   notes: z.string().optional(),
 });
 
@@ -202,9 +201,9 @@ export default function BookAppointmentDoctorPage() {
     consultationType: "CLINIC" | "ONLINE";
     doctorTimezone: string;
   } | null>(null);
-  const [approxEquivalentLabel, setApproxEquivalentLabel] = useState<string | null>(
-    null,
-  );
+  const [approxEquivalentLabel, setApproxEquivalentLabel] = useState<
+    string | null
+  >(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const { data: doctor, isLoading: doctorLoading } = useQuery({
@@ -237,19 +236,19 @@ export default function BookAppointmentDoctorPage() {
   const slotDetailByStart = useMemo<Map<string, SlotDetail>>(
     () =>
       new Map<string, SlotDetail>(
-        (slotsData?.slotDetails ?? []).map(
-          (detail): [string, SlotDetail] => [detail.startTime, detail],
-        ),
+        (slotsData?.slotDetails ?? []).map((detail): [string, SlotDetail] => [
+          detail.startTime,
+          detail,
+        ]),
       ),
     [slotsData?.slotDetails],
   );
   const selectedSlotDetail = selectedSlot
-    ? slotDetailByStart.get(selectedSlot) ?? null
+    ? (slotDetailByStart.get(selectedSlot) ?? null)
     : null;
   // Default displayed online fee should be the base 15-minute consultation fee
   // until a slot is explicitly selected.
-  const selectedSlotDuration =
-    selectedSlotDetail?.slotDurationMinutes ?? 15;
+  const selectedSlotDuration = selectedSlotDetail?.slotDurationMinutes ?? 15;
   const selectedSlotPriceCents = useMemo(
     () => priceCentsForDuration(doctorPriceMap, selectedSlotDuration),
     [doctorPriceMap, selectedSlotDuration],
@@ -268,6 +267,11 @@ export default function BookAppointmentDoctorPage() {
   const selectedConsultationAllowed =
     (consultationType === "CLINIC" && canBookClinic) ||
     (consultationType === "ONLINE" && canBookOnline);
+  // Lock the email field when the patient is signed in so they can't book
+  // under an email different from their account; the field is prefilled from
+  // the session above.
+  const isPatientSignedIn =
+    sessionStatus === "authenticated" && Boolean(session?.user?.email);
 
   const onPatientFormSubmit = useCallback(
     async (data: PatientFormValues) => {
@@ -314,7 +318,9 @@ export default function BookAppointmentDoctorPage() {
           }
 
           setBookedConfirmation({
-            doctorName: doctor?.name ?? "Your doctor",
+            doctorName: doctor?.name
+              ? formatDoctorDisplayName(doctor.name)
+              : "Your doctor",
             appointmentDate: selectedDate,
             appointmentTime: selectedSlot ?? "",
             patientName: data.patientName,
@@ -400,13 +406,22 @@ export default function BookAppointmentDoctorPage() {
     (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
   const filteredDurationLabel = useMemo(() => {
-    const durations = [...new Set(
-      filteredSlots
-        .map((slotStart) => slotDetailByStart.get(slotStart)?.slotDurationMinutes)
-        .filter((duration): duration is number => typeof duration === "number"),
-    )].sort((a, b) => a - b);
-    const labelNoun = filteredSlots.length === 1 ? "appointment" : "appointments";
-    if (durations.length === 0) return `${slotDurationMinutes}-minute ${labelNoun}`;
+    const durations = [
+      ...new Set(
+        filteredSlots
+          .map(
+            (slotStart) =>
+              slotDetailByStart.get(slotStart)?.slotDurationMinutes,
+          )
+          .filter(
+            (duration): duration is number => typeof duration === "number",
+          ),
+      ),
+    ].sort((a, b) => a - b);
+    const labelNoun =
+      filteredSlots.length === 1 ? "appointment" : "appointments";
+    if (durations.length === 0)
+      return `${slotDurationMinutes}-minute ${labelNoun}`;
     if (durations.length === 1) return `${durations[0]}-minute ${labelNoun}`;
     return `${durations.join(" / ")}-minute ${labelNoun}`;
   }, [filteredSlots, slotDetailByStart, slotDurationMinutes]);
@@ -524,7 +539,9 @@ export default function BookAppointmentDoctorPage() {
                   <span className="text-[#333333]">Clinic Visit</span>
                 </p>
               </div>
-              <PostAppointmentActions emailHint={bookedConfirmation.patientEmail} />
+              <PostAppointmentActions
+                emailHint={bookedConfirmation.patientEmail}
+              />
             </div>
           </section>
         ) : (
@@ -545,7 +562,7 @@ export default function BookAppointmentDoctorPage() {
               {!doctorLoading && doctor && (
                 <div className="mt-4 flex flex-col gap-1">
                   <span className="font-montaga text-lg text-[#111111] md:text-xl">
-                    {doctor.name}
+                    {formatDoctorDisplayName(doctor.name)}
                   </span>
                   <span className="font-montserrat text-sm text-[#5E5E5E]">
                     {doctor.specialization}
@@ -732,12 +749,24 @@ export default function BookAppointmentDoctorPage() {
                       id="email"
                       type="email"
                       {...register("email")}
-                      className="rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
+                      readOnly={isPatientSignedIn}
+                      aria-readonly={isPatientSignedIn}
+                      className={`rounded-xl border border-[#e5e5e5] px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5 ${
+                        isPatientSignedIn
+                          ? "bg-[#f5f5f5] cursor-not-allowed"
+                          : "bg-white"
+                      }`}
                       placeholder="you@example.com"
                     />
                     {errors.email && (
                       <p className="font-montserrat text-sm text-red-600">
                         {errors.email.message}
+                      </p>
+                    )}
+                    {isPatientSignedIn && (
+                      <p className="font-montserrat text-xs text-[#5E5E5E]">
+                        Email is linked to your appointment history and cannot
+                        be changed.
                       </p>
                     )}
                   </div>
@@ -779,7 +808,9 @@ export default function BookAppointmentDoctorPage() {
                       )}
                     />
                     {phoneError ? (
-                      <p className="font-montserrat text-sm text-red-600">{phoneError}</p>
+                      <p className="font-montserrat text-sm text-red-600">
+                        {phoneError}
+                      </p>
                     ) : null}
                     {errors.phone && !phoneError && (
                       <p className="font-montserrat text-sm text-red-600">

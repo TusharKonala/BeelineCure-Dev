@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 async function getDoctors() {
   const res = await fetch("/api/doctors");
@@ -72,7 +73,7 @@ export function DoctorSelectionSection() {
                   <div className="relative w-full overflow-hidden rounded-t-2xl bg-[#f5f5f5] aspect-4/3 min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64">
                     <Image
                       src={doctor.profilePhotoUrl}
-                      alt={doctor.name}
+                      alt={formatDoctorDisplayName(doctor.name)}
                       fill
                       className="object-cover object-top"
                       sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -80,7 +81,7 @@ export function DoctorSelectionSection() {
                   </div>
                   <div className="flex flex-1 flex-col gap-1.5 px-5 py-4">
                     <span className="font-montaga text-lg text-[#111111] md:text-xl">
-                      {doctor.name}
+                      {formatDoctorDisplayName(doctor.name)}
                     </span>
                     <span className="font-montserrat text-sm text-[#5E5E5E]">
                       {doctor.specialization}

@@ -16,6 +16,7 @@ import {
   formatPrice,
 } from "@/lib/currency";
 import { convertCentsAmount } from "@/lib/fx-rates";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 type PageProps = {
   params: Promise<{ bookingSessionId: string }>;
@@ -92,7 +93,7 @@ export default async function BookingReviewPage({ params }: PageProps) {
               <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">
                 <span className="font-medium text-[#111111]">Doctor</span>
                 <span className="text-[#5E5E5E] sm:text-right">
-                  {doctor.name}
+                  {formatDoctorDisplayName(doctor.name)}
                 </span>
               </div>
               <div className="flex flex-col justify-between gap-1 font-montserrat text-sm text-[#333333] sm:flex-row sm:items-center">

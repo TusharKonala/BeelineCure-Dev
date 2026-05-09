@@ -6,6 +6,7 @@ import {
   formatDateInPatientTz,
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -40,7 +41,9 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
         : null;
 
       if (bookingSession) {
-        doctorName = bookingSession.doctor?.name ?? "Your doctor";
+        doctorName = bookingSession.doctor?.name
+          ? formatDoctorDisplayName(bookingSession.doctor.name)
+          : "Your doctor";
         appointmentDate = formatDateInPatientTz(
           bookingSession.date,
           bookingSession.time,
