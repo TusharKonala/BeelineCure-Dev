@@ -67,6 +67,7 @@ export async function POST(request: Request) {
     where: { passwordResetTokenHash: tokenHash },
     select: {
       id: true,
+      password: true,
       passwordResetTokenExpiresAt: true,
     },
   });
@@ -87,6 +88,21 @@ export async function POST(request: Request) {
       },
     });
     return NextResponse.json({ error: "Reset link has expired" }, { status: 400 });
+  }
+
+  if (user.password) {
+    const isSameAsCurrent = await bcrypt.compare(
+      parsed.data.password,
+      user.password,
+    );
+    if (isSameAsCurrent) {
+      return NextResponse.json(
+        {
+          error: "New password must be different from your current password.",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const nextPasswordHash = await bcrypt.hash(parsed.data.password, 12);
