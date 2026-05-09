@@ -9,6 +9,7 @@ import { Resend } from "resend";
 import { EmailVerificationTemplate } from "@/components/email-verification-template";
 import { formatDoctorStoredName } from "@/lib/doctor-name";
 import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
+import { currencyForTimezone } from "@/lib/currency";
 
 const doctorSignupSchema = z.object({
   phone: z
@@ -142,6 +143,7 @@ export async function POST(request: Request) {
                 bio: doctorSignup.bio?.trim() || null,
                 profilePhotoUrl: doctorSignup.profilePhotoUrl.trim(),
                 timezone: doctorSignup.timezone.trim(),
+                currency: currencyForTimezone(doctorSignup.timezone.trim()),
               },
             }
           : undefined,
