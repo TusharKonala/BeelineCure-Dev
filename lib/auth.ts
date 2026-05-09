@@ -47,7 +47,7 @@ async function authorizeMagicLink(rawToken: string) {
     });
     if (cleared.count !== 1) return null;
 
-    if (user.role === UserRole.DOCTOR) {
+    if (user.role === UserRole.DOCTOR && user.profileComplete !== false) {
       if (user.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
         throw new Error("DOCTOR_REJECTED");
       }
@@ -112,7 +112,7 @@ export const authOptions: NextAuthOptions = {
         if (!user.emailVerifiedAt) {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
-        if (user.role === UserRole.DOCTOR) {
+        if (user.role === UserRole.DOCTOR && user.profileComplete !== false) {
           if (user.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
             throw new Error("DOCTOR_REJECTED");
           }
@@ -137,6 +137,36 @@ export const authOptions: NextAuthOptions = {
     signIn: "/auth/signin",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider !== "google") return true;
+
+      const email = user.email?.trim().toLowerCase();
+      if (!email) return true;
+
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+        include: {
+          doctor: {
+            select: {
+              approvalStatus: true,
+            },
+          },
+        },
+      });
+
+      // Let incomplete Google-doctor onboarding continue to the profile form.
+      if (!existingUser || existingUser.profileComplete === false) return true;
+      if (existingUser.role !== UserRole.DOCTOR) return true;
+
+      if (existingUser.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
+        return "/auth/signin?error=DOCTOR_REJECTED";
+      }
+      if (existingUser.doctor?.approvalStatus !== DoctorApprovalStatus.APPROVED) {
+        return "/auth/signin?error=DOCTOR_NOT_APPROVED";
+      }
+
+      return true;
+    },
     async jwt({ token, user, account, trigger, session }) {
       if (user && account?.provider === "google") {
         const email = user.email;
@@ -166,7 +196,7 @@ export const authOptions: NextAuthOptions = {
             },
           },
         });
-        if (dbUser.role === UserRole.DOCTOR) {
+        if (dbUser.role === UserRole.DOCTOR && dbUser.profileComplete !== false) {
           if (dbUser.doctor?.approvalStatus === DoctorApprovalStatus.REJECTED) {
             throw new Error("DOCTOR_REJECTED");
           }

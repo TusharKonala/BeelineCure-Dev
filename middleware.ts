@@ -36,6 +36,10 @@ export default withAuth(
         return NextResponse.redirect(new URL(target, req.url));
       }
 
+      if (profileComplete === false) {
+        return NextResponse.redirect(new URL("/auth/signup?role=doctor", req.url));
+      }
+
       if (doctorApprovalStatus !== "APPROVED") {
         return NextResponse.redirect(
           new URL("/auth/doctor-pending-approval", req.url),
