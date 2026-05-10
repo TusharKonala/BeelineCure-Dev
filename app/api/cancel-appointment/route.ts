@@ -26,9 +26,9 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import {
   cancellationRefundPolicy,
   getChargeAmountCents,
+  formatRefundEmailSentence,
   initiateRefund,
   resolvePaymentIntentId,
-  refundEmailSentence,
 } from "@/lib/refunds";
 import {
   coerceSupportedCurrency,
@@ -229,7 +229,10 @@ export async function POST(request: NextRequest) {
         percentage: policy?.percentage === 100 ? 100 : 50,
       });
       if (result.ok) {
-        refundSentence = refundEmailSentence(result);
+        refundSentence = await formatRefundEmailSentence(
+          result,
+          appointment.patientTimezone,
+        );
       } else if (result.reason === "stripe_error") {
         refundFailed = true;
       }
@@ -251,12 +254,22 @@ export async function POST(request: NextRequest) {
         appointmentId,
       },
     });
-    await inngest.send({
-      name: "appointment/online-reminder-t15.cancelled",
-      data: {
-        appointmentId,
-      },
-    });
+    if (appointment.consultationType === ConsultationType.ONLINE) {
+      await inngest.send({
+        name: "appointment/online-reminder-t15.cancelled",
+        data: {
+          appointmentId,
+        },
+      });
+    }
+    if (appointment.consultationType === ConsultationType.CLINIC) {
+      await inngest.send({
+        name: "appointment/clinic-reminder-t120.cancelled",
+        data: {
+          appointmentId,
+        },
+      });
+    }
   } catch (err) {
     console.error("[cancel] Failed to cancel reminder:", err);
   }

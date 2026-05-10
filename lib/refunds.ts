@@ -5,6 +5,13 @@ import {
   PaymentStatus,
   RefundStatus,
 } from "@/generated/prisma/client";
+import {
+  coerceSupportedCurrency,
+  currencyForTimezone,
+  formatPrice,
+  type SupportedCurrency,
+} from "@/lib/currency";
+import { convertCentsAmount } from "@/lib/fx-rates";
 import { prisma } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
 
@@ -70,6 +77,8 @@ export type InitiateRefundResult =
       ok: true;
       refundAmountCents: number;
       percentage: 100 | 50;
+      /** Currency of the Stripe charge/refund (patient's payment currency). */
+      paymentCurrency: SupportedCurrency;
     }
   | {
       ok: false;
@@ -199,10 +208,16 @@ export async function initiateRefund({
       },
     });
 
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const paymentCurrency = coerceSupportedCurrency(
+      refund.currency ?? paymentIntent.currency,
+    );
+
     return {
       ok: true,
       refundAmountCents: persistedAmount,
       percentage,
+      paymentCurrency,
     };
   } catch (err) {
     console.error(
@@ -215,14 +230,44 @@ export async function initiateRefund({
 }
 
 /**
- * Human-readable refund sentence appended to cancellation emails
- * (patient and doctor flows). Returns null when no refund applies.
+ * Human-readable refund sentence for cancellation emails and in-app messages.
+ * Amounts are always in Stripe payment currency; when that differs from the
+ * patient's local currency (from `patientTimezone`), appends the same
+ * `(approx …)` pattern as `buildEmailPriceLabels` in `email-price-labels.ts`.
  */
-export function refundEmailSentence(result: InitiateRefundResult): string | null {
+export async function formatRefundEmailSentence(
+  result: InitiateRefundResult,
+  patientTimezone: string | null | undefined,
+): Promise<string | null> {
   if (!result.ok) return null;
-  const dollars = (result.refundAmountCents / 100).toFixed(2);
-  if (result.percentage === 100) {
-    return `A full refund of $${dollars} has been initiated and should appear on your original payment method within 5-10 business days.`;
+
+  const payCur = result.paymentCurrency;
+  const paymentPart = formatPrice(result.refundAmountCents, payCur);
+
+  let amountPhrase: string;
+  if (!patientTimezone) {
+    amountPhrase = paymentPart;
+  } else {
+    const patientCurrency = currencyForTimezone(patientTimezone);
+    if (patientCurrency === payCur) {
+      amountPhrase = paymentPart;
+    } else {
+      try {
+        const localCents = await convertCentsAmount(
+          result.refundAmountCents,
+          payCur,
+          patientCurrency,
+        );
+        amountPhrase = `${paymentPart} (approx ${formatPrice(localCents, patientCurrency)})`;
+      } catch (err) {
+        console.error("[refunds] FX for refund sentence failed:", err);
+        amountPhrase = paymentPart;
+      }
+    }
   }
-  return `Per our cancellation policy, a 50% refund of $${dollars} has been initiated and should appear on your original payment method within 5-10 business days.`;
+
+  if (result.percentage === 100) {
+    return `A full refund of ${amountPhrase} has been initiated and should appear on your original payment method within 5-10 business days.`;
+  }
+  return `Per our cancellation policy, a 50% refund of ${amountPhrase} has been initiated and should appear on your original payment method within 5-10 business days.`;
 }
