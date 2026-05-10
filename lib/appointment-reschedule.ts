@@ -11,6 +11,7 @@ import { inngest } from "@/inngest/client";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
 import {
+  clinicT120ReminderAtMs,
   onlineT15ReminderAtMs,
   reminderAtMsFromPatientLocal,
 } from "@/lib/reminder-time";
@@ -101,14 +102,22 @@ export async function reschedulePatientAppointment(input: {
         appointmentId: updatedAppointment.id,
       },
     });
-    // Cancel any pending 15-min online reminder; we'll schedule a fresh one
-    // below if the new slot is in the future.
-    await inngest.send({
-      name: "appointment/online-reminder-t15.cancelled",
-      data: {
-        appointmentId: updatedAppointment.id,
-      },
-    });
+    if (updatedAppointment.consultationType === ConsultationType.ONLINE) {
+      await inngest.send({
+        name: "appointment/online-reminder-t15.cancelled",
+        data: {
+          appointmentId: updatedAppointment.id,
+        },
+      });
+    }
+    if (updatedAppointment.consultationType === ConsultationType.CLINIC) {
+      await inngest.send({
+        name: "appointment/clinic-reminder-t120.cancelled",
+        data: {
+          appointmentId: updatedAppointment.id,
+        },
+      });
+    }
 
     const reminderAtMs = reminderAtMsFromPatientLocal(
       dateParam,
@@ -137,6 +146,20 @@ export async function reschedulePatientAppointment(input: {
           name: "appointment/online-reminder-t15.scheduled",
           data: { appointmentId: updatedAppointment.id },
           ts: t15Ms,
+        });
+      }
+    }
+    if (updatedAppointment.consultationType === ConsultationType.CLINIC) {
+      const t120Ms = clinicT120ReminderAtMs(
+        dateParam,
+        time,
+        appointment.timezone,
+      );
+      if (t120Ms !== null) {
+        await inngest.send({
+          name: "appointment/clinic-reminder-t120.scheduled",
+          data: { appointmentId: updatedAppointment.id },
+          ts: t120Ms,
         });
       }
     }

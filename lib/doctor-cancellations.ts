@@ -10,7 +10,7 @@ import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { deleteMeetCalendarEvent } from "@/lib/google-calendar-meet";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
-import { initiateRefund, refundEmailSentence } from "@/lib/refunds";
+import { formatRefundEmailSentence, initiateRefund } from "@/lib/refunds";
 import { inngest } from "@/inngest/client";
 import {
   formatDateInPatientTz,
@@ -134,7 +134,10 @@ export async function cancelAppointmentByStaff(input: {
       percentage: 100,
     });
     if (result.ok) {
-      refundSentence = refundEmailSentence(result);
+      refundSentence = await formatRefundEmailSentence(
+        result,
+        appointment.patientTimezone,
+      );
     } else if (result.reason === "stripe_error") {
       refundFailed = true;
     }
@@ -147,12 +150,22 @@ export async function cancelAppointmentByStaff(input: {
         appointmentId: appointment.id,
       },
     });
-    await inngest.send({
-      name: "appointment/online-reminder-t15.cancelled",
-      data: {
-        appointmentId: appointment.id,
-      },
-    });
+    if (appointment.consultationType === ConsultationType.ONLINE) {
+      await inngest.send({
+        name: "appointment/online-reminder-t15.cancelled",
+        data: {
+          appointmentId: appointment.id,
+        },
+      });
+    }
+    if (appointment.consultationType === ConsultationType.CLINIC) {
+      await inngest.send({
+        name: "appointment/clinic-reminder-t120.cancelled",
+        data: {
+          appointmentId: appointment.id,
+        },
+      });
+    }
   } catch (err) {
     console.error("[doctor-cancellations] Failed to cancel reminder:", err);
   }
@@ -247,13 +260,19 @@ export async function cancelAppointmentByStaff(input: {
       appointment.patientTimezone,
     );
 
+    const refundNotifyAppendix = refundSentence
+      ? ` ${refundSentence}`
+      : refundFailed
+        ? " We attempted to initiate your refund but ran into an issue. Our support team will follow up shortly to resolve it."
+        : "";
+
     await createAppointmentNotificationForEmail({
       patientEmail: appointment.email,
       type: NotificationType.APPOINTMENT_CANCELLED,
       title: "Appointment cancelled",
       message: `Your appointment${
         doctorDisplayName ? ` with ${doctorDisplayName}` : ""
-      } on ${formattedDate} at ${formattedTime} was cancelled by your doctor.`,
+      } on ${formattedDate} at ${formattedTime} was cancelled by your doctor.${refundNotifyAppendix}`,
       actorUserId: input.actorUserId ?? null,
     });
   } catch (err) {
