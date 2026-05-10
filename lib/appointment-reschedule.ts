@@ -10,6 +10,7 @@ import { updateMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet"
 import { inngest } from "@/inngest/client";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
+import { rescheduleConfirmationEmailMessage } from "@/lib/reschedule-policy-copy";
 import {
   clinicT120ReminderAtMs,
   onlineT15ReminderAtMs,
@@ -212,10 +213,11 @@ export async function reschedulePatientAppointment(input: {
         subject: "Appointment Rescheduled",
         react: EmailTemplate({
           heading: "Appointment Rescheduled",
-          message:
+          message: rescheduleConfirmationEmailMessage(
             updatedAppointment.consultationType === ConsultationType.ONLINE
-              ? "Your appointment has been rescheduled. Please be available at the scheduled time. To cancel or reschedule, use the links below."
-              : "Your appointment has been rescheduled. Please arrive a few minutes early. To cancel or reschedule, use the links below.",
+              ? "ONLINE"
+              : "CLINIC",
+          ),
           doctorName: doctor.name,
           appointmentDate: formatDateInPatientTz(
             dateParam,

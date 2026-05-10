@@ -33,6 +33,7 @@ import {
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { createMeetEventForOnlineAppointment } from "@/lib/google-calendar-meet";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
+import { bookingConfirmationEmailMessage } from "@/lib/reschedule-policy-copy";
 import { coerceSupportedCurrency } from "@/lib/currency";
 import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
 
@@ -235,6 +236,11 @@ export async function POST(request: NextRequest) {
         to: appointment.email,
         subject: "Appointment Confirmation",
         react: EmailTemplate({
+          message: bookingConfirmationEmailMessage(
+            bookingSession.consultationType === ConsultationType.ONLINE
+              ? "ONLINE"
+              : "CLINIC",
+          ),
           doctorName: doctor.name,
           appointmentDate: formatDateInPatientTz(
             bookingSession.date,

@@ -36,6 +36,7 @@ import {
   createDoctorNotificationForDoctorId,
 } from "@/lib/notifications";
 import { buildEmailPriceLabels } from "@/lib/email-price-labels";
+import { bookingConfirmationEmailMessage } from "@/lib/reschedule-policy-copy";
 import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import { fromZonedTime } from "date-fns-tz";
 
@@ -310,6 +311,7 @@ export async function POST(request: NextRequest) {
       to: email,
       subject: "Appointment Confirmation",
       react: EmailTemplate({
+        message: bookingConfirmationEmailMessage("CLINIC"),
         doctorName: doctor.name,
         appointmentDate: formatDateInPatientTz(dateParam, time, doctorTimezone, patientTimezone),
         appointmentTime: formatTimeInPatientTz(dateParam, time, doctorTimezone, patientTimezone),
