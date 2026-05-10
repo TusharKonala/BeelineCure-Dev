@@ -1,7 +1,11 @@
 import { EmailTemplate } from "@/components/email-template";
 import { MedicineReminderEmailTemplate } from "@/components/medicine-reminder-email-template";
 import { prisma } from "@/lib/db";
-import { AppointmentStatus, NotificationType } from "@/generated/prisma/client";
+import {
+  AppointmentStatus,
+  ConsultationType,
+  NotificationType,
+} from "@/generated/prisma/client";
 import { Resend } from "resend";
 import { inngest } from "./client";
 import {
@@ -16,6 +20,10 @@ import {
   createDoctorNotificationForDoctorId,
 } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import {
+  APPOINTMENT_REMINDER_EMAIL_BODY_26H,
+  RESCHEDULE_ONLY_MORE_THAN_24H,
+} from "@/lib/reschedule-policy-copy";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -23,12 +31,16 @@ type PrescriptionReminderType = "HALFWAY" | "COMPLETED";
 const OVERDUE_IN_APP_MS = 24 * 60 * 60 * 1000;
 const OVERDUE_EMAIL_MS = 48 * 60 * 60 * 1000;
 
-function isReminderEligibleAppointmentStatus(status: AppointmentStatus): boolean {
+function isReminderEligibleAppointmentStatus(
+  status: AppointmentStatus,
+): boolean {
   return status === AppointmentStatus.CONFIRMED;
 }
 
 function formatDaysValue(days: number): string {
-  return Number.isInteger(days) ? String(days) : String(Number(days.toFixed(1)));
+  return Number.isInteger(days)
+    ? String(days)
+    : String(Number(days.toFixed(1)));
 }
 
 function extractMedicineSummary(
@@ -110,8 +122,7 @@ export const sendAppointmentReminder = inngest.createFunction(
       subject: "Appointment Reminder",
       react: EmailTemplate({
         heading: "Appointment Reminder",
-        message:
-          "This is a reminder that your appointment is scheduled in 24 hours. If you need to cancel or reschedule, please use the links below.",
+        message: APPOINTMENT_REMINDER_EMAIL_BODY_26H,
         showActionLinks: true,
         doctorName: appointment.doctor.name,
         appointmentDate: formatDateInPatientTz(
@@ -135,7 +146,9 @@ export const sendAppointmentReminder = inngest.createFunction(
     });
 
     try {
-      const doctorDisplayName = formatDoctorDisplayName(appointment.doctor.name);
+      const doctorDisplayName = formatDoctorDisplayName(
+        appointment.doctor.name,
+      );
       await createAppointmentNotificationForEmail({
         patientEmail: appointment.email,
         type: NotificationType.APPOINTMENT_REMINDER,
@@ -150,10 +163,13 @@ export const sendAppointmentReminder = inngest.createFunction(
           appointment.time,
           appointment.timezone,
           appointment.patientTimezone,
-        )}.`,
+        )}. You have about two hours left to reschedule. ${RESCHEDULE_ONLY_MORE_THAN_24H} Use the links in your confirmation email to cancel or reschedule.`,
       });
     } catch (err) {
-      console.error("[appointments-reminder] Failed to create notification:", err);
+      console.error(
+        "[appointments-reminder] Failed to create notification:",
+        err,
+      );
     }
 
     if (error) {
@@ -169,9 +185,10 @@ export const sendAppointmentReminder = inngest.createFunction(
 /**
  * 15-minute "join now" reminder for ONLINE appointments only. Sends an email
  * to both the patient and the doctor (when the doctor has a linked user
- * account with an email) and includes the Google Meet link. Scheduled at
- * appointment start − 15 minutes from booking + reschedule sites; cancelled
- * via `appointment/online-reminder-t15.cancelled`.
+ * account with an email) and includes the Google Meet link. No reschedule
+ * link: within the 24h minimum from `reschedule-appointment`. Scheduled at
+ * appointment start − 15 minutes; cancelled via
+ * `appointment/online-reminder-t15.cancelled`.
  */
 export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
   {
@@ -202,7 +219,6 @@ export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
         consultationType: true,
         status: true,
         cancelToken: true,
-        rescheduleToken: true,
         googleMeetUrl: true,
         doctor: {
           select: {
@@ -235,14 +251,7 @@ export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
           appointment.id,
         )}&token=${encodeURIComponent(appointment.cancelToken)}`
       : "";
-    const rescheduleUrl = appointment.rescheduleToken
-      ? `${origin}/reschedule?appointmentId=${encodeURIComponent(
-          appointment.id,
-        )}&token=${encodeURIComponent(appointment.rescheduleToken)}`
-      : "";
-
-    const message =
-      "Your online consultation starts in about 15 minutes. Use the Google Meet link below to join.";
+    const message = `This is a reminder that your online consultation starts in about 15 minutes. Use the Google Meet link below to join. ${RESCHEDULE_ONLY_MORE_THAN_24H} If you cannot attend, use Cancel below — then book a new appointment when you are ready.`;
 
     const patientSend = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
@@ -268,7 +277,7 @@ export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
         patientName: appointment.patientName,
         consultationType: appointment.consultationType,
         cancelUrl,
-        rescheduleUrl,
+        rescheduleUrl: "",
         meetLink: appointment.googleMeetUrl,
       }),
     });
@@ -351,6 +360,132 @@ export const sendOnlineAppointmentT15Reminder = inngest.createFunction(
   },
 );
 
+/**
+ * Two-hour "head out" reminder for CLINIC appointments only. No Meet link.
+ * Reschedule is not offered here: API requires ≥24h lead (`reschedule-appointment`).
+ * Cancelled via `appointment/clinic-reminder-t120.cancelled`.
+ */
+export const sendClinicAppointmentT120Reminder = inngest.createFunction(
+  {
+    id: "send-clinic-appointment-t120-reminder",
+    retries: 2,
+    triggers: [{ event: "appointment/clinic-reminder-t120.scheduled" }],
+    cancelOn: [
+      {
+        event: "appointment/clinic-reminder-t120.cancelled",
+        match: "data.appointmentId",
+      },
+    ],
+  },
+  async ({ event }) => {
+    const { appointmentId } = event.data as { appointmentId: string };
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      select: {
+        id: true,
+        email: true,
+        date: true,
+        time: true,
+        timezone: true,
+        patientTimezone: true,
+        patientName: true,
+        consultationType: true,
+        status: true,
+        cancelToken: true,
+        doctor: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!appointment) return { skipped: true, reason: "not_found" };
+    if (appointment.consultationType !== ConsultationType.CLINIC) {
+      return { skipped: true, reason: "not_clinic" };
+    }
+    if (!isReminderEligibleAppointmentStatus(appointment.status)) {
+      return { skipped: true, reason: "inactive_status" };
+    }
+    if (!appointment.cancelToken) {
+      return { skipped: true, reason: "missing_tokens" };
+    }
+
+    const dateStr = appointment.date.toISOString().slice(0, 10);
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL ??
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+      "http://localhost:3000";
+    const cancelUrl = `${origin}/cancel?appointmentId=${encodeURIComponent(
+      appointment.id,
+    )}&token=${encodeURIComponent(appointment.cancelToken)}`;
+
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: appointment.email,
+      subject: "Your clinic appointment is in 2 hours",
+      react: EmailTemplate({
+        heading: "Time to head out",
+        message: `This is a reminder that your in-clinic appointment is in about 2 hours. Please arrive a few minutes early. ${RESCHEDULE_ONLY_MORE_THAN_24H} If you cannot attend, use Cancel below and book again when you are ready.`,
+        showActionLinks: true,
+        doctorName: appointment.doctor.name,
+        appointmentDate: formatDateInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        appointmentTime: formatTimeInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        ),
+        patientName: appointment.patientName,
+        consultationType: appointment.consultationType,
+        cancelUrl,
+        rescheduleUrl: "",
+      }),
+    });
+
+    try {
+      const doctorDisplayName = formatDoctorDisplayName(
+        appointment.doctor.name,
+      );
+      await createAppointmentNotificationForEmail({
+        patientEmail: appointment.email,
+        type: NotificationType.APPOINTMENT_REMINDER,
+        title: "Clinic visit soon",
+        message: `Your in-clinic appointment with ${doctorDisplayName} is in about 2 hours — time to head out. ${formatDateInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        )} at ${formatTimeInPatientTz(
+          dateStr,
+          appointment.time,
+          appointment.timezone,
+          appointment.patientTimezone,
+        )}.`,
+      });
+    } catch (err) {
+      console.error(
+        "[appointments-clinic-t120-reminder] Failed to create notification:",
+        err,
+      );
+    }
+
+    if (error) {
+      throw new Error(
+        `[appointments-clinic-t120-reminder] Email failed: ${JSON.stringify(error)}`,
+      );
+    }
+
+    return { sent: true, appointmentId };
+  },
+);
+
 export const sendPrescriptionReminder = inngest.createFunction(
   {
     id: "send-prescription-reminder",
@@ -401,7 +536,9 @@ export const sendPrescriptionReminder = inngest.createFunction(
       return { skipped: true, reason: "missing_prescription" };
     }
 
-    const medicineSummary = extractMedicineSummary(appointment.prescription.medicines);
+    const medicineSummary = extractMedicineSummary(
+      appointment.prescription.medicines,
+    );
     if (!medicineSummary) {
       return { skipped: true, reason: "invalid_medicines_payload" };
     }
@@ -419,7 +556,9 @@ export const sendPrescriptionReminder = inngest.createFunction(
         ? "Medication Reminder: Halfway Through"
         : "Medication Reminder: Course Completed";
     const heading =
-      reminderType === "HALFWAY" ? "Medication Progress Check-in" : "Medication Course Completed";
+      reminderType === "HALFWAY"
+        ? "Medication Progress Check-in"
+        : "Medication Course Completed";
     const message =
       reminderType === "HALFWAY"
         ? `You are halfway through your medication course (${halfwayDaysText}). Please continue your prescribed medicines as advised by your doctor.`
@@ -443,12 +582,15 @@ export const sendPrescriptionReminder = inngest.createFunction(
         doctorName: appointment.doctor.name,
         patientName: appointment.patientName,
         primaryActionLabel:
-          reminderType === "HALFWAY" ? "View prescription" : "Book a follow-up if needed",
+          reminderType === "HALFWAY"
+            ? "View prescription"
+            : "Book a follow-up if needed",
         primaryActionUrl:
           reminderType === "HALFWAY" ? viewPrescriptionUrl : followUpUrl,
         secondaryActionLabel:
           reminderType === "HALFWAY" ? "Book a follow-up if needed" : undefined,
-        secondaryActionUrl: reminderType === "HALFWAY" ? followUpUrl : undefined,
+        secondaryActionUrl:
+          reminderType === "HALFWAY" ? followUpUrl : undefined,
       }),
     });
 
@@ -473,7 +615,10 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
     const appointments = await prisma.appointment.findMany({
       where: {
         status: AppointmentStatus.CONFIRMED,
-        OR: [{ overdueInAppNotifiedAt: null }, { overdueEmailNotifiedAt: null }],
+        OR: [
+          { overdueInAppNotifiedAt: null },
+          { overdueEmailNotifiedAt: null },
+        ],
       },
       select: {
         id: true,
@@ -543,7 +688,10 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
               where: { id: appointment.id },
               data: { overdueInAppNotifiedAt: null },
             });
-            console.error("[doctor-overdue] Failed to create in-app notification:", err);
+            console.error(
+              "[doctor-overdue] Failed to create in-app notification:",
+              err,
+            );
           }
         }
       }
@@ -554,7 +702,8 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
       const doctorSeenAt = appointment.doctor.lastSeenAt;
       const shouldFallbackToEmail =
         !doctorSeenAt ||
-        doctorSeenAt.getTime() < appointmentStartAt.getTime() + OVERDUE_EMAIL_MS;
+        doctorSeenAt.getTime() <
+          appointmentStartAt.getTime() + OVERDUE_EMAIL_MS;
       const doctorEmail = appointment.doctor.user?.email?.trim();
       if (!shouldFallbackToEmail || !doctorEmail) {
         continue;
@@ -619,4 +768,3 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
     };
   },
 );
-

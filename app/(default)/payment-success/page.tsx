@@ -7,6 +7,7 @@ import {
   formatTimeInPatientTz,
 } from "@/lib/timezone-display";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { RESCHEDULE_POLICY_CONFIRMATION_LINE } from "@/lib/reschedule-policy-copy";
 
 type PageProps = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
@@ -99,10 +100,15 @@ export default async function PaymentSuccessPage({ searchParams }: PageProps) {
               {confirmationMessage}
             </p>
             {isOnline && (
-              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E] md:text-base">
-                A Google Meet link has been sent to your email. If you&apos;re
-                signed in, you can also find it in your appointments dashboard.
-              </p>
+              <>
+                <p className="mt-2 font-montserrat text-sm text-[#5E5E5E] md:text-base">
+                  A Google Meet link has been sent to your email. If you&apos;re
+                  signed in, you can also find it in your appointments dashboard.
+                </p>
+                <p className="mt-2 font-montserrat text-sm text-[#5E5E5E] md:text-base">
+                  {RESCHEDULE_POLICY_CONFIRMATION_LINE}
+                </p>
+              </>
             )}
             {hasDetails ? (
               <div className="mt-6 space-y-3 font-montserrat text-sm">

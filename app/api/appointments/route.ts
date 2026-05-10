@@ -20,7 +20,10 @@ import {
 } from "@/lib/doctor-availability-slots";
 import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
 import { coerceSupportedCurrency } from "@/lib/currency";
-import { reminderAtMsFromPatientLocal } from "@/lib/reminder-time";
+import {
+  clinicT120ReminderAtMs,
+  reminderAtMsFromPatientLocal,
+} from "@/lib/reminder-time";
 import { countUpcomingAppointmentsForEmail } from "@/lib/upcoming-appointments";
 import {
   formatDateInDoctorTz,
@@ -384,6 +387,21 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[appointments] Failed to schedule reminder:", err);
+  }
+
+  try {
+    const t120Ms = clinicT120ReminderAtMs(dateParam, time, doctorTimezone);
+    if (t120Ms !== null) {
+      await inngest.send({
+        name: "appointment/clinic-reminder-t120.scheduled",
+        data: {
+          appointmentId: appointment.id,
+        },
+        ts: t120Ms,
+      });
+    }
+  } catch (err) {
+    console.error("[appointments] Failed to schedule 2-hour clinic reminder:", err);
   }
 
   return NextResponse.json(appointment);

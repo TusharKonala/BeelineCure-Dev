@@ -32,6 +32,7 @@ import {
 } from "@/lib/doctor-pricing";
 import { convertCentsAmount } from "@/lib/fx-rates";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
+import { RESCHEDULE_POLICY_CONFIRMATION_LINE } from "@/lib/reschedule-policy-copy";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -498,6 +499,9 @@ export default function BookAppointmentDoctorPage() {
               </h2>
               <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
                 {confirmationMessage}
+              </p>
+              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+                {RESCHEDULE_POLICY_CONFIRMATION_LINE}
               </p>
               <div className="mt-6 flex flex-col gap-2 rounded-lg bg-[#fafafa] p-4 font-montserrat text-sm">
                 <p>
