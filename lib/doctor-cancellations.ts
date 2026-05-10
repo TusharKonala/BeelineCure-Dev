@@ -190,11 +190,17 @@ export async function cancelAppointmentByStaff(input: {
         : "";
     const message = `${copy.message}${refundAppendix}`;
 
-    const { priceLabel, approxLocalPriceLabel } = await buildEmailPriceLabels({
-      priceCents: appointment.priceCentsAtBooking ?? null,
-      baseCurrency: appointment.currencyAtBooking ?? null,
-      patientTimezone: appointment.patientTimezone,
-    });
+    let priceLabel: string | null = null;
+    let approxLocalPriceLabel: string | null = null;
+    if (appointment.consultationType !== ConsultationType.CLINIC) {
+      const labels = await buildEmailPriceLabels({
+        priceCents: appointment.priceCentsAtBooking ?? null,
+        baseCurrency: appointment.currencyAtBooking ?? null,
+        patientTimezone: appointment.patientTimezone,
+      });
+      priceLabel = labels.priceLabel;
+      approxLocalPriceLabel = labels.approxLocalPriceLabel;
+    }
 
     const { error } = await resend.emails.send({
       from: "Clinic Appointments <onboarding@resend.dev>",
