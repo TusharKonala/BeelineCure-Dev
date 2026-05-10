@@ -12,6 +12,8 @@ const prisma = new PrismaClient({ adapter });
 type DoctorSeed = {
   name: string;
   specialization: string;
+  phone: string;
+  qualification: string;
   profilePhotoUrl: string;
   timezone: string;
   /** One or more availability windows per calendar day. */
@@ -25,6 +27,8 @@ const doctorSeeds: DoctorSeed[] = [
   {
     name: "Dr. Sharma",
     specialization: "Cardiologist",
+    phone: "+919876543210",
+    qualification: "MBBS, MD (Cardiology)",
     profilePhotoUrl: "/doctors/sharma.jpg",
     timezone: "Asia/Kolkata",
     dayBlocks: [...dayBlock9to1],
@@ -32,6 +36,8 @@ const doctorSeeds: DoctorSeed[] = [
   {
     name: "Dr. Johnson",
     specialization: "General Physician",
+    phone: "+12125550199",
+    qualification: "MD",
     profilePhotoUrl: "/doctors/johnson.jpg",
     timezone: "America/New_York",
     dayBlocks: [...dayBlock9to1],
@@ -39,6 +45,8 @@ const doctorSeeds: DoctorSeed[] = [
   {
     name: "Dr. Fernandes",
     specialization: "Orthopedic",
+    phone: "+33144556677",
+    qualification: "MD, Orthopedic Surgery",
     profilePhotoUrl: "/doctors/fernandes.jpg",
     timezone: "Europe/Paris",
     dayBlocks: [...dayBlock9to1],
@@ -73,6 +81,8 @@ async function main() {
       data: {
         name: seed.name,
         specialization: seed.specialization,
+        phone: seed.phone,
+        qualification: seed.qualification,
         licenseNumber: "SEED",
         profilePhotoUrl: seed.profilePhotoUrl,
         timezone: seed.timezone,
