@@ -2,6 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, UserRole } from "../generated/prisma/client.js";
+import { assignUniqueDoctorSlug } from "../lib/doctor-slug";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -44,7 +45,7 @@ const doctorSeeds: DoctorSeed[] = [
   },
   {
     name: "Dr. Fernandes",
-    specialization: "Orthopedic",
+    specialization: "Orthopedic Surgeon",
     phone: "+33144556677",
     qualification: "MD, Orthopedic Surgery",
     profilePhotoUrl: "/doctors/fernandes.jpg",
@@ -88,6 +89,11 @@ async function main() {
         timezone: seed.timezone,
         isActive: true,
       },
+    });
+
+    await assignUniqueDoctorSlug(prisma, {
+      doctorId: doctor.id,
+      name: doctor.name,
     });
 
     for (let offset = 0; offset < daysToSeed; offset++) {

@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import { DoctorApprovalStatus, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
+import { assignUniqueDoctorSlug } from "@/lib/doctor-slug";
 import { prisma } from "@/lib/db";
 
 export async function PATCH(
@@ -34,7 +35,7 @@ export async function PATCH(
 
   const doctor = await prisma.doctor.findUnique({
     where: { id: doctorId },
-    select: { id: true, userId: true },
+    select: { id: true, userId: true, name: true },
   });
   if (!doctor) {
     return NextResponse.json({ error: "Doctor profile not found" }, { status: 404 });
@@ -46,23 +47,33 @@ export async function PATCH(
     );
   }
 
-  await prisma.doctor.update({
-    where: { id: doctorId },
-    data:
-      nextStatus === "APPROVED"
-        ? {
-            approvalStatus: DoctorApprovalStatus.APPROVED,
-            approvedAt: new Date(),
-            approvedByUserId: session.user.id,
-            isActive: true,
-          }
-        : {
-            approvalStatus: DoctorApprovalStatus.REJECTED,
-            approvedAt: null,
-            approvedByUserId: null,
-            isActive: false,
-          },
-  });
+  if (nextStatus === "APPROVED") {
+    await prisma.$transaction(async (tx) => {
+      await tx.doctor.update({
+        where: { id: doctorId },
+        data: {
+          approvalStatus: DoctorApprovalStatus.APPROVED,
+          approvedAt: new Date(),
+          approvedByUserId: session.user.id,
+          isActive: true,
+        },
+      });
+      await assignUniqueDoctorSlug(tx, {
+        doctorId,
+        name: doctor.name,
+      });
+    });
+  } else {
+    await prisma.doctor.update({
+      where: { id: doctorId },
+      data: {
+        approvalStatus: DoctorApprovalStatus.REJECTED,
+        approvedAt: null,
+        approvedByUserId: null,
+        isActive: false,
+      },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
