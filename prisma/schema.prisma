@@ -144,6 +144,8 @@ model Doctor {
   userId           String?              @unique
   user             User?                @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
+  /// URL segment for public profile `/doctors/[slug]`. Set when approved (or seeded catalog).
+  slug             String?              @unique
   /// Contact phone for clinic / admin search.
   phone            String
   specialization   String
