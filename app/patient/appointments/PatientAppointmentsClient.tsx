@@ -10,6 +10,7 @@ import {
   formatDateInPatientTz,
   isDoctorTimeInPast,
 } from "@/lib/timezone-display";
+import { LeaveReviewModal } from "./LeaveReviewModal";
 
 type ConsultationType = "CLINIC" | "ONLINE";
 type AppointmentStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED";
@@ -26,6 +27,7 @@ export type PatientAppointmentItem = {
   consultationType: ConsultationType;
   googleMeetUrl: string | null;
   prescription: { medicines: unknown; generalNotes: string | null } | null;
+  review: { id: string; rating: number } | null;
   status: AppointmentStatus;
   doctor: {
     name: string;
@@ -77,6 +79,7 @@ export default function PatientAppointmentsClient() {
   const [doctorId, setDoctorId] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [error, setError] = useState<string | null>(null);
+  const [reviewTarget, setReviewTarget] = useState<PatientAppointmentItem | null>(null);
 
   const effectiveDoctorId = useMemo(
     () => (doctorOptions.some((d) => d.id === doctorId) ? doctorId : ""),
@@ -335,7 +338,7 @@ export default function PatientAppointmentsClient() {
                           href={a.googleMeetUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="font-medium text-[#2555F3] underline underline-offset-2 break-words"
+                          className="font-medium text-[#2555F3] underline underline-offset-2 wrap-break-word"
                         >
                           Join Google Meet
                         </a>
@@ -405,18 +408,34 @@ export default function PatientAppointmentsClient() {
                     </div>
                   )}
 
-                {a.status === "COMPLETED" && a.prescription && (
-                  <div className="mt-3">
-                    <Button
-                      asChild
-                      variant="outline"
-                      size="sm"
-                      className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
-                    >
-                      <Link href={`/patient/appointments/${a.id}/prescription`}>
-                        View prescription
-                      </Link>
-                    </Button>
+                {a.status === "COMPLETED" && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {a.prescription && (
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="w-fit cursor-pointer rounded-xl border-2 border-[#b8b8b8] font-montserrat hover:border-[#8a8a8a]"
+                      >
+                        <Link href={`/patient/appointments/${a.id}/prescription`}>
+                          View prescription
+                        </Link>
+                      </Button>
+                    )}
+                    {!a.review ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-fit cursor-pointer rounded-xl font-montserrat"
+                        onClick={() => setReviewTarget(a)}
+                      >
+                        Leave a Review
+                      </Button>
+                    ) : (
+                      <span className="rounded-full border border-[#f59e0b]/30 bg-[#f59e0b]/10 px-2.5 py-1 font-montserrat text-xs font-medium text-[#92400e]">
+                        Reviewed {a.review.rating}/5
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
@@ -433,6 +452,23 @@ export default function PatientAppointmentsClient() {
           </div>
         </div>
       )}
+      {reviewTarget ? (
+        <LeaveReviewModal
+          appointmentId={reviewTarget.id}
+          doctorName={reviewTarget.doctor.name}
+          onClose={() => setReviewTarget(null)}
+          onSubmitted={(review) => {
+            setAppointments((current) =>
+              current.map((appointment) =>
+                appointment.id === reviewTarget.id
+                  ? { ...appointment, review }
+                  : appointment,
+              ),
+            );
+            setReviewTarget(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
