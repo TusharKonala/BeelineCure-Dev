@@ -7,17 +7,20 @@ import useInfiniteScroll from "react-infinite-scroll-hook";
 
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  ALLOWED_SLOT_DURATION_MINUTES,
+  type AllowedSlotDurationMinutes,
+} from "@/lib/doctor-availability-slots";
+import { currencyForTimezone, type SupportedCurrency } from "@/lib/currency";
 import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
-import {
-  specializationForSymptom,
-  searchSymptoms,
-} from "@/lib/symptomMap";
+import { specializationForSymptom, searchSymptoms } from "@/lib/symptomMap";
 
 type DoctorCard = {
   id: string;
   name: string;
   specialization: string;
+  qualification: string;
   profilePhotoUrl: string;
   slug: string | null;
 };
@@ -30,25 +33,50 @@ type ListResponse = {
 };
 
 const CHEVRON_CLASSES =
-  'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000/svg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
+  'cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000/svg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
 
 function doctorListUrl(params: {
   specialty: string;
   consultationMode: string;
-  feeMinCents: string;
-  feeMaxCents: string;
+  feeMinCents: number | null;
+  feeMaxCents: number | null;
+  feeDurationMinutes: AllowedSlotDurationMinutes;
+  patientCurrency: SupportedCurrency;
   page: number;
 }): string {
   const sp = new URLSearchParams();
   sp.set("page", String(params.page));
-  sp.set("limit", "12");
+  sp.set("limit", "6");
   if (params.specialty) sp.set("specialty", params.specialty);
-  if (params.consultationMode === "online" || params.consultationMode === "clinic") {
+  if (
+    params.consultationMode === "online" ||
+    params.consultationMode === "clinic"
+  ) {
     sp.set("consultationMode", params.consultationMode);
   }
-  if (params.feeMinCents.trim()) sp.set("feeMinCents", params.feeMinCents.trim());
-  if (params.feeMaxCents.trim()) sp.set("feeMaxCents", params.feeMaxCents.trim());
+  sp.set("patientCurrency", params.patientCurrency);
+  sp.set("feeDurationMinutes", String(params.feeDurationMinutes));
+  if (params.feeMinCents != null)
+    sp.set("feeMinCents", String(params.feeMinCents));
+  if (params.feeMaxCents != null)
+    sp.set("feeMaxCents", String(params.feeMaxCents));
   return `/api/doctors?${sp.toString()}`;
+}
+
+function patientCurrencyFromTimezone(): SupportedCurrency {
+  const timezone =
+    typeof Intl !== "undefined"
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : "";
+  return currencyForTimezone(timezone);
+}
+
+function amountInputToCents(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount) || amount < 0) return Number.NaN;
+  return Math.round(amount * 100);
 }
 
 export function DoctorSelectionSection() {
@@ -56,35 +84,93 @@ export function DoctorSelectionSection() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMode, setLoadingMode] = useState<"replace" | "append" | null>(
+    "replace",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const [specialty, setSpecialty] = useState("");
   const [consultationMode, setConsultationMode] = useState("");
-  const [feeMinCents, setFeeMinCents] = useState("");
-  const [feeMaxCents, setFeeMaxCents] = useState("");
+  const [feeMinAmount, setFeeMinAmount] = useState("");
+  const [feeMaxAmount, setFeeMaxAmount] = useState("");
+  const [debouncedFeeMinAmount, setDebouncedFeeMinAmount] = useState("");
+  const [debouncedFeeMaxAmount, setDebouncedFeeMaxAmount] = useState("");
+  const [feeDurationMinutes, setFeeDurationMinutes] =
+    useState<AllowedSlotDurationMinutes>(30);
 
   const [symptomInput, setSymptomInput] = useState("");
   const [showSuggest, setShowSuggest] = useState(false);
   const symptomBoxRef = useRef<HTMLDivElement | null>(null);
+  const patientCurrency = useMemo(() => patientCurrencyFromTimezone(), []);
+  const feeMinCents = useMemo(
+    () => amountInputToCents(debouncedFeeMinAmount),
+    [debouncedFeeMinAmount],
+  );
+  const feeMaxCents = useMemo(
+    () => amountInputToCents(debouncedFeeMaxAmount),
+    [debouncedFeeMaxAmount],
+  );
+  const feeRangeError = useMemo(() => {
+    if (Number.isNaN(feeMinCents) || Number.isNaN(feeMaxCents)) {
+      return "Please enter valid fee amounts.";
+    }
+    if (
+      feeMinCents != null &&
+      feeMaxCents != null &&
+      feeMaxCents < feeMinCents
+    ) {
+      return "Max amount can't be smaller than min amount.";
+    }
+    return null;
+  }, [feeMinCents, feeMaxCents]);
+  const hasActiveFilters =
+    Boolean(specialty) ||
+    Boolean(consultationMode) ||
+    Boolean(feeMinAmount.trim()) ||
+    Boolean(feeMaxAmount.trim()) ||
+    feeDurationMinutes !== 30 ||
+    Boolean(symptomInput.trim());
 
   const filterKey = useMemo(
     () =>
       JSON.stringify({
         specialty,
         consultationMode,
-        feeMinCents,
-        feeMaxCents,
+        debouncedFeeMinAmount,
+        debouncedFeeMaxAmount,
+        feeDurationMinutes,
+        patientCurrency,
       }),
-    [specialty, consultationMode, feeMinCents, feeMaxCents],
+    [
+      specialty,
+      consultationMode,
+      debouncedFeeMinAmount,
+      debouncedFeeMaxAmount,
+      feeDurationMinutes,
+      patientCurrency,
+    ],
   );
 
   const latestRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedFeeMinAmount(feeMinAmount);
+      setDebouncedFeeMaxAmount(feeMaxAmount);
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [feeMinAmount, feeMaxAmount]);
 
   const loadDoctors = useCallback(
     async (nextPage: number, append: boolean) => {
       const requestId = ++latestRequestIdRef.current;
       setLoading(true);
+      setLoadingMode(append ? "append" : "replace");
       setError(null);
+      if (!append) {
+        setDoctors([]);
+        setHasMore(false);
+      }
       try {
         const res = await fetch(
           doctorListUrl({
@@ -92,12 +178,19 @@ export function DoctorSelectionSection() {
             consultationMode,
             feeMinCents,
             feeMaxCents,
+            feeDurationMinutes,
+            patientCurrency,
             page: nextPage,
           }),
         );
         if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
           if (latestRequestIdRef.current !== requestId) return;
-          setError("Failed to load doctors.");
+          setDoctors([]);
+          setHasMore(false);
+          setError(data?.error ?? "Failed to load doctors.");
           return;
         }
         const data = (await res.json()) as ListResponse;
@@ -110,19 +203,38 @@ export function DoctorSelectionSection() {
         if (latestRequestIdRef.current !== requestId) return;
         setError("Failed to load doctors.");
       } finally {
-        if (latestRequestIdRef.current === requestId) setLoading(false);
+        if (latestRequestIdRef.current === requestId) {
+          setLoading(false);
+          setLoadingMode(null);
+        }
       }
     },
-    [specialty, consultationMode, feeMinCents, feeMaxCents],
+    [
+      specialty,
+      consultationMode,
+      feeMinCents,
+      feeMaxCents,
+      feeDurationMinutes,
+      patientCurrency,
+    ],
   );
 
   useEffect(() => {
+    if (feeRangeError) {
+      latestRequestIdRef.current += 1;
+      setLoading(false);
+      setLoadingMode(null);
+      setDoctors([]);
+      setHasMore(false);
+      setError(feeRangeError);
+      return;
+    }
     void loadDoctors(1, false);
-  }, [filterKey, loadDoctors]);
+  }, [filterKey, feeRangeError, loadDoctors]);
 
   const [sentryRef] = useInfiniteScroll({
     loading,
-    hasNextPage: hasMore,
+    hasNextPage: hasMore && !feeRangeError,
     onLoadMore: () => void loadDoctors(page + 1, true),
     disabled: false,
     rootMargin: "0px 0px 320px 0px",
@@ -144,9 +256,20 @@ export function DoctorSelectionSection() {
 
   const cardHref = (d: DoctorCard) =>
     d.slug ? `/doctors/${d.slug}` : `/book-appointment/${d.id}`;
+  const clearAllFilters = useCallback(() => {
+    setSpecialty("");
+    setConsultationMode("");
+    setFeeMinAmount("");
+    setFeeMaxAmount("");
+    setDebouncedFeeMinAmount("");
+    setDebouncedFeeMaxAmount("");
+    setFeeDurationMinutes(30);
+    setSymptomInput("");
+    setShowSuggest(false);
+  }, []);
 
   return (
-    <section className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
+    <section className="w-full bg-[#fafafa] py-6 md:py-10 lg:py-12">
       <Container>
         <div className="flex flex-col gap-2 text-left md:text-left">
           <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
@@ -155,6 +278,20 @@ export function DoctorSelectionSection() {
         </div>
 
         <div className="mt-6 flex flex-col gap-4 border-b border-[#e5e5e5] pb-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="font-montserrat text-xs text-[#777777]">
+              Filter by symptom, specialty, mode, and fee.
+            </p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearAllFilters}
+                className="cursor-pointer font-montserrat text-xs text-[#777777] underline underline-offset-4 transition hover:text-[#2555F3]"
+              >
+                Clear all filters
+              </button>
+            )}
+          </div>
           <div className="relative w-full max-w-xl" ref={symptomBoxRef}>
             <label className="font-montserrat text-xs font-medium text-[#5e5e5e]">
               Search by symptom
@@ -201,7 +338,7 @@ export function DoctorSelectionSection() {
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="flex flex-col gap-1">
               <label
                 className="font-montserrat text-xs font-medium text-[#5e5e5e]"
@@ -249,18 +386,44 @@ export function DoctorSelectionSection() {
             <div className="flex flex-col gap-1">
               <label
                 className="font-montserrat text-xs font-medium text-[#5e5e5e]"
+                htmlFor="fee-duration"
+              >
+                Fee duration
+              </label>
+              <select
+                id="fee-duration"
+                value={feeDurationMinutes}
+                onChange={(e) =>
+                  setFeeDurationMinutes(
+                    Number(e.target.value) as AllowedSlotDurationMinutes,
+                  )
+                }
+                className={`w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] ${CHEVRON_CLASSES}`}
+              >
+                {ALLOWED_SLOT_DURATION_MINUTES.map((duration) => (
+                  <option key={duration} value={duration}>
+                    {duration} min
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label
+                className="font-montserrat text-xs font-medium text-[#5e5e5e]"
                 htmlFor="fee-min"
               >
-                Min fee (cents, 30 min slot)
+                Min fee for {feeDurationMinutes} min ({patientCurrency})
               </label>
               <input
                 id="fee-min"
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
                 min={0}
-                value={feeMinCents}
-                onChange={(e) => setFeeMinCents(e.target.value)}
-                placeholder="1500"
+                step="0.01"
+                value={feeMinAmount}
+                onChange={(e) => setFeeMinAmount(e.target.value)}
+                placeholder="15.00"
                 className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333]"
               />
             </div>
@@ -270,23 +433,24 @@ export function DoctorSelectionSection() {
                 className="font-montserrat text-xs font-medium text-[#5e5e5e]"
                 htmlFor="fee-max"
               >
-                Max fee (cents, 30 min slot)
+                Max fee for {feeDurationMinutes} min ({patientCurrency})
               </label>
               <input
                 id="fee-max"
                 type="number"
-                inputMode="numeric"
+                inputMode="decimal"
                 min={0}
-                value={feeMaxCents}
-                onChange={(e) => setFeeMaxCents(e.target.value)}
-                placeholder="8000"
+                step="0.01"
+                value={feeMaxAmount}
+                onChange={(e) => setFeeMaxAmount(e.target.value)}
+                placeholder="80.00"
                 className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333]"
               />
             </div>
           </div>
         </div>
 
-        {loading && doctors.length === 0 && (
+        {loadingMode === "replace" && (
           <div className="mt-6 grid grid-cols-1 gap-6 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
             {Array.from({ length: 3 }).map((_, i) => (
               <div
@@ -304,16 +468,18 @@ export function DoctorSelectionSection() {
         )}
 
         {error && (
-          <div className="mt-6 font-montserrat text-sm text-red-600">{error}</div>
+          <div className="mt-6 font-montserrat text-sm text-red-600">
+            {error}
+          </div>
         )}
 
-        {!loading && !error && doctors.length === 0 && (
+        {loadingMode !== "replace" && !error && doctors.length === 0 && (
           <p className="mt-8 font-montserrat text-sm text-[#5e5e5e]">
             No doctors match these filters yet.
           </p>
         )}
 
-        {(doctors.length > 0 || (loading && doctors.length > 0)) && (
+        {loadingMode !== "replace" && doctors.length > 0 && (
           <div className="mt-6 grid grid-cols-1 gap-6 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
             {doctors.map((doctor) => (
               <article
@@ -342,6 +508,9 @@ export function DoctorSelectionSection() {
                   <span className="font-montserrat text-sm text-[#5E5E5E]">
                     {doctor.specialization}
                   </span>
+                  <span className="font-montserrat text-xs text-[#777777]">
+                    {doctor.qualification}
+                  </span>
                   <div className="mt-auto flex flex-wrap gap-2 pt-2">
                     <Link
                       href={cardHref(doctor)}
@@ -362,7 +531,7 @@ export function DoctorSelectionSection() {
           </div>
         )}
 
-        {hasMore && (
+        {hasMore && !feeRangeError && (
           <div
             ref={sentryRef}
             aria-hidden="true"
@@ -370,7 +539,7 @@ export function DoctorSelectionSection() {
           />
         )}
 
-        {loading && doctors.length > 0 && (
+        {loadingMode === "append" && doctors.length > 0 && (
           <p className="mt-6 text-center font-montserrat text-sm text-[#5e5e5e]">
             Loading…
           </p>
