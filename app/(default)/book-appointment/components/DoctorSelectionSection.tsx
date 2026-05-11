@@ -36,6 +36,7 @@ const CHEVRON_CLASSES =
   'cursor-pointer appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000/svg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
 
 function doctorListUrl(params: {
+  nameSearch: string;
   specialty: string;
   consultationMode: string;
   feeMinCents: number | null;
@@ -47,6 +48,7 @@ function doctorListUrl(params: {
   const sp = new URLSearchParams();
   sp.set("page", String(params.page));
   sp.set("limit", "6");
+  if (params.nameSearch.trim()) sp.set("nameSearch", params.nameSearch.trim());
   if (params.specialty) sp.set("specialty", params.specialty);
   if (
     params.consultationMode === "online" ||
@@ -91,6 +93,9 @@ export function DoctorSelectionSection() {
 
   const [specialty, setSpecialty] = useState("");
   const [consultationMode, setConsultationMode] = useState("");
+  const [doctorNameSearch, setDoctorNameSearch] = useState("");
+  const [debouncedDoctorNameSearch, setDebouncedDoctorNameSearch] =
+    useState("");
   const [feeMinAmount, setFeeMinAmount] = useState("");
   const [feeMaxAmount, setFeeMaxAmount] = useState("");
   const [debouncedFeeMinAmount, setDebouncedFeeMinAmount] = useState("");
@@ -124,6 +129,7 @@ export function DoctorSelectionSection() {
     return null;
   }, [feeMinCents, feeMaxCents]);
   const hasActiveFilters =
+    Boolean(doctorNameSearch.trim()) ||
     Boolean(specialty) ||
     Boolean(consultationMode) ||
     Boolean(feeMinAmount.trim()) ||
@@ -136,6 +142,7 @@ export function DoctorSelectionSection() {
       JSON.stringify({
         specialty,
         consultationMode,
+        debouncedDoctorNameSearch,
         debouncedFeeMinAmount,
         debouncedFeeMaxAmount,
         feeDurationMinutes,
@@ -144,6 +151,7 @@ export function DoctorSelectionSection() {
     [
       specialty,
       consultationMode,
+      debouncedDoctorNameSearch,
       debouncedFeeMinAmount,
       debouncedFeeMaxAmount,
       feeDurationMinutes,
@@ -161,6 +169,13 @@ export function DoctorSelectionSection() {
     return () => window.clearTimeout(timeoutId);
   }, [feeMinAmount, feeMaxAmount]);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedDoctorNameSearch(doctorNameSearch);
+    }, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [doctorNameSearch]);
+
   const loadDoctors = useCallback(
     async (nextPage: number, append: boolean) => {
       const requestId = ++latestRequestIdRef.current;
@@ -174,6 +189,7 @@ export function DoctorSelectionSection() {
       try {
         const res = await fetch(
           doctorListUrl({
+            nameSearch: debouncedDoctorNameSearch,
             specialty,
             consultationMode,
             feeMinCents,
@@ -212,6 +228,7 @@ export function DoctorSelectionSection() {
     [
       specialty,
       consultationMode,
+      debouncedDoctorNameSearch,
       feeMinCents,
       feeMaxCents,
       feeDurationMinutes,
@@ -259,6 +276,8 @@ export function DoctorSelectionSection() {
   const clearAllFilters = useCallback(() => {
     setSpecialty("");
     setConsultationMode("");
+    setDoctorNameSearch("");
+    setDebouncedDoctorNameSearch("");
     setFeeMinAmount("");
     setFeeMaxAmount("");
     setDebouncedFeeMinAmount("");
@@ -292,50 +311,69 @@ export function DoctorSelectionSection() {
               </button>
             )}
           </div>
-          <div className="relative w-full max-w-xl" ref={symptomBoxRef}>
-            <label className="font-montserrat text-xs font-medium text-[#5e5e5e]">
-              Search by symptom
-            </label>
-            <input
-              type="text"
-              value={symptomInput}
-              onChange={(e) => {
-                setSymptomInput(e.target.value);
-                setShowSuggest(true);
-              }}
-              onFocus={() => setShowSuggest(true)}
-              placeholder="e.g. chest pain, headache…"
-              className="mt-1 w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#111111] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
-              autoComplete="off"
-            />
-            {showSuggest && suggestions.length > 0 && (
-              <ul
-                className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-xl border border-[#e5e5e5] bg-white py-1 shadow-md"
-                role="listbox"
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label
+                className="font-montserrat text-xs font-medium text-[#5e5e5e]"
+                htmlFor="doctor-name-search"
               >
-                {suggestions.map((sym) => (
-                  <li key={sym}>
-                    <button
-                      type="button"
-                      className="w-full px-3 py-2 text-left font-montserrat text-sm text-[#333333] hover:bg-[#f5f5f5]"
-                      onClick={() => {
-                        const spec = specializationForSymptom(sym);
-                        if (spec) setSpecialty(spec);
-                        setSymptomInput(sym);
-                        setShowSuggest(false);
-                      }}
-                    >
-                      <span className="text-[#111111]">{sym}</span>
-                      {specializationForSymptom(sym) && (
-                        <span className="ml-2 text-xs text-[#777777]">
-                          → {specializationForSymptom(sym)}
-                        </span>
-                      )}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                Search by doctor name
+              </label>
+              <input
+                id="doctor-name-search"
+                type="text"
+                value={doctorNameSearch}
+                onChange={(e) => setDoctorNameSearch(e.target.value)}
+                placeholder="e.g. Grace, Sharma…"
+                className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#111111] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+                autoComplete="off"
+              />
+            </div>
+            <div className="relative flex flex-col gap-1" ref={symptomBoxRef}>
+              <label className="font-montserrat text-xs font-medium text-[#5e5e5e]">
+                Search by symptom
+              </label>
+              <input
+                type="text"
+                value={symptomInput}
+                onChange={(e) => {
+                  setSymptomInput(e.target.value);
+                  setShowSuggest(true);
+                }}
+                onFocus={() => setShowSuggest(true)}
+                placeholder="e.g. chest pain, headache…"
+                className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#111111] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+                autoComplete="off"
+              />
+              {showSuggest && suggestions.length > 0 && (
+                <ul
+                  className="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-auto rounded-xl border border-[#e5e5e5] bg-white py-1 shadow-md"
+                  role="listbox"
+                >
+                  {suggestions.map((sym) => (
+                    <li key={sym}>
+                      <button
+                        type="button"
+                        className="w-full px-3 py-2 text-left font-montserrat text-sm text-[#333333] hover:bg-[#f5f5f5]"
+                        onClick={() => {
+                          const spec = specializationForSymptom(sym);
+                          if (spec) setSpecialty(spec);
+                          setSymptomInput(sym);
+                          setShowSuggest(false);
+                        }}
+                      >
+                        <span className="text-[#111111]">{sym}</span>
+                        {specializationForSymptom(sym) && (
+                          <span className="ml-2 text-xs text-[#777777]">
+                            → {specializationForSymptom(sym)}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
