@@ -2,13 +2,13 @@ import { Container } from "@/components/layout/Container";
 
 export function HeaderSection() {
   return (
-    <section className="w-full bg-white py-10 md:py-14 lg:py-16">
+    <section className="w-full bg-white py-6 md:py-8 lg:py-10">
       <Container>
         <div className="flex flex-col items-center text-center">
-          <h1 className="font-montaga text-3xl leading-tight tracking-tight text-[#111111] md:text-4xl lg:text-5xl">
+          <h1 className="font-montaga text-3xl leading-tight tracking-tight text-[#111111] md:text-4xl">
             Book an Appointment
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl font-montserrat text-sm leading-relaxed text-[#5E5E5E] md:mt-5 md:text-base">
+          <p className="mx-auto mt-2 max-w-2xl font-montserrat text-sm leading-relaxed text-[#5E5E5E] md:mt-3 md:text-base">
             Select a doctor and schedule a visit at a time that works for you.
           </p>
         </div>
