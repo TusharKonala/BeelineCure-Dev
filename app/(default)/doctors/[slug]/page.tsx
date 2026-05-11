@@ -10,14 +10,13 @@ import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
 import {
   coerceSupportedCurrency,
-  formatPrice,
   type SupportedCurrency,
 } from "@/lib/currency";
 import { publicDoctorWhere } from "@/lib/doctor-visibility";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
-import { ALLOWED_SLOT_DURATION_MINUTES } from "@/lib/doctor-availability-slots";
-import { parsePriceMap, priceCentsForDuration } from "@/lib/doctor-pricing";
+import { parsePriceMap } from "@/lib/doctor-pricing";
 import { prisma } from "@/lib/db";
+import { ProfileFees } from "./ProfileFees";
 
 type PageProps = { params: Promise<{ slug: string }> };
 
@@ -81,6 +80,7 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
       id: true,
       name: true,
       specialization: true,
+      qualification: true,
       yearsExperience: true,
       bio: true,
       profilePhotoUrl: true,
@@ -125,6 +125,9 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
               <p className="mt-1 font-montserrat text-sm text-[#5e5e5e] md:text-base">
                 {doctor.specialization}
               </p>
+              <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                {doctor.qualification}
+              </p>
               {doctor.yearsExperience != null && doctor.yearsExperience >= 0 && (
                 <p className="mt-2 font-montserrat text-sm text-[#333333]">
                   {doctor.yearsExperience}{" "}
@@ -144,24 +147,7 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
               </p>
             </div>
 
-            <div>
-              <h2 className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#777777]">
-                Fees
-              </h2>
-              <ul className="mt-2 grid gap-1.5 font-montserrat text-sm text-[#333333] sm:grid-cols-2">
-                {ALLOWED_SLOT_DURATION_MINUTES.map((mins) => {
-                  const cents = priceCentsForDuration(priceMap, mins);
-                  return (
-                    <li key={mins}>
-                      {mins} min — {formatPrice(cents, currency)}
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="mt-2 font-montserrat text-xs text-[#5e5e5e]">
-                Prices charged in your doctor&apos;s billing currency ({currency}).
-              </p>
-            </div>
+            <ProfileFees priceMap={priceMap} doctorCurrency={currency} />
 
             {doctor.bio?.trim() && (
               <div>
