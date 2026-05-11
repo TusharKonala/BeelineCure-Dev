@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { recomputeDoctorReviewStats } from "@/lib/review-stats";
 
 export async function DELETE(
   _request: Request,
@@ -23,15 +24,18 @@ export async function DELETE(
 
   const existing = await prisma.review.findUnique({
     where: { id: reviewId },
-    select: { id: true },
+    select: { id: true, doctorId: true },
   });
 
   if (!existing) {
     return NextResponse.json({ error: "Review not found" }, { status: 404 });
   }
 
-  await prisma.review.delete({
-    where: { id: reviewId },
+  await prisma.$transaction(async (tx) => {
+    await tx.review.delete({
+      where: { id: reviewId },
+    });
+    await recomputeDoctorReviewStats(tx, existing.doctorId);
   });
 
   return NextResponse.json({ ok: true });

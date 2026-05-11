@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.js";
+import { recomputeAllDoctorReviewStats } from "../lib/review-stats";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -75,6 +76,7 @@ async function main() {
 
   await prisma.bookingSession.deleteMany({});
   const deletedAppointments = await prisma.appointment.deleteMany({});
+  await recomputeAllDoctorReviewStats(prisma);
   await prisma.doctorAvailability.deleteMany({});
 
   for (const doctor of doctors) {

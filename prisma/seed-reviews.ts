@@ -2,6 +2,7 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, UserRole } from "../generated/prisma/client.js";
+import { recomputeAllDoctorReviewStats } from "../lib/review-stats";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -96,6 +97,7 @@ async function main() {
   });
 
   await prisma.review.createMany({ data: reviewsData });
+  await recomputeAllDoctorReviewStats(prisma);
 
   console.log(
     `Inserted ${reviewCount} reviews without wiping existing data.`,

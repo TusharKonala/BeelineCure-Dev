@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Star } from "lucide-react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
+import { RatingStars } from "@/components/reviews/RatingStars";
 
 type RatingFilter = "ALL" | "1" | "2" | "3" | "4" | "5";
 
@@ -40,23 +40,6 @@ function formatCreatedDate(value: string) {
   } catch {
     return value;
   }
-}
-
-function RatingStars({ rating }: { rating: number }) {
-  return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: 5 }).map((_, index) => {
-        const isFilled = index < rating;
-        return (
-          <Star
-            key={index}
-            className={`h-4 w-4 ${isFilled ? "fill-[#f59e0b] text-[#f59e0b]" : "text-[#d4d4d4]"}`}
-          />
-        );
-      })}
-      <span className="ml-1 font-montserrat text-xs text-[#5e5e5e]">{rating}/5</span>
-    </div>
-  );
 }
 
 export default function AdminReviewsPage() {
@@ -269,10 +252,10 @@ export default function AdminReviewsPage() {
                             {review.doctorName}
                           </td>
                           <td className="px-3 py-3">
-                            <RatingStars rating={review.rating} />
+                            <RatingStars rating={review.rating} showValue />
                           </td>
                           <td className="px-3 py-3 font-montserrat text-sm text-[#333333]">
-                            <p className="max-w-xl whitespace-pre-wrap break-words">
+                            <p className="max-w-xl whitespace-pre-wrap wrap-break-word">
                               {review.comment}
                             </p>
                           </td>
@@ -312,7 +295,7 @@ export default function AdminReviewsPage() {
         deleteTarget &&
         createPortal(
           <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            className="fixed inset-0 z-100 flex items-center justify-center p-4"
             role="dialog"
             aria-modal="true"
             aria-labelledby="admin-review-delete-title"
@@ -328,7 +311,7 @@ export default function AdminReviewsPage() {
               }}
             />
             <div
-              className="relative z-[1] w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-lg"
+              className="relative z-1 w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-lg"
               onClick={(event) => event.stopPropagation()}
             >
               <h2
