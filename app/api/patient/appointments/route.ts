@@ -108,6 +108,12 @@ export async function GET(request: NextRequest) {
             generalNotes: true,
           },
         },
+        review: {
+          select: {
+            id: true,
+            rating: true,
+          },
+        },
         status: true,
         doctor: {
           select: {
@@ -175,6 +181,12 @@ export async function GET(request: NextRequest) {
       ? {
           medicines: a.prescription.medicines,
           generalNotes: a.prescription.generalNotes,
+        }
+      : null,
+    review: a.review
+      ? {
+          id: a.review.id,
+          rating: a.review.rating,
         }
       : null,
     status: a.status,
