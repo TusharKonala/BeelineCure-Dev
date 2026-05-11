@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     MAX_PAGE_SIZE,
     Math.max(1, Number(sp.get("limit") ?? String(DEFAULT_PAGE_SIZE)) || DEFAULT_PAGE_SIZE),
   );
+  const nameSearch = (sp.get("nameSearch") ?? "").trim();
   const specialtyRaw = (sp.get("specialty") ?? "").trim();
   const patientCurrencyRaw = (sp.get("patientCurrency") ?? "USD")
     .trim()
@@ -109,6 +110,9 @@ export async function GET(request: NextRequest) {
   }
 
   const andWhere: Prisma.DoctorWhereInput[] = [publicDoctorWhere];
+  if (nameSearch) {
+    andWhere.push({ name: { contains: nameSearch, mode: "insensitive" } });
+  }
   if (specialty) {
     andWhere.push({ specialization: specialty });
   }
