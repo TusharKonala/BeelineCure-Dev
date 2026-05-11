@@ -316,12 +316,14 @@ export function DoctorSelectionSection() {
         {(doctors.length > 0 || (loading && doctors.length > 0)) && (
           <div className="mt-6 grid grid-cols-1 gap-6 sm:mt-8 sm:grid-cols-2 lg:grid-cols-3 lg:gap-8">
             {doctors.map((doctor) => (
-              <Link
+              <article
                 key={doctor.id}
-                href={cardHref(doctor)}
-                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#e5e5e5] bg-white shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#2555F3] hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 focus:ring-offset-2"
+                className="group flex h-full flex-col overflow-hidden rounded-2xl border border-[#e5e5e5] bg-white shadow-sm transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[#2555F3] hover:shadow-md"
               >
-                <div className="relative aspect-4/3 w-full overflow-hidden rounded-t-2xl bg-[#f5f5f5] min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64">
+                <Link
+                  href={cardHref(doctor)}
+                  className="relative aspect-4/3 w-full overflow-hidden rounded-t-2xl bg-[#f5f5f5] min-[450px]:h-72 min-[450px]:aspect-auto sm:h-64"
+                >
                   <Image
                     src={doctor.profilePhotoUrl}
                     alt={formatDoctorDisplayName(doctor.name)}
@@ -329,16 +331,33 @@ export function DoctorSelectionSection() {
                     className="object-cover object-top"
                     sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   />
-                </div>
-                <div className="flex flex-1 flex-col gap-1.5 px-5 py-4">
-                  <span className="font-montaga text-lg text-[#111111] md:text-xl">
+                </Link>
+                <div className="flex flex-1 flex-col gap-3 px-5 py-4">
+                  <Link
+                    href={cardHref(doctor)}
+                    className="font-montaga text-lg text-[#111111] hover:text-[#2555F3] md:text-xl"
+                  >
                     {formatDoctorDisplayName(doctor.name)}
-                  </span>
+                  </Link>
                   <span className="font-montserrat text-sm text-[#5E5E5E]">
                     {doctor.specialization}
                   </span>
+                  <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                    <Link
+                      href={cardHref(doctor)}
+                      className="inline-flex items-center justify-center rounded-full bg-[#2555F3] px-4 py-2 font-montserrat text-xs font-medium text-white transition hover:bg-[#1e44c7] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 focus:ring-offset-2"
+                    >
+                      View profile
+                    </Link>
+                    <Link
+                      href={`/book-appointment/${doctor.id}`}
+                      className="inline-flex items-center justify-center rounded-full border border-[#d4d4d4] px-4 py-2 font-montserrat text-xs font-medium text-[#333333] transition hover:border-[#2555F3] hover:text-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 focus:ring-offset-2"
+                    >
+                      Book appointment
+                    </Link>
+                  </div>
                 </div>
-              </Link>
+              </article>
             ))}
           </div>
         )}
