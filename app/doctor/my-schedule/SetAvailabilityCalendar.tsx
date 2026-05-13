@@ -12,12 +12,21 @@ type Props = {
   /** Set of YYYY-MM-DD strings already configured — rendered as disabled. */
   disabledDates: Set<string>;
   /**
+   * When set (e.g. public booking), only these dates are selectable; others are disabled.
+   * Ignores `disabledDates` / `exceptionDates` for eligibility (pass empty `disabledDates`).
+   */
+  enabledDates?: Set<string>;
+  /**
    * Dates that should remain selectable even if present in `disabledDates`
    * (e.g. the date the doctor came from via View Schedule -> Edit).
    */
   exceptionDates?: Set<string>;
   /** While true, prevent date picks until configured-date metadata is loaded. */
   loadingDisabledDates?: boolean;
+  /** Optional loading caption under the grid (defaults by mode). */
+  loadingCaption?: string;
+  /** Accessible name for the date grid (defaults by mode). */
+  gridAriaLabel?: string;
   onSelect: (ymd: string) => void;
 };
 
@@ -55,8 +64,11 @@ export function SetAvailabilityCalendar({
   value,
   minDate,
   disabledDates,
+  enabledDates,
   exceptionDates,
   loadingDisabledDates = false,
+  loadingCaption,
+  gridAriaLabel,
   onSelect,
 }: Props) {
   const initialAnchor = parseYmd(value || minDate);
@@ -153,7 +165,7 @@ export function SetAvailabilityCalendar({
       <div
         className="mt-1 grid grid-cols-7 gap-1"
         role="grid"
-        aria-label="Select availability date"
+        aria-label={gridAriaLabel ?? "Select availability date"}
         aria-busy={loadingDisabledDates}
       >
         {cells.map((cell, idx) => {
@@ -161,9 +173,18 @@ export function SetAvailabilityCalendar({
             return <div key={`pad-${idx}`} className="h-9" aria-hidden="true" />;
           }
           const isPast = cell.ymd < minDate;
+          const bookingMode = enabledDates !== undefined;
+          const notInBookingWindow =
+            bookingMode && !enabledDates!.has(cell.ymd);
           const isExisting =
-            disabledDates.has(cell.ymd) && !exceptionDates?.has(cell.ymd);
-          const isDisabled = loadingDisabledDates || isPast || isExisting;
+            !bookingMode &&
+            disabledDates.has(cell.ymd) &&
+            !exceptionDates?.has(cell.ymd);
+          const isDisabled =
+            loadingDisabledDates ||
+            isPast ||
+            isExisting ||
+            notInBookingWindow;
           const isSelected = cell.ymd === value;
 
           return (
@@ -175,13 +196,15 @@ export function SetAvailabilityCalendar({
               aria-disabled={isDisabled}
               aria-selected={isSelected}
               aria-label={
-                isExisting
-                  ? `${cell.ymd} (already configured)`
-                  : loadingDisabledDates
-                    ? `${cell.ymd} (checking configured dates)`
-                    : isPast
-                    ? `${cell.ymd} (past)`
-                    : cell.ymd
+                notInBookingWindow
+                  ? `${cell.ymd} (no availability)`
+                  : isExisting
+                    ? `${cell.ymd} (already configured)`
+                    : loadingDisabledDates
+                      ? `${cell.ymd} (checking configured dates)`
+                      : isPast
+                        ? `${cell.ymd} (past)`
+                        : cell.ymd
               }
               onClick={() => !isDisabled && onSelect(cell.ymd)}
               className={cn(
@@ -191,18 +214,22 @@ export function SetAvailabilityCalendar({
                       "border-[#2555F3] bg-[#2555F3] font-semibold text-white",
                       loadingDisabledDates ? "cursor-wait opacity-80" : "cursor-pointer",
                     )
-                  : isExisting
-                    ? "cursor-not-allowed border-[#e5e5e5] bg-[#ECECEC] text-[#9A9A9A] line-through"
-                    : loadingDisabledDates
-                      ? "cursor-wait border-[#e5e5e5] bg-[#fafafa] text-[#9A9A9A]"
-                    : isPast
-                      ? "cursor-not-allowed border-transparent bg-transparent text-[#C8C8C8]"
-                      : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f8ff] hover:border-[#2555F3]/40",
+                  : notInBookingWindow
+                    ? "cursor-not-allowed border-[#e5e5e5] bg-[#fafafa] text-[#C8C8C8]"
+                    : isExisting
+                      ? "cursor-not-allowed border-[#e5e5e5] bg-[#ECECEC] text-[#9A9A9A] line-through"
+                      : loadingDisabledDates
+                        ? "cursor-wait border-[#e5e5e5] bg-[#fafafa] text-[#9A9A9A]"
+                        : isPast
+                          ? "cursor-not-allowed border-transparent bg-transparent text-[#C8C8C8]"
+                          : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f8ff] hover:border-[#2555F3]/40",
               )}
               title={
                 isExisting
                   ? "Already configured. Use View Schedule -> Edit to modify."
-                  : undefined
+                  : notInBookingWindow
+                    ? "No appointments available on this date."
+                    : undefined
               }
             >
               {cell.day}
@@ -212,7 +239,10 @@ export function SetAvailabilityCalendar({
       </div>
       {loadingDisabledDates ? (
         <p className="mt-2 font-montserrat text-xs text-[#5E5E5E]">
-          Checking configured dates...
+          {loadingCaption ??
+            (enabledDates !== undefined
+              ? "Loading available dates..."
+              : "Checking configured dates...")}
         </p>
       ) : null}
     </div>
