@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
 import { RatingStars } from "@/components/reviews/RatingStars";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type RatingFilter = "ALL" | "1" | "2" | "3" | "4" | "5";
 
@@ -48,7 +49,8 @@ export default function AdminReviewsPage() {
   const [hasMore, setHasMore] = useState(false);
   const [query, setQuery] = useState("");
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>("ALL");
-  const [loading, setLoading] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busyReviewId, setBusyReviewId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminReview | null>(null);
@@ -77,7 +79,14 @@ export default function AdminReviewsPage() {
 
   const loadReviews = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
-    setLoading(true);
+    if (!append) {
+      setReviews([]);
+    }
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoadingInitial(true);
+    }
     setError(null);
     try {
       const params = new URLSearchParams({
@@ -113,7 +122,11 @@ export default function AdminReviewsPage() {
       setError("Failed to load reviews.");
     } finally {
       if (latestRequestIdRef.current !== requestId) return;
-      setLoading(false);
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoadingInitial(false);
+      }
     }
   }, [query, ratingFilter]);
 
@@ -122,10 +135,10 @@ export default function AdminReviewsPage() {
   }, [loadReviews]);
 
   const [sentryRef] = useInfiniteScroll({
-    loading,
+    loading: loadingMore,
     hasNextPage: hasMore,
     onLoadMore: () => void loadReviews(page + 1, true),
-    disabled: false,
+    disabled: loadingInitial,
     rootMargin: "0px 0px 300px 0px",
   });
 
@@ -204,11 +217,58 @@ export default function AdminReviewsPage() {
             </div>
           ) : null}
 
-          {loading && visibleReviews.length === 0 ? (
-            <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
-              <p className="font-montserrat text-sm text-[#5e5e5e]">Loading reviews...</p>
+          {loadingInitial && visibleReviews.length === 0 ? (
+            <div className="mt-6 overflow-x-auto rounded-xl border border-[#e5e5e5]">
+              <table className="min-w-[960px] w-full border-collapse bg-white">
+                <thead className="bg-[#fafafa]">
+                  <tr>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Patient
+                    </th>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Doctor
+                    </th>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Rating
+                    </th>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Review
+                    </th>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Date
+                    </th>
+                    <th className="px-3 py-3 text-left font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5e5e5e]">
+                      Action
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i} className="border-t border-[#ededed]">
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-4 w-28 bg-[#e5e5e5]" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-4 w-32 bg-[#e5e5e5]" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-5 w-16 bg-[#e5e5e5]" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-12 w-full max-w-md bg-[#e5e5e5]" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-4 w-24 bg-[#e5e5e5]" />
+                      </td>
+                      <td className="px-3 py-3">
+                        <Skeleton className="h-8 w-16 bg-[#e5e5e5]" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ) : visibleReviews.length === 0 ? (
+          ) : !loadingInitial && visibleReviews.length === 0 ? (
             <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
               <p className="font-montserrat text-sm text-[#5e5e5e]">
                 No reviews found for this filter.
@@ -279,12 +339,12 @@ export default function AdminReviewsPage() {
                 </table>
               </div>
 
-              {(hasMore || loading) && visibleReviews.length > 0 && (
+              {(hasMore || loadingMore) && visibleReviews.length > 0 && (
                 <div
                   ref={sentryRef}
                   className="py-4 text-center font-montserrat text-sm text-[#5E5E5E]"
                 >
-                  {loading ? "Loading..." : "Scroll for more"}
+                  {loadingMore ? "Loading..." : "Scroll for more"}
                 </div>
               )}
             </>
