@@ -90,6 +90,11 @@ model User {
   magicLinkTokenExpiresAt DateTime?
   /// Throttle magic-link email sends per user.
   magicLinkLastSentAt DateTime?
+  /// Proposed login email while an admin email change awaits confirmation (mailed link).
+  pendingEmail String?
+  /// Hash of one-time token to confirm `pendingEmail` (raw token never stored).
+  emailChangeTokenHash String?
+  emailChangeTokenExpiresAt DateTime?
   /// Null for OAuth-only accounts (e.g. Google sign-in).
   password  String?
   role      UserRole @default(PATIENT)
