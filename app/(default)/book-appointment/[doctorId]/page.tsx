@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
+import { SetAvailabilityCalendar } from "@/app/doctor/my-schedule/SetAvailabilityCalendar";
 import { Container } from "@/components/layout/Container";
 import { PostAppointmentActions } from "@/components/PostAppointmentActions";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,14 @@ async function getDoctor(doctorId: string) {
   return res.json();
 }
 
+async function getAvailableDates(doctorId: string): Promise<{ dates: string[] }> {
+  const res = await fetch(`/api/doctors/${doctorId}/available-dates`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to fetch available dates");
+  return res.json();
+}
+
 async function getSlots(
   doctorId: string,
   date: string,
@@ -121,8 +130,10 @@ export default function BookAppointmentDoctorPage() {
   const [consultationType, setConsultationType] = useState<"CLINIC" | "ONLINE">(
     "CLINIC",
   );
+  const [clinicPaymentMode, setClinicPaymentMode] = useState<
+    "payNow" | "payAtClinic"
+  >("payAtClinic");
   const queryClient = useQueryClient();
-  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const patientTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -212,6 +223,21 @@ export default function BookAppointmentDoctorPage() {
     queryFn: () => getDoctor(doctorId),
     enabled: !!doctorId,
   });
+
+  const {
+    data: availableDatesData,
+    isLoading: availableDatesLoading,
+    isFetching: availableDatesFetching,
+  } = useQuery({
+    queryKey: ["available-dates", doctorId],
+    queryFn: () => getAvailableDates(doctorId),
+    enabled: !!doctorId,
+  });
+
+  const enabledDateSet = useMemo(
+    () => new Set(availableDatesData?.dates ?? []),
+    [availableDatesData?.dates],
+  );
   const doctorCurrency: SupportedCurrency = useMemo(
     () => coerceSupportedCurrency(doctor?.currency),
     [doctor?.currency],
@@ -281,7 +307,11 @@ export default function BookAppointmentDoctorPage() {
       try {
         const doctorTimezone = slotsData?.doctorTimezone ?? "UTC";
 
-        if (consultationType === "CLINIC") {
+        const useBookingSessionCheckout =
+          consultationType === "ONLINE" ||
+          (consultationType === "CLINIC" && clinicPaymentMode === "payNow");
+
+        if (consultationType === "CLINIC" && !useBookingSessionCheckout) {
           const res = await fetch("/api/appointments", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -395,6 +425,7 @@ export default function BookAppointmentDoctorPage() {
       selectedSlot,
       selectedSlotDetail,
       consultationType,
+      clinicPaymentMode,
       doctor?.name,
       slotsData?.doctorTimezone,
       patientTimezone,
@@ -430,6 +461,23 @@ export default function BookAppointmentDoctorPage() {
   useEffect(() => {
     setSubmitError(null);
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (availableDatesLoading || availableDatesFetching) return;
+    if (enabledDateSet.size === 0) return;
+    if (enabledDateSet.has(selectedDate)) return;
+    const sorted = [...enabledDateSet].sort();
+    const next =
+      sorted.find((d) => d >= minDate) ?? sorted[sorted.length - 1] ?? minDate;
+    setSelectedDate(next);
+    setSelectedSlot(null);
+  }, [
+    availableDatesLoading,
+    availableDatesFetching,
+    enabledDateSet,
+    selectedDate,
+    minDate,
+  ]);
 
   useEffect(() => {
     if (!selectedSlotDetail) return;
@@ -475,9 +523,8 @@ export default function BookAppointmentDoctorPage() {
     setApproxEquivalentLabel,
   ]);
 
-  const onDateChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const next = e.target.value;
-    setSelectedDate(next);
+  const onCalendarSelect = useCallback((ymd: string) => {
+    setSelectedDate(ymd);
     setSelectedSlot(null);
   }, []);
 
@@ -580,27 +627,35 @@ export default function BookAppointmentDoctorPage() {
               )}
             </section>
 
-            {/* 2. Date Picker */}
+            {/* 2. Date calendar */}
             <section className="mb-10 md:mb-12">
               <div className="flex flex-col gap-2 text-left">
                 <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
                   Select date
                 </h2>
               </div>
-              <div
-                className="mt-4 inline-block"
-                onClick={() => dateInputRef.current?.showPicker()}
-              >
-                <input
-                  ref={dateInputRef}
-                  type="date"
-                  value={selectedDate}
-                  min={minDate}
-                  onChange={onDateChange}
-                  className="cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 font-montserrat text-sm text-[#111111] shadow-sm focus:border-[#2555F3] focus:outline-none focus:ring-2 focus:ring-[#2555F3]/30 md:py-2.5"
-                  aria-label="Select appointment date"
-                />
-              </div>
+              {availableDatesLoading || availableDatesFetching ? (
+                <div className="mt-4">
+                  <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
+                </div>
+              ) : enabledDateSet.size === 0 ? (
+                <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
+                  This doctor has no upcoming availability yet. Please try again
+                  later or choose another doctor.
+                </p>
+              ) : (
+                <div className="mt-4">
+                  <SetAvailabilityCalendar
+                    value={selectedDate}
+                    minDate={minDate}
+                    disabledDates={new Set()}
+                    enabledDates={enabledDateSet}
+                    loadingDisabledDates={false}
+                    gridAriaLabel="Select appointment date"
+                    onSelect={onCalendarSelect}
+                  />
+                </div>
+              )}
             </section>
 
             {/* 3. Consultation Type */}
@@ -648,9 +703,45 @@ export default function BookAppointmentDoctorPage() {
                       : "This slot supports both clinic and online consultations."}
                 </p>
               )}
+
+              {consultationType === "CLINIC" && (
+                <div className="mt-5 max-w-md">
+                  <p className="font-montserrat text-sm font-medium text-[#111111]">
+                    Payment
+                  </p>
+                  <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                    Pay securely online now, or pay when you arrive at the clinic.
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Button
+                      type="button"
+                      variant={
+                        clinicPaymentMode === "payAtClinic" ? "default" : "outline"
+                      }
+                      className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                      aria-pressed={clinicPaymentMode === "payAtClinic"}
+                      onClick={() => setClinicPaymentMode("payAtClinic")}
+                    >
+                      Pay at clinic
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={clinicPaymentMode === "payNow" ? "default" : "outline"}
+                      className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                      aria-pressed={clinicPaymentMode === "payNow"}
+                      onClick={() => setClinicPaymentMode("payNow")}
+                    >
+                      Pay now
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
                 {consultationType === "CLINIC"
-                  ? `Consultation fee (payable at clinic): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
+                  ? clinicPaymentMode === "payAtClinic"
+                    ? `Consultation fee (payable at clinic): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
+                    : `Consultation fee (pay online): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
                   : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
               </p>
             </section>
@@ -859,7 +950,9 @@ export default function BookAppointmentDoctorPage() {
                   >
                     {isSubmitting
                       ? "Booking…"
-                      : consultationType === "ONLINE"
+                      : consultationType === "ONLINE" ||
+                          (consultationType === "CLINIC" &&
+                            clinicPaymentMode === "payNow")
                         ? "Continue to payment"
                         : "Confirm appointment"}
                   </Button>
