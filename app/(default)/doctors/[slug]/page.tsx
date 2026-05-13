@@ -29,9 +29,15 @@ function consultationModeLabel(types: AvailabilityConsultationType[]): string {
   let online = false;
   let clinic = false;
   for (const t of types) {
-    if (t === AvailabilityConsultationType.ONLINE || t === AvailabilityConsultationType.BOTH)
+    if (
+      t === AvailabilityConsultationType.ONLINE ||
+      t === AvailabilityConsultationType.BOTH
+    )
       online = true;
-    if (t === AvailabilityConsultationType.CLINIC || t === AvailabilityConsultationType.BOTH)
+    if (
+      t === AvailabilityConsultationType.CLINIC ||
+      t === AvailabilityConsultationType.BOTH
+    )
       clinic = true;
   }
   if (online && clinic) return "Online and in-clinic";
@@ -109,7 +115,7 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
     select: { consultationType: true },
     distinct: ["consultationType"],
   });
-  const initialReviewLimit = 10;
+  const initialReviewLimit = 5;
   const initialReviews = await prisma.review.findMany({
     where: { doctorId: doctor.id },
     select: {
@@ -133,20 +139,22 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
   const currency: SupportedCurrency = coerceSupportedCurrency(doctor.currency);
 
   const displayName = formatDoctorDisplayName(doctor.name);
-  const initialReviewItems: DoctorReviewItem[] = initialReviews.map((review) => ({
-    id: review.id,
-    rating: review.rating,
-    comment: review.comment,
-    createdAt: review.createdAt.toISOString(),
-    patientFirstName: firstName(review.patient.name),
-  }));
+  const initialReviewItems: DoctorReviewItem[] = initialReviews.map(
+    (review) => ({
+      id: review.id,
+      rating: review.rating,
+      comment: review.comment,
+      createdAt: review.createdAt.toISOString(),
+      patientFirstName: firstName(review.patient.name),
+    }),
+  );
 
   return (
     <main className="w-full bg-[#fafafa] py-10 md:py-14 lg:py-16">
       <Container>
         <div className="grid gap-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:items-start">
           <article className="overflow-hidden rounded-2xl border border-[#e5e5e5] bg-white shadow-sm lg:sticky lg:top-24">
-            <div className="relative aspect-4/3 w-full max-h-80 bg-[#f5f5f5] md:aspect-21/9 md:max-h-none md:min-h-[220px] lg:aspect-4/3 lg:min-h-0">
+            <div className="relative mx-auto aspect-4/3 w-full max-h-80 max-w-[425px] bg-[#f5f5f5] md:aspect-21/9 md:max-h-none md:min-h-[300px] lg:aspect-4/3 lg:min-h-0">
               <Image
                 src={doctor.profilePhotoUrl}
                 alt={displayName}
@@ -175,12 +183,14 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
                 <p className="mt-1 font-montserrat text-sm text-[#333333]">
                   {doctor.qualification}
                 </p>
-                {doctor.yearsExperience != null && doctor.yearsExperience >= 0 && (
-                  <p className="mt-2 font-montserrat text-sm text-[#333333]">
-                    {doctor.yearsExperience}{" "}
-                    {doctor.yearsExperience === 1 ? "year" : "years"} of experience
-                  </p>
-                )}
+                {doctor.yearsExperience != null &&
+                  doctor.yearsExperience >= 0 && (
+                    <p className="mt-2 font-montserrat text-sm text-[#333333]">
+                      {doctor.yearsExperience}{" "}
+                      {doctor.yearsExperience === 1 ? "year" : "years"} of
+                      experience
+                    </p>
+                  )}
               </div>
 
               <div>
@@ -188,9 +198,7 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
                   Consultation options
                 </h2>
                 <p className="mt-1 font-montserrat text-sm text-[#333333]">
-                  {consultationModeLabel(
-                    modes.map((m) => m.consultationType),
-                  )}
+                  {consultationModeLabel(modes.map((m) => m.consultationType))}
                 </p>
               </div>
 
@@ -208,8 +216,13 @@ export default async function DoctorPublicProfilePage(props: PageProps) {
               )}
 
               <div className="flex flex-wrap gap-3 pt-2">
-                <Button className="rounded-full bg-[#2555F3] px-6 text-white hover:bg-[#1e44c7]" asChild>
-                  <Link href={`/book-appointment/${doctor.id}`}>Book Appointment</Link>
+                <Button
+                  className="rounded-full bg-[#2555F3] px-6 text-white hover:bg-[#1e44c7]"
+                  asChild
+                >
+                  <Link href={`/book-appointment/${doctor.id}`}>
+                    Book Appointment
+                  </Link>
                 </Button>
                 <Button
                   variant="outline"

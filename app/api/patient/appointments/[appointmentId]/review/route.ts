@@ -12,7 +12,7 @@ import { recomputeDoctorReviewStats } from "@/lib/review-stats";
 
 const reviewSchema = z.object({
   rating: z.number().int().min(1).max(5),
-  comment: z.string().trim().min(1).max(1000),
+  comment: z.string().trim().min(1).max(300),
 });
 
 export async function POST(
@@ -37,7 +37,7 @@ export async function POST(
   const parsed = reviewSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: "Provide a 1-5 star rating and a comment under 1000 characters." },
+      { error: "Provide a 1-5 star rating and a comment under 300 characters." },
       { status: 400 },
     );
   }

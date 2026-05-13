@@ -19,7 +19,7 @@ export async function GET(
   );
   const limit = Math.min(
     20,
-    Math.max(5, Number(request.nextUrl.searchParams.get("limit") ?? "10") || 10),
+    Math.max(5, Number(request.nextUrl.searchParams.get("limit") ?? "5") || 5),
   );
 
   const doctor = await prisma.doctor.findFirst({

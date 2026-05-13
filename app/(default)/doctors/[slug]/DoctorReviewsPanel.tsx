@@ -58,7 +58,7 @@ export function DoctorReviewsPanel({
       try {
         const params = new URLSearchParams({
           page: String(nextPage),
-          limit: "10",
+          limit: "5",
         });
         const response = await fetch(
           `/api/doctors/${encodeURIComponent(doctorId)}/reviews?${params.toString()}`,
@@ -95,7 +95,7 @@ export function DoctorReviewsPanel({
   });
 
   return (
-    <section className="rounded-2xl border border-[#e5e5e5] bg-white p-5 shadow-sm md:p-6 lg:h-[calc(100vh-8rem)]">
+    <section className="rounded-2xl border border-[#e5e5e5] bg-white p-5 shadow-sm md:p-6 lg:h-[calc(100vh-8rem)] lg:max-h-[800px]">
       <div className="flex flex-col gap-3 border-b border-[#ededed] pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="font-montaga text-2xl font-semibold text-[#111111]">
@@ -120,7 +120,7 @@ export function DoctorReviewsPanel({
 
       <div
         ref={rootRef}
-        className="mt-5 lg:h-[calc(100%-7.5rem)] lg:overflow-y-auto lg:pr-2"
+        className="mt-5 lg:h-[calc(100%-7.5rem)] lg:max-h-[740px] lg:overflow-y-auto lg:pr-2"
       >
         {reviews.length === 0 ? (
           <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatDoctorDisplayName } from "@/lib/doctor-name";
 
 type SubmittedReview = {
   id: string;
@@ -25,6 +26,8 @@ export function LeaveReviewModal({
 }: LeaveReviewModalProps) {
   const [mounted, setMounted] = useState(false);
   const [rating, setRating] = useState(0);
+  /** While hovering the star row: show how many stars would be selected (desktop / pointer devices). */
+  const [hoverPreview, setHoverPreview] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -90,6 +93,8 @@ export function LeaveReviewModal({
 
   if (!mounted) return null;
 
+  const displayedStars = hoverPreview ?? rating;
+
   return createPortal(
     <div
       className="fixed inset-0 z-100 flex items-center justify-center p-4"
@@ -116,7 +121,7 @@ export function LeaveReviewModal({
           Leave a review
         </h2>
         <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-          Share your experience with {doctorName}.
+          Share your experience with {formatDoctorDisplayName(doctorName)}.
         </p>
 
         <div className="mt-6">
@@ -127,10 +132,11 @@ export function LeaveReviewModal({
             className="mt-2 flex gap-1"
             role="radiogroup"
             aria-label="Rating"
+            onMouseLeave={() => setHoverPreview(null)}
           >
             {Array.from({ length: 5 }).map((_, index) => {
               const value = index + 1;
-              const selected = value <= rating;
+              const filled = value <= displayedStars;
               return (
                 <button
                   key={value}
@@ -138,15 +144,17 @@ export function LeaveReviewModal({
                   role="radio"
                   aria-checked={rating === value}
                   aria-label={`${value} ${value === 1 ? "star" : "stars"}`}
-                  className="cursor-pointer rounded-md p-1 text-[#d4d4d4] outline-none transition-colors focus:ring-2 focus:ring-[#2555F3]/30"
+                  className="cursor-pointer rounded-md p-1 text-[#d4d4d4] outline-none ring-0 transition-colors focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-[#2555F3]/30"
+                  onMouseEnter={() => setHoverPreview(value)}
                   onClick={() => {
                     setRating(value);
+                    setHoverPreview(null);
                     setError(null);
                   }}
                 >
                   <Star
-                    className={`h-7 w-7 ${
-                      selected ? "fill-[#f59e0b] text-[#f59e0b]" : ""
+                    className={`h-7 w-7 transition-colors ${
+                      filled ? "fill-[#f59e0b] text-[#f59e0b]" : ""
                     }`}
                     aria-hidden="true"
                   />
@@ -154,6 +162,13 @@ export function LeaveReviewModal({
               );
             })}
           </div>
+          <p className="mt-1 font-montserrat text-xs text-[#777777]">
+            {hoverPreview
+              ? `Click to set ${hoverPreview} stars`
+              : rating > 0
+                ? `${rating} stars selected — click any star to change`
+                : "Select a rating"}
+          </p>
         </div>
 
         <div className="mt-5">
@@ -166,7 +181,7 @@ export function LeaveReviewModal({
           <textarea
             id="review-comment"
             value={comment}
-            maxLength={1000}
+            maxLength={300}
             rows={5}
             onChange={(event) => {
               setComment(event.target.value);
@@ -176,7 +191,7 @@ export function LeaveReviewModal({
             className="mt-2 w-full resize-none rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
           />
           <p className="mt-1 text-right font-montserrat text-xs text-[#777777]">
-            {comment.length}/1000
+            {comment.length}/300
           </p>
         </div>
 
