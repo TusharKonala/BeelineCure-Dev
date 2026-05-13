@@ -35,15 +35,18 @@ export async function GET(request: NextRequest) {
   // PENDING row. Match approval tab without isActive for PENDING and REJECTED; only
   // Approved uses isActive together with the activity toggle (live vs deactivated).
   const where: Prisma.DoctorWhereInput = {};
-  if (status === "PENDING") {
+  if (activity === "inactive") {
+    where.approvalStatus = DoctorApprovalStatus.APPROVED;
+    where.isActive = false;
+  } else if (status === "PENDING") {
     where.approvalStatus = DoctorApprovalStatus.PENDING;
   } else if (status === "REJECTED") {
     where.approvalStatus = DoctorApprovalStatus.REJECTED;
   } else if (status === "APPROVED") {
     where.approvalStatus = DoctorApprovalStatus.APPROVED;
-    where.isActive = activity !== "inactive";
+    where.isActive = true;
   } else {
-    where.isActive = activity !== "inactive";
+    where.isActive = true;
   }
   if (search) {
     where.OR = [
