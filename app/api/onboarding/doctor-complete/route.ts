@@ -1,9 +1,11 @@
 import { getServerSession } from "next-auth/next";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { UserRole } from "@/generated/prisma/client";
+import { NotificationType, UserRole } from "@/generated/prisma/client";
+import { Resend } from "resend";
 import { formatDoctorStoredName } from "@/lib/doctor-name";
 import { DOCTOR_SPECIALIZATIONS } from "@/lib/doctor-specializations";
 import { currencyForTimezone } from "@/lib/currency";
@@ -26,6 +28,8 @@ const doctorCompleteSchema = z.object({
   profilePhotoUrl: z.string().min(1).max(100_000),
   timezone: z.string().min(1).max(128),
 });
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -84,15 +88,15 @@ export async function POST(request: Request) {
   const emailLocal = user.email?.split("@")[0] || "Doctor";
   const storedName = formatDoctorStoredName(data.name, emailLocal);
 
-  await prisma.$transaction([
-    prisma.user.update({
+  const doctorRow = await prisma.$transaction(async (tx) => {
+    await tx.user.update({
       where: { id: user.id },
       data: {
         name: storedName,
         profileComplete: true,
       },
-    }),
-    prisma.doctor.create({
+    });
+    return tx.doctor.create({
       data: {
         userId: user.id,
         name: storedName,
@@ -106,8 +110,63 @@ export async function POST(request: Request) {
         timezone: data.timezone.trim(),
         currency: currencyForTimezone(data.timezone.trim()),
       },
-    }),
-  ]);
+    });
+  });
 
-  return NextResponse.json({ ok: true, requiresApproval: true }, { status: 201 });
+  const adminUsers = await prisma.user.findMany({
+    where: { role: UserRole.ADMIN },
+    select: { id: true, email: true },
+  });
+
+  const headersList = await headers();
+  const origin =
+    headersList.get("origin") ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    "http://localhost:3000";
+  const doctorsUrl = `${origin.replace(/\/$/, "")}/admin/doctors`;
+
+  const displayName = storedName.trim();
+  const applicantEmail = user.email ?? "";
+
+  try {
+    await prisma.notification.createMany({
+      data: adminUsers.map((admin) => ({
+        userId: admin.id,
+        type: NotificationType.DOCTOR_PENDING_APPROVAL,
+        title: "Doctor pending approval",
+        message: `${displayName} (${applicantEmail}) submitted a profile and is awaiting approval.`,
+      })),
+    });
+  } catch (err) {
+    console.error("[doctor-complete] Failed to notify admins:", err);
+  }
+
+  const adminEmails = adminUsers
+    .map((a) => a.email?.trim())
+    .filter((e): e is string => Boolean(e));
+
+  if (adminEmails.length > 0 && process.env.RESEND_API_KEY) {
+    try {
+      await resend.emails.send({
+        from: "Clinivo <onboarding@resend.dev>",
+        to: adminEmails,
+        subject: "New doctor registration pending approval",
+        text: [
+          `A new doctor, ${displayName}, has completed signup and is pending approval.`,
+          applicantEmail ? `Email: ${applicantEmail}` : "",
+          `Review and approve: ${doctorsUrl}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      });
+    } catch (err) {
+      console.error("[doctor-complete] Admin alert email failed:", err);
+    }
+  }
+
+  return NextResponse.json(
+    { ok: true, requiresApproval: true, doctorId: doctorRow.id },
+    { status: 201 },
+  );
 }
