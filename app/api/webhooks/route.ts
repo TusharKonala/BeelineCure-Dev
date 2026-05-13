@@ -17,6 +17,7 @@ import { EmailTemplate } from "@/components/email-template";
 import { Resend } from "resend";
 import { inngest } from "@/inngest/client";
 import {
+  clinicT120ReminderAtMs,
   onlineT15ReminderAtMs,
   reminderAtMsFromPatientLocal,
 } from "@/lib/reminder-time";
@@ -89,15 +90,6 @@ export async function POST(request: NextRequest) {
       // Already processed or no longer valid – ignore duplicate webhooks
       return new NextResponse("OK", { status: 200 });
     }
-    if (bookingSession.consultationType !== "ONLINE") {
-      console.warn(
-        "[webhooks] Ignoring non-online booking session:",
-        bookingSession.id,
-        bookingSession.consultationType,
-      );
-      return new NextResponse("OK", { status: 200 });
-    }
-
     const date = parseDateOnly(bookingSession.date);
 
     if (!date) {
@@ -139,6 +131,11 @@ export async function POST(request: NextRequest) {
         ? bookingSession.currencyAtBooking.trim().toUpperCase()
         : fallbackCurrencyAtBooking;
 
+    const appointmentConsultationType =
+      bookingSession.consultationType === "CLINIC"
+        ? ConsultationType.CLINIC
+        : ConsultationType.ONLINE;
+
     const cancelToken = randomBytes(32).toString("hex");
     const rescheduleToken = randomBytes(32).toString("hex");
     // Create the confirmed appointment from the booking session data
@@ -155,8 +152,7 @@ export async function POST(request: NextRequest) {
           phone: bookingSession.phone,
           notes: bookingSession.notes,
           status: AppointmentStatus.CONFIRMED,
-          consultationType:
-            ConsultationType.ONLINE,
+          consultationType: appointmentConsultationType,
           priceCentsAtBooking,
           currencyAtBooking,
           stripePaymentId: session.id,
@@ -286,11 +282,15 @@ export async function POST(request: NextRequest) {
         bookingSession.timezone,
         bookingSession.patientTimezone,
       );
+      const patientModality =
+        appointmentConsultationType === ConsultationType.ONLINE
+          ? "online"
+          : "in-clinic";
       await createAppointmentNotificationForEmail({
         patientEmail: bookingSession.email,
         type: NotificationType.APPOINTMENT_BOOKED,
         title: "Appointment booked",
-        message: `Your online appointment with Dr. ${doctor.name} is confirmed for ${patientDateLabel} at ${patientTimeLabel}.`,
+        message: `Your ${patientModality} appointment with Dr. ${doctor.name} is confirmed for ${patientDateLabel} at ${patientTimeLabel}.`,
         actorUserId:
           (
             await prisma.user.findUnique({
@@ -349,21 +349,42 @@ export async function POST(request: NextRequest) {
     }
 
     // 15-minute "join now" reminder for online appointments only.
-    try {
-      const t15Ms = onlineT15ReminderAtMs(
-        bookingSession.date,
-        bookingSession.time,
-        bookingSession.timezone,
-      );
-      if (t15Ms !== null) {
-        await inngest.send({
-          name: "appointment/online-reminder-t15.scheduled",
-          data: { appointmentId: appointment.id },
-          ts: t15Ms,
-        });
+    if (appointment.consultationType === ConsultationType.ONLINE) {
+      try {
+        const t15Ms = onlineT15ReminderAtMs(
+          bookingSession.date,
+          bookingSession.time,
+          bookingSession.timezone,
+        );
+        if (t15Ms !== null) {
+          await inngest.send({
+            name: "appointment/online-reminder-t15.scheduled",
+            data: { appointmentId: appointment.id },
+            ts: t15Ms,
+          });
+        }
+      } catch (err) {
+        console.error("[webhooks] Failed to schedule 15-min reminder:", err);
       }
-    } catch (err) {
-      console.error("[webhooks] Failed to schedule 15-min reminder:", err);
+    }
+
+    if (appointment.consultationType === ConsultationType.CLINIC) {
+      try {
+        const t120Ms = clinicT120ReminderAtMs(
+          bookingSession.date,
+          bookingSession.time,
+          bookingSession.timezone,
+        );
+        if (t120Ms !== null) {
+          await inngest.send({
+            name: "appointment/clinic-reminder-t120.scheduled",
+            data: { appointmentId: appointment.id },
+            ts: t120Ms,
+          });
+        }
+      } catch (err) {
+        console.error("[webhooks] Failed to schedule 2-hour clinic reminder:", err);
+      }
     }
   }
 

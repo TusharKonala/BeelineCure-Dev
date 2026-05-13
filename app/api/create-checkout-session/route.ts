@@ -80,9 +80,12 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
-    if (bookingSession.consultationType !== "ONLINE") {
+    if (
+      bookingSession.consultationType !== "ONLINE" &&
+      bookingSession.consultationType !== "CLINIC"
+    ) {
       return NextResponse.json(
-        { error: "Only online booking sessions can proceed to payment" },
+        { error: "This booking session cannot proceed to payment" },
         { status: 409 },
       );
     }
@@ -109,7 +112,13 @@ export async function POST(request: NextRequest) {
       bookingSession.currencyAtBooking ?? doctor.currency,
     );
     const doctorName = doctor.name?.trim() || "your doctor";
-    const description = `A secure ${bookingSession.durationMinutes} min online consultation with ${doctorName}.`;
+    const isClinic = bookingSession.consultationType === "CLINIC";
+    const description = isClinic
+      ? `Clinic visit (${bookingSession.durationMinutes} min) with ${doctorName}.`
+      : `A secure ${bookingSession.durationMinutes} min online consultation with ${doctorName}.`;
+    const productName = isClinic
+      ? `Clinic visit with ${doctorName}`
+      : `Online consultation with ${doctorName}`;
 
     const stripeSession = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -119,7 +128,7 @@ export async function POST(request: NextRequest) {
             currency: currency.toLowerCase(),
             unit_amount: unitAmountCents,
             product_data: {
-              name: `Online consultation with ${doctorName}`,
+              name: productName,
               description,
             },
           },
@@ -127,7 +136,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/book-appointment`,
+      cancel_url: `${origin}/book-appointment/review/${encodeURIComponent(bookingSession.id)}`,
       metadata: {
         bookingSessionId: bookingSession.id,
         doctorId: bookingSession.doctorId,

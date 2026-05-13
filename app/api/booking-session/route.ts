@@ -23,8 +23,8 @@ const bookingSessionSchema = z.object({
   doctorId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   time: z.string().min(1),
-  /** Online checkout flow only. */
-  consultationType: z.literal("ONLINE"),
+  /** Online consultation or prepaid clinic visit (Stripe checkout). */
+  consultationType: z.enum(["ONLINE", "CLINIC"]),
   availabilityId: z.string().optional(),
   patientName: z.string().min(1),
   email: z.string().email(),
@@ -127,10 +127,20 @@ export async function POST(request: NextRequest) {
   }
   const slotAllowsOnline =
     slotMeta.consultationType === "ONLINE" || slotMeta.consultationType === "BOTH";
-  if (!slotAllowsOnline) {
+  const slotAllowsClinic =
+    slotMeta.consultationType === "CLINIC" || slotMeta.consultationType === "BOTH";
+  if (consultationType === "ONLINE" && !slotAllowsOnline) {
     return NextResponse.json(
       {
         error: "This slot is not available for online consultation",
+      },
+      { status: 409 },
+    );
+  }
+  if (consultationType === "CLINIC" && !slotAllowsClinic) {
+    return NextResponse.json(
+      {
+        error: "This slot is not available for clinic visits",
       },
       { status: 409 },
     );
