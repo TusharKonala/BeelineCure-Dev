@@ -92,8 +92,6 @@ export function MyScheduleClient() {
   const [slotDurationMinutes, setSlotDurationMinutes] =
     useState<AllowedSlotDurationMinutes>(DEFAULT_SLOT_DURATION_MINUTES);
 
-  const rangeStartInputRef = useRef<HTMLInputElement>(null);
-  const rangeEndInputRef = useRef<HTMLInputElement>(null);
   const slotWindowStartInputRef = useRef<HTMLInputElement>(null);
   const slotWindowEndInputRef = useRef<HTMLInputElement>(null);
   /** Latest window for async fetch when the loaded day has no saved slots (keep previous window). */
@@ -384,11 +382,6 @@ export function MyScheduleClient() {
     setRangeStart((s) => (s < minStart ? minStart : s));
   }, [mode, meta]);
 
-  useEffect(() => {
-    if (mode !== "range") return;
-    setRangeEnd((e) => (e < rangeStart ? rangeStart : e));
-  }, [mode, rangeStart]);
-
   function toggleSlot(t: string) {
     if (bookedSlots.has(t)) {
       return;
@@ -426,10 +419,17 @@ export function MyScheduleClient() {
 
   async function handleSave() {
     if (!meta) return;
-    if (mode === "range" && rangeStart > rangeEnd) {
-      setSaveError("Start date must be on or before end date.");
-      setSaveOk(null);
-      return;
+    if (mode === "range") {
+      if (!rangeStart || !rangeEnd) {
+        setSaveError("Select a start date and an end date for the range.");
+        setSaveOk(null);
+        return;
+      }
+      if (rangeStart > rangeEnd) {
+        setSaveError("Start date must be on or before end date.");
+        setSaveOk(null);
+        return;
+      }
     }
     setSaving(true);
     setSaveError(null);
@@ -863,63 +863,75 @@ export function MyScheduleClient() {
             </div>
           ) : (
             <>
-              <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div>
-                  <label
-                    htmlFor="schedule-range-start"
+              <div className="mt-6 flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+                <div className="min-w-0 flex-1">
+                  <p
+                    id="schedule-range-start-label"
                     className="font-montserrat text-sm font-medium text-[#333333]"
                   >
                     Start date
-                  </label>
+                  </p>
                   <div
-                    className="mt-2 inline-block w-full max-w-[min(100%,14rem)] cursor-pointer"
-                    onClick={() => rangeStartInputRef.current?.showPicker?.()}
+                    className="mt-2"
+                    aria-labelledby="schedule-range-start-label"
                   >
-                    <input
-                      ref={rangeStartInputRef}
-                      id="schedule-range-start"
-                      type="date"
-                      min={rangeStartMinDate}
+                    <SetAvailabilityCalendar
                       value={rangeStart}
-                      onChange={(e) => {
+                      minDate={rangeStartMinDate}
+                      disabledDates={existingAvailabilityDates}
+                      loadingDisabledDates={existingAvailabilityDatesLoading}
+                      gridAriaLabel="Select range start date"
+                      onSelect={(nextStart) => {
                         setSaveOk(null);
-                        setRangeStart(e.target.value);
+                        setRangeStart(nextStart);
+                        setRangeEnd((prevEnd) =>
+                          prevEnd && nextStart > prevEnd ? "" : prevEnd,
+                        );
                       }}
-                      className={dateInputClassName}
-                      aria-label="Select range start date"
                     />
                   </div>
                 </div>
-                <div>
-                  <label
-                    htmlFor="schedule-range-end"
+                <div className="min-w-0 flex-1">
+                  <p
+                    id="schedule-range-end-label"
                     className="font-montserrat text-sm font-medium text-[#333333]"
                   >
                     End date
-                  </label>
+                  </p>
                   <div
-                    className="mt-2 inline-block w-full max-w-[min(100%,14rem)] cursor-pointer"
-                    onClick={() => rangeEndInputRef.current?.showPicker?.()}
+                    className="mt-2"
+                    aria-labelledby="schedule-range-end-label"
                   >
-                    <input
-                      ref={rangeEndInputRef}
-                      id="schedule-range-end"
-                      type="date"
-                      min={
+                    <SetAvailabilityCalendar
+                      value={rangeEnd}
+                      minDate={
                         rangeStart >= rangeStartMinDate
                           ? rangeStart
                           : rangeStartMinDate
                       }
-                      value={rangeEnd}
-                      onChange={(e) => {
+                      disabledDates={existingAvailabilityDates}
+                      loadingDisabledDates={existingAvailabilityDatesLoading}
+                      gridAriaLabel="Select range end date"
+                      onSelect={(nextEnd) => {
                         setSaveOk(null);
-                        setRangeEnd(e.target.value);
+                        setRangeEnd(nextEnd);
                       }}
-                      className={dateInputClassName}
-                      aria-label="Select range end date"
                     />
                   </div>
                 </div>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 font-montserrat text-xs text-[#5E5E5E]">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    aria-hidden="true"
+                    className="inline-block h-3 w-3 rounded border border-[#e5e5e5] bg-[#ECECEC]"
+                  />
+                  Already configured
+                </span>
+                <span>
+                  Greyed-out dates already have availability — use View Schedule
+                  → Edit to modify them.
+                </span>
               </div>
               <p className="mt-3 font-montserrat text-xs text-[#5E5E5E]">
                 To set today&apos;s slots, use Single day mode.
@@ -1072,7 +1084,11 @@ export function MyScheduleClient() {
             <Button
               type="button"
               className="h-11 cursor-pointer rounded-xl bg-[#2555F3] font-montserrat text-sm font-medium text-white hover:bg-[#1e44c7] disabled:cursor-not-allowed"
-              disabled={saving || (mode === "single" && loadingSlots)}
+              disabled={
+                saving ||
+                (mode === "single" && loadingSlots) ||
+                (mode === "range" && !rangeEnd)
+              }
               onClick={() => void handleSave()}
             >
               {saving ? "Saving…" : "Save"}
