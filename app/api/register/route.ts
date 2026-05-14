@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { UserRole } from "@/generated/prisma/client";
+import { NotificationType, UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { headers } from "next/headers";
 import { createHash, randomBytes } from "crypto";
@@ -189,6 +189,55 @@ export async function POST(request: Request) {
       { error: "Unable to send verification email" },
       { status: 500 },
     );
+  }
+
+  if (role === "DOCTOR") {
+    const adminUsers = await prisma.user.findMany({
+      where: { role: UserRole.ADMIN },
+      select: { id: true, email: true },
+    });
+
+    const doctorsUrl = `${origin.replace(/\/$/, "")}/admin/doctors`;
+    const displayName = (resolvedUserName ?? user.name ?? "").trim();
+    const applicantEmail = normalizedEmail;
+
+    if (adminUsers.length > 0) {
+      try {
+        await prisma.notification.createMany({
+          data: adminUsers.map((admin) => ({
+            userId: admin.id,
+            type: NotificationType.DOCTOR_PENDING_APPROVAL,
+            title: "Doctor pending approval",
+            message: `${displayName} (${applicantEmail}) submitted a profile and is awaiting approval.`,
+          })),
+        });
+      } catch (err) {
+        console.error("[register] Failed to notify admins:", err);
+      }
+    }
+
+    const adminEmails = adminUsers
+      .map((a) => a.email?.trim())
+      .filter((e): e is string => Boolean(e));
+
+    if (adminEmails.length > 0 && process.env.RESEND_API_KEY) {
+      try {
+        const adminFrom =
+          process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+        await resend.emails.send({
+          from: adminFrom,
+          to: adminEmails,
+          subject: "New doctor registration pending approval",
+          text: [
+            `A new doctor, ${displayName}, has completed signup and is pending approval.`,
+            `Email: ${applicantEmail}`,
+            `Review and approve: ${doctorsUrl}`,
+          ].join("\n\n"),
+        });
+      } catch (err) {
+        console.error("[register] Admin alert email failed:", err);
+      }
+    }
   }
 
   return NextResponse.json(
