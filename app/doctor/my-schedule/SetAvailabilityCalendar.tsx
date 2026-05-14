@@ -29,6 +29,8 @@ type Props = {
   gridAriaLabel?: string;
   /** When true, month controls are disabled and the grid is non-interactive (e.g. booking preview before consultation type). */
   readOnly?: boolean;
+  /** Called when the visible calendar month changes (navigation, controlled value sync, or initial mount). */
+  onViewingMonthChange?: (year: number, month0: number) => void;
   onSelect: (ymd: string) => void;
 };
 
@@ -72,6 +74,7 @@ export function SetAvailabilityCalendar({
   loadingCaption,
   gridAriaLabel,
   readOnly = false,
+  onViewingMonthChange,
   onSelect,
 }: Props) {
   const initialAnchor = parseYmd(value || minDate);
@@ -88,6 +91,10 @@ export function SetAvailabilityCalendar({
     setViewYear(year);
     setViewMonth0(month0);
   }, [value]);
+
+  useEffect(() => {
+    onViewingMonthChange?.(viewYear, viewMonth0);
+  }, [viewYear, viewMonth0, onViewingMonthChange]);
 
   const cells = useMemo(() => {
     const total = daysInMonth(viewYear, viewMonth0);
