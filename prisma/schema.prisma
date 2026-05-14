@@ -227,6 +227,8 @@ model DoctorAvailability {
   slotDurationMinutes Int @default(30)
   /// Consultation mode available for this availability window.
   consultationType AvailabilityConsultationType @default(BOTH)
+
+  @@index([doctorId, consultationType, date])
 }
 
 model Appointment {
