@@ -3,6 +3,8 @@ import { publicDoctorByIdWhere } from "@/lib/doctor-visibility";
 import {
   coerceAllowedSlotDurationMinutes,
   expandAvailabilityRowsDetailed,
+  slotSupportsPatientConsultationChoice,
+  type PatientConsultationChoice,
 } from "@/lib/doctor-availability-slots";
 import { isDoctorTimeInPast } from "@/lib/timezone-display";
 import { AppointmentStatus } from "@/generated/prisma/client";
@@ -15,10 +17,22 @@ function dateKeyUtc(d: Date): string {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ doctorId: string }> },
 ) {
   const { doctorId } = await params;
+
+  const choiceParam = request.nextUrl.searchParams.get("consultationType");
+  let consultationFilter: PatientConsultationChoice | null = null;
+  if (choiceParam !== null && choiceParam !== "") {
+    if (choiceParam !== "CLINIC" && choiceParam !== "ONLINE") {
+      return NextResponse.json(
+        { error: "consultationType must be CLINIC or ONLINE" },
+        { status: 400 },
+      );
+    }
+    consultationFilter = choiceParam;
+  }
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -97,7 +111,15 @@ export async function GET(
   const datesWithSlots: string[] = [];
 
   for (const [dayKey, rows] of rowsByDay) {
-    const slotDetails = expandAvailabilityRowsDetailed(rows, fallback);
+    let slotDetails = expandAvailabilityRowsDetailed(rows, fallback);
+    if (consultationFilter) {
+      slotDetails = slotDetails.filter((d) =>
+        slotSupportsPatientConsultationChoice(
+          d.consultationType,
+          consultationFilter,
+        ),
+      );
+    }
     const slots = [...new Set(slotDetails.map((s) => s.startTime))].sort();
     const booked = bookedByDay.get(dayKey) ?? new Set<string>();
     const available = slots.filter((s) => !booked.has(s));
