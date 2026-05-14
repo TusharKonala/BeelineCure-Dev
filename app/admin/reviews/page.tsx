@@ -47,7 +47,8 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = useState<AdminReview[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
-  const [query, setQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState<RatingFilter>("ALL");
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -77,6 +78,13 @@ export default function AdminReviewsPage() {
     };
   }, [deleteTarget, busyReviewId]);
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
   const loadReviews = useCallback(async (nextPage: number, append: boolean) => {
     const requestId = ++latestRequestIdRef.current;
     if (!append) {
@@ -93,7 +101,7 @@ export default function AdminReviewsPage() {
         page: String(nextPage),
         limit: "10",
       });
-      if (query.trim()) params.set("search", query.trim());
+      if (debouncedSearch) params.set("search", debouncedSearch);
       if (ratingFilter !== "ALL") params.set("rating", ratingFilter);
 
       const response = await fetch(`/api/admin/reviews?${params.toString()}`, {
@@ -128,7 +136,7 @@ export default function AdminReviewsPage() {
         setLoadingInitial(false);
       }
     }
-  }, [query, ratingFilter]);
+  }, [debouncedSearch, ratingFilter]);
 
   useEffect(() => {
     void loadReviews(1, false);
@@ -185,8 +193,8 @@ export default function AdminReviewsPage() {
               </label>
               <input
                 id="admin-reviews-search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
                 placeholder="Search by doctor name"
                 className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] shadow-sm outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
               />
