@@ -726,11 +726,9 @@ export default function BookAppointmentDoctorPage() {
                       </div>
                     </>
                   ) : (
-                    <div className="mt-1 flex min-h-25 items-start sm:min-h-27">
-                      <p className="font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
-                        Online consultations require advance payment.
-                      </p>
-                    </div>
+                    <p className="mt-3 font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                      Online consultations require advance payment.
+                    </p>
                   )}
                 </div>
               )}
@@ -747,38 +745,52 @@ export default function BookAppointmentDoctorPage() {
             </section>
 
             {/* 3. Date calendar */}
-            {consultationType !== null && (
-              <section className="mb-10 md:mb-12">
-                <div className="flex flex-col gap-2 text-left">
-                  <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-                    Select date
-                  </h2>
-                </div>
-                {availableDatesLoading || availableDatesFetching ? (
-                  <div className="mt-4">
-                    <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
-                  </div>
-                ) : enabledDateSet.size === 0 ? (
-                  <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
-                    This doctor has no upcoming availability for this
-                    consultation type yet. Please try again later, pick the other
-                    option, or choose another doctor.
+            <section className="mb-10 md:mb-12">
+              <div className="flex flex-col gap-2 text-left">
+                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                  Select date
+                </h2>
+                {consultationType === null ? (
+                  <p className="font-montserrat text-sm text-[#5E5E5E]">
+                    Choose clinic or online above to see which dates are
+                    available.
                   </p>
-                ) : (
-                  <div className="mt-4">
-                    <SetAvailabilityCalendar
-                      value={selectedDate}
-                      minDate={minDate}
-                      disabledDates={new Set()}
-                      enabledDates={enabledDateSet}
-                      loadingDisabledDates={false}
-                      gridAriaLabel="Select appointment date"
-                      onSelect={onCalendarSelect}
-                    />
-                  </div>
-                )}
-              </section>
-            )}
+                ) : null}
+              </div>
+              {consultationType !== null &&
+              (availableDatesLoading || availableDatesFetching) ? (
+                <div className="mt-4">
+                  <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
+                </div>
+              ) : consultationType !== null && enabledDateSet.size === 0 ? (
+                <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
+                  This doctor has no upcoming availability for this consultation
+                  type yet. Please try again later, pick the other option, or
+                  choose another doctor.
+                </p>
+              ) : (
+                <div className="mt-4">
+                  <SetAvailabilityCalendar
+                    value={selectedDate}
+                    minDate={minDate}
+                    disabledDates={new Set()}
+                    enabledDates={
+                      consultationType === null
+                        ? new Set<string>()
+                        : enabledDateSet
+                    }
+                    loadingDisabledDates={false}
+                    readOnly={consultationType === null}
+                    gridAriaLabel={
+                      consultationType === null
+                        ? "Calendar preview — choose consultation type to select a date"
+                        : "Select appointment date"
+                    }
+                    onSelect={onCalendarSelect}
+                  />
+                </div>
+              )}
+            </section>
 
             {/* 4. Time Slot Grid */}
             {consultationType !== null && (
