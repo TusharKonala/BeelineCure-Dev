@@ -4,6 +4,8 @@ import {
   coerceAllowedSlotDurationMinutes,
   expandAvailabilityRowsDetailed,
   inferSlotDurationMinutesFromRows,
+  slotSupportsPatientConsultationChoice,
+  type PatientConsultationChoice,
 } from "@/lib/doctor-availability-slots";
 import { NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus } from "@/generated/prisma/client";
@@ -17,6 +19,17 @@ export async function GET(
   const excludeAppointmentId = request.nextUrl.searchParams.get(
     "excludeAppointmentId",
   );
+  const choiceParam = request.nextUrl.searchParams.get("consultationType");
+  let consultationFilter: PatientConsultationChoice | null = null;
+  if (choiceParam !== null && choiceParam !== "") {
+    if (choiceParam !== "CLINIC" && choiceParam !== "ONLINE") {
+      return NextResponse.json(
+        { error: "consultationType must be CLINIC or ONLINE" },
+        { status: 400 },
+      );
+    }
+    consultationFilter = choiceParam;
+  }
 
   if (!dateParam) {
     return NextResponse.json({ error: "date is required" }, { status: 400 });
@@ -79,9 +92,16 @@ export async function GET(
     slotDurationMinutes: a.slotDurationMinutes,
     consultationType: a.consultationType,
   }));
-  const slotDetails = expandAvailabilityRowsDetailed(rows, fallback);
+  let slotDetails = expandAvailabilityRowsDetailed(rows, fallback);
+  if (consultationFilter) {
+    slotDetails = slotDetails.filter((d) =>
+      slotSupportsPatientConsultationChoice(
+        d.consultationType,
+        consultationFilter,
+      ),
+    );
+  }
   const slots = slotDetails.map((slot) => slot.startTime);
-  const slotDurationMinutes = inferSlotDurationMinutesFromRows(rows, fallback);
 
   const booked = new Set(appointments.map((a) => a.time));
 
@@ -89,6 +109,16 @@ export async function GET(
   const availableDetails = slotDetails.filter((detail) =>
     available.includes(detail.startTime),
   );
+  const slotDurationMinutes = consultationFilter
+    ? inferSlotDurationMinutesFromRows(
+        availableDetails.map((d) => ({
+          startTime: d.startTime,
+          endTime: d.startTime,
+          slotDurationMinutes: d.slotDurationMinutes,
+        })),
+        fallback,
+      )
+    : inferSlotDurationMinutesFromRows(rows, fallback);
 
   return NextResponse.json({
     slots: available,
