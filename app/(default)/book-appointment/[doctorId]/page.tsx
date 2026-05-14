@@ -1,12 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
-import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
 import { z } from "zod";
@@ -82,12 +77,19 @@ async function getDoctor(doctorId: string) {
   return res.json();
 }
 
-async function getAvailableDates(
+async function getAvailableDatesChunk(
   doctorId: string,
   consultationType: PatientConsultationChoice,
+  from: string,
+  to: string,
 ): Promise<{ dates: string[] }> {
+  const params = new URLSearchParams({
+    consultationType,
+    from,
+    to,
+  });
   const res = await fetch(
-    `/api/doctors/${doctorId}/available-dates?consultationType=${encodeURIComponent(consultationType)}`,
+    `/api/doctors/${doctorId}/available-dates?${params.toString()}`,
     { cache: "no-store" },
   );
   if (!res.ok) throw new Error("Failed to fetch available dates");
@@ -121,6 +123,25 @@ function todayISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+function addDaysToYmd(ymd: string, deltaDays: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + deltaDays));
+  return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+}
+
+function daysInMonthUtc(year: number, month0: number): number {
+  return new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+}
+
+function lastYmdOfMonthUtc(year: number, month0: number): string {
+  const dim = daysInMonthUtc(year, month0);
+  return `${year}-${pad2(month0 + 1)}-${pad2(dim)}`;
+}
+
 function patientCurrencyFromTimezone(): SupportedCurrency {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return currencyForTimezone(timezone);
@@ -133,12 +154,19 @@ export default function BookAppointmentDoctorPage() {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(() => todayISO());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [consultationType, setConsultationType] = useState<
-    PatientConsultationChoice | null
-  >(null);
+  const [consultationType, setConsultationType] =
+    useState<PatientConsultationChoice | null>(null);
   const [clinicPaymentMode, setClinicPaymentMode] = useState<
     "payNow" | "payAtClinic"
   >("payAtClinic");
+  type AvailabilityDateChunk = { from: string; to: string };
+  const [availabilityDateChunks, setAvailabilityDateChunks] = useState<
+    AvailabilityDateChunk[]
+  >([]);
+  const [selectedDurationMinutes, setSelectedDurationMinutes] = useState<
+    number | null
+  >(null);
+  const prevConsultationScopeRef = useRef<string>("");
   const queryClient = useQueryClient();
 
   const patientTimezone = useMemo(
@@ -230,19 +258,51 @@ export default function BookAppointmentDoctorPage() {
     enabled: !!doctorId,
   });
 
-  const {
-    data: availableDatesData,
-    isLoading: availableDatesLoading,
-    isFetching: availableDatesFetching,
-  } = useQuery({
-    queryKey: ["available-dates", doctorId, consultationType],
-    queryFn: () => getAvailableDates(doctorId, consultationType!),
-    enabled: !!doctorId && consultationType !== null,
+  useLayoutEffect(() => {
+    if (consultationType === null) {
+      setAvailabilityDateChunks([]);
+      prevConsultationScopeRef.current = "";
+      return;
+    }
+    const scope = `${doctorId}:${consultationType}`;
+    if (prevConsultationScopeRef.current === scope) return;
+    prevConsultationScopeRef.current = scope;
+    const from = todayISO();
+    setAvailabilityDateChunks([{ from, to: addDaysToYmd(from, 60) }]);
+    setSelectedDurationMinutes(null);
+  }, [doctorId, consultationType]);
+
+  const availabilityDateQueries = useQueries({
+    queries:
+      consultationType !== null && availabilityDateChunks.length > 0
+        ? availabilityDateChunks.map(({ from, to }) => ({
+            queryKey: [
+              "available-dates",
+              doctorId,
+              consultationType,
+              from,
+              to,
+            ] as const,
+            queryFn: () =>
+              getAvailableDatesChunk(doctorId, consultationType, from, to),
+            enabled: Boolean(doctorId),
+            staleTime: 5 * 60 * 1000,
+            refetchOnWindowFocus: false,
+          }))
+        : [],
   });
 
-  const enabledDateSet = useMemo(
-    () => new Set(availableDatesData?.dates ?? []),
-    [availableDatesData?.dates],
+  const enabledDateSet = useMemo(() => {
+    const next = new Set<string>();
+    for (const q of availabilityDateQueries) {
+      for (const d of q.data?.dates ?? []) next.add(d);
+    }
+    return next;
+  }, [availabilityDateQueries]);
+
+  const availabilityCalendarPending = useMemo(
+    () => availabilityDateQueries.some((q) => q.isPending),
+    [availabilityDateQueries],
   );
   const doctorCurrency: SupportedCurrency = useMemo(
     () => coerceSupportedCurrency(doctor?.currency),
@@ -261,8 +321,7 @@ export default function BookAppointmentDoctorPage() {
   } = useQuery({
     queryKey: ["slots", doctorId, dateForSlots, consultationType],
     queryFn: () => getSlots(doctorId, dateForSlots, consultationType!),
-    enabled:
-      !!doctorId && !!dateForSlots && consultationType !== null,
+    enabled: !!doctorId && !!dateForSlots && consultationType !== null,
   });
   const slotStarts: string[] = slotsData?.slots ?? [];
   const doctorTz = slotsData?.doctorTimezone ?? "UTC";
@@ -306,6 +365,7 @@ export default function BookAppointmentDoctorPage() {
       if (consultationType !== null && consultationType !== next) {
         setSelectedSlot(null);
         setSelectedDate(todayISO());
+        setSelectedDurationMinutes(null);
         void queryClient.invalidateQueries({
           queryKey: ["available-dates", doctorId],
         });
@@ -460,6 +520,30 @@ export default function BookAppointmentDoctorPage() {
   const filteredSlots = slotStarts.filter(
     (s) => !isDoctorTimeInPast(selectedDate, s, doctorTz),
   );
+  const durationFilteredSlots = useMemo(() => {
+    if (selectedDurationMinutes === null) return filteredSlots;
+    return filteredSlots.filter((start) => {
+      const dur =
+        slotDetailByStart.get(start)?.slotDurationMinutes ??
+        slotDurationMinutes;
+      return dur === selectedDurationMinutes;
+    });
+  }, [
+    filteredSlots,
+    selectedDurationMinutes,
+    slotDetailByStart,
+    slotDurationMinutes,
+  ]);
+  const uniqueSlotDurationsMinutes = useMemo(() => {
+    const set = new Set<number>();
+    for (const start of filteredSlots) {
+      const dur =
+        slotDetailByStart.get(start)?.slotDurationMinutes ??
+        slotDurationMinutes;
+      set.add(dur);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [filteredSlots, slotDetailByStart, slotDurationMinutes]);
   const filteredDurationLabel = useMemo(() => {
     const durations = [
       ...new Set(
@@ -482,11 +566,18 @@ export default function BookAppointmentDoctorPage() {
   }, [filteredSlots, slotDetailByStart, slotDurationMinutes]);
 
   useEffect(() => {
+    if (!selectedSlot) return;
+    if (!durationFilteredSlots.includes(selectedSlot)) {
+      setSelectedSlot(null);
+    }
+  }, [selectedSlot, durationFilteredSlots]);
+
+  useEffect(() => {
     setSubmitError(null);
   }, [selectedDate]);
 
   useEffect(() => {
-    if (availableDatesLoading || availableDatesFetching) return;
+    if (availabilityCalendarPending) return;
     if (enabledDateSet.size === 0) return;
     if (enabledDateSet.has(selectedDate)) return;
     const sorted = [...enabledDateSet].sort();
@@ -494,13 +585,8 @@ export default function BookAppointmentDoctorPage() {
       sorted.find((d) => d >= minDate) ?? sorted[sorted.length - 1] ?? minDate;
     setSelectedDate(next);
     setSelectedSlot(null);
-  }, [
-    availableDatesLoading,
-    availableDatesFetching,
-    enabledDateSet,
-    selectedDate,
-    minDate,
-  ]);
+    setSelectedDurationMinutes(null);
+  }, [availabilityCalendarPending, enabledDateSet, selectedDate, minDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -537,9 +623,31 @@ export default function BookAppointmentDoctorPage() {
     setApproxEquivalentLabel,
   ]);
 
+  const onCalendarViewingMonthChange = useCallback(
+    (year: number, month0: number) => {
+      setAvailabilityDateChunks((prev) => {
+        if (prev.length === 0) return prev;
+        const coverageTo = prev.reduce(
+          (max, c) => (c.to > max ? c.to : max),
+          prev[0]!.to,
+        );
+        const lastDay = lastYmdOfMonthUtc(year, month0);
+        if (lastDay <= coverageTo) return prev;
+        const fromNext = addDaysToYmd(coverageTo, 1);
+        // Always cover through end of viewed month (28–31 days).
+        const toNext = lastDay;
+        if (prev.some((c) => c.from === fromNext && c.to === toNext))
+          return prev;
+        return [...prev, { from: fromNext, to: toNext }];
+      });
+    },
+    [],
+  );
+
   const onCalendarSelect = useCallback((ymd: string) => {
     setSelectedDate(ymd);
     setSelectedSlot(null);
+    setSelectedDurationMinutes(null);
   }, []);
 
   const slotsLoadingOrFetching = slotsLoading || slotsFetching;
@@ -757,8 +865,7 @@ export default function BookAppointmentDoctorPage() {
                   </p>
                 ) : null}
               </div>
-              {consultationType !== null &&
-              (availableDatesLoading || availableDatesFetching) ? (
+              {consultationType !== null && availabilityCalendarPending ? (
                 <div className="mt-4">
                   <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
                 </div>
@@ -786,10 +893,18 @@ export default function BookAppointmentDoctorPage() {
                         ? "Calendar preview — choose consultation type to select a date"
                         : "Select appointment date"
                     }
+                    onViewingMonthChange={onCalendarViewingMonthChange}
                     onSelect={onCalendarSelect}
                   />
                 </div>
               )}
+              {consultationType !== null ? (
+                <p className="mt-3 max-w-sm font-montserrat text-xs leading-relaxed text-[#5E5E5E] md:text-sm">
+                  Greyed-out dates are not available to book here — the day may
+                  be full, the doctor may not be scheduled, or the date may
+                  already be in the past.
+                </p>
+              ) : null}
             </section>
 
             {/* 4. Time Slot Grid */}
@@ -804,6 +919,42 @@ export default function BookAppointmentDoctorPage() {
                       {filteredDurationLabel}
                     </p>
                   )}
+                  {!slotsLoadingOrFetching &&
+                    uniqueSlotDurationsMinutes.length > 1 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant={
+                            selectedDurationMinutes === null
+                              ? "default"
+                              : "outline"
+                          }
+                          size="sm"
+                          className="h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
+                          aria-pressed={selectedDurationMinutes === null}
+                          onClick={() => setSelectedDurationMinutes(null)}
+                        >
+                          All lengths
+                        </Button>
+                        {uniqueSlotDurationsMinutes.map((mins) => (
+                          <Button
+                            key={mins}
+                            type="button"
+                            variant={
+                              selectedDurationMinutes === mins
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            className="h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
+                            aria-pressed={selectedDurationMinutes === mins}
+                            onClick={() => setSelectedDurationMinutes(mins)}
+                          >
+                            {mins} min
+                          </Button>
+                        ))}
+                      </div>
+                    )}
                 </div>
 
                 {slotsLoadingOrFetching && (
@@ -817,33 +968,35 @@ export default function BookAppointmentDoctorPage() {
                   </div>
                 )}
 
-                {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
-                  <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
-                    No slots available for this date.
-                  </p>
-                )}
+                {!slotsLoadingOrFetching &&
+                  durationFilteredSlots.length === 0 && (
+                    <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
+                      No slots available for this date.
+                    </p>
+                  )}
 
-                {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
-                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                    {filteredSlots.map((time) => {
-                      const detail = slotDetailByStart.get(time);
-                      const durationForTile =
-                        detail?.slotDurationMinutes ?? slotDurationMinutes;
-                      return (
-                        <Button
-                          key={time}
-                          variant={
-                            selectedSlot === time ? "default" : "outline"
-                          }
-                          className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                          onClick={() => setSelectedSlot(time)}
-                        >
-                          {`${formatTimeInPatientTz(selectedDate, time, doctorTz)} · ${durationForTile} min`}
-                        </Button>
-                      );
-                    })}
-                  </div>
-                )}
+                {!slotsLoadingOrFetching &&
+                  durationFilteredSlots.length > 0 && (
+                    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
+                      {durationFilteredSlots.map((time) => {
+                        const detail = slotDetailByStart.get(time);
+                        const durationForTile =
+                          detail?.slotDurationMinutes ?? slotDurationMinutes;
+                        return (
+                          <Button
+                            key={time}
+                            variant={
+                              selectedSlot === time ? "default" : "outline"
+                            }
+                            className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                            onClick={() => setSelectedSlot(time)}
+                          >
+                            {`${formatTimeInPatientTz(selectedDate, time, doctorTz)} · ${durationForTile} min`}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  )}
               </section>
             )}
 
