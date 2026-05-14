@@ -11,6 +11,20 @@ export type AllowedSlotDurationMinutes =
   (typeof ALLOWED_SLOT_DURATION_MINUTES)[number];
 export type AvailabilityConsultationType = "CLINIC" | "ONLINE" | "BOTH";
 
+export type PatientConsultationChoice = "CLINIC" | "ONLINE";
+
+/**
+ * Whether an availability row supports the patient's clinic vs online booking choice.
+ * `BOTH` matches either path (same semantics as reschedule slot filtering).
+ */
+export function slotSupportsPatientConsultationChoice(
+  slotType: AvailabilityConsultationType,
+  choice: PatientConsultationChoice,
+): boolean {
+  if (slotType === "BOTH") return true;
+  return slotType === choice;
+}
+
 /** Default window for the schedule UI (09:00–23:59 doctor-local). */
 export const DEFAULT_SLOT_WINDOW_START = "09:00";
 export const DEFAULT_SLOT_WINDOW_END = "23:59";
