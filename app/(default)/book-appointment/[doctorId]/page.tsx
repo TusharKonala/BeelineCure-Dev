@@ -34,6 +34,7 @@ import {
 import { convertCentsAmount } from "@/lib/fx-rates";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
 import { RESCHEDULE_POLICY_CONFIRMATION_LINE } from "@/lib/reschedule-policy-copy";
+import type { PatientConsultationChoice } from "@/lib/doctor-availability-slots";
 
 const patientFormSchema = z.object({
   patientName: z.string().min(1, "Full name is required"),
@@ -81,10 +82,14 @@ async function getDoctor(doctorId: string) {
   return res.json();
 }
 
-async function getAvailableDates(doctorId: string): Promise<{ dates: string[] }> {
-  const res = await fetch(`/api/doctors/${doctorId}/available-dates`, {
-    cache: "no-store",
-  });
+async function getAvailableDates(
+  doctorId: string,
+  consultationType: PatientConsultationChoice,
+): Promise<{ dates: string[] }> {
+  const res = await fetch(
+    `/api/doctors/${doctorId}/available-dates?consultationType=${encodeURIComponent(consultationType)}`,
+    { cache: "no-store" },
+  );
   if (!res.ok) throw new Error("Failed to fetch available dates");
   return res.json();
 }
@@ -92,6 +97,7 @@ async function getAvailableDates(doctorId: string): Promise<{ dates: string[] }>
 async function getSlots(
   doctorId: string,
   date: string,
+  consultationType: PatientConsultationChoice,
 ): Promise<{
   slots: string[];
   slotDetails: {
@@ -104,7 +110,7 @@ async function getSlots(
   slotDurationMinutes: number;
 }> {
   const res = await fetch(
-    `/api/doctors/${doctorId}/slots?date=${encodeURIComponent(date)}`,
+    `/api/doctors/${doctorId}/slots?date=${encodeURIComponent(date)}&consultationType=${encodeURIComponent(consultationType)}`,
   );
   if (!res.ok) throw new Error("Failed to fetch slots");
   return res.json();
@@ -127,9 +133,9 @@ export default function BookAppointmentDoctorPage() {
   const router = useRouter();
   const [selectedDate, setSelectedDate] = useState<string>(() => todayISO());
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
-  const [consultationType, setConsultationType] = useState<"CLINIC" | "ONLINE">(
-    "CLINIC",
-  );
+  const [consultationType, setConsultationType] = useState<
+    PatientConsultationChoice | null
+  >(null);
   const [clinicPaymentMode, setClinicPaymentMode] = useState<
     "payNow" | "payAtClinic"
   >("payAtClinic");
@@ -229,9 +235,9 @@ export default function BookAppointmentDoctorPage() {
     isLoading: availableDatesLoading,
     isFetching: availableDatesFetching,
   } = useQuery({
-    queryKey: ["available-dates", doctorId],
-    queryFn: () => getAvailableDates(doctorId),
-    enabled: !!doctorId,
+    queryKey: ["available-dates", doctorId, consultationType],
+    queryFn: () => getAvailableDates(doctorId, consultationType!),
+    enabled: !!doctorId && consultationType !== null,
   });
 
   const enabledDateSet = useMemo(
@@ -253,9 +259,10 @@ export default function BookAppointmentDoctorPage() {
     isLoading: slotsLoading,
     isFetching: slotsFetching,
   } = useQuery({
-    queryKey: ["slots", doctorId, dateForSlots],
-    queryFn: () => getSlots(doctorId, dateForSlots),
-    enabled: !!doctorId && !!dateForSlots,
+    queryKey: ["slots", doctorId, dateForSlots, consultationType],
+    queryFn: () => getSlots(doctorId, dateForSlots, consultationType!),
+    enabled:
+      !!doctorId && !!dateForSlots && consultationType !== null,
   });
   const slotStarts: string[] = slotsData?.slots ?? [];
   const doctorTz = slotsData?.doctorTimezone ?? "UTC";
@@ -287,13 +294,27 @@ export default function BookAppointmentDoctorPage() {
   const patientCurrency = useMemo(() => patientCurrencyFromTimezone(), []);
   const shouldShowApproxEquivalent =
     !!selectedSlot && patientCurrency !== doctorCurrency;
-  const canBookClinic =
-    !selectedSlotDetail || selectedSlotDetail.consultationType !== "ONLINE";
-  const canBookOnline =
-    !selectedSlotDetail || selectedSlotDetail.consultationType !== "CLINIC";
   const selectedConsultationAllowed =
-    (consultationType === "CLINIC" && canBookClinic) ||
-    (consultationType === "ONLINE" && canBookOnline);
+    consultationType !== null &&
+    !!selectedSlot &&
+    !!selectedSlotDetail &&
+    (selectedSlotDetail.consultationType === "BOTH" ||
+      selectedSlotDetail.consultationType === consultationType);
+
+  const selectConsultationType = useCallback(
+    (next: PatientConsultationChoice) => {
+      if (consultationType !== null && consultationType !== next) {
+        setSelectedSlot(null);
+        setSelectedDate(todayISO());
+        void queryClient.invalidateQueries({
+          queryKey: ["available-dates", doctorId],
+        });
+        void queryClient.invalidateQueries({ queryKey: ["slots", doctorId] });
+      }
+      setConsultationType(next);
+    },
+    [consultationType, doctorId, queryClient],
+  );
   // Lock the email field when the patient is signed in so they can't book
   // under an email different from their account; the field is prefilled from
   // the session above.
@@ -305,6 +326,8 @@ export default function BookAppointmentDoctorPage() {
       setSubmitError(null);
       setIsSubmitting(true);
       try {
+        if (consultationType === null) return;
+
         const doctorTimezone = slotsData?.doctorTimezone ?? "UTC";
 
         const useBookingSessionCheckout =
@@ -408,8 +431,8 @@ export default function BookAppointmentDoctorPage() {
           router.push(`/book-appointment/review/${bookingSessionId}`);
         }
 
-        queryClient.invalidateQueries({
-          queryKey: ["slots", doctorId, selectedDate],
+        void queryClient.invalidateQueries({
+          queryKey: ["slots", doctorId],
         });
 
         setSelectedSlot(null);
@@ -478,15 +501,6 @@ export default function BookAppointmentDoctorPage() {
     selectedDate,
     minDate,
   ]);
-
-  useEffect(() => {
-    if (!selectedSlotDetail) return;
-    if (selectedSlotDetail.consultationType === "CLINIC") {
-      setConsultationType("CLINIC");
-    } else if (selectedSlotDetail.consultationType === "ONLINE") {
-      setConsultationType("ONLINE");
-    }
-  }, [selectedSlotDetail]);
 
   useEffect(() => {
     let cancelled = false;
@@ -587,7 +601,11 @@ export default function BookAppointmentDoctorPage() {
                   <span className="font-medium text-[#111111]">
                     Consultation:
                   </span>{" "}
-                  <span className="text-[#333333]">Clinic Visit</span>
+                  <span className="text-[#333333]">
+                    {bookedConfirmation.consultationType === "ONLINE"
+                      ? "Online consultation"
+                      : "Clinic visit"}
+                  </span>
                 </p>
               </div>
               <PostAppointmentActions
@@ -627,38 +645,7 @@ export default function BookAppointmentDoctorPage() {
               )}
             </section>
 
-            {/* 2. Date calendar */}
-            <section className="mb-10 md:mb-12">
-              <div className="flex flex-col gap-2 text-left">
-                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-                  Select date
-                </h2>
-              </div>
-              {availableDatesLoading || availableDatesFetching ? (
-                <div className="mt-4">
-                  <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
-                </div>
-              ) : enabledDateSet.size === 0 ? (
-                <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
-                  This doctor has no upcoming availability yet. Please try again
-                  later or choose another doctor.
-                </p>
-              ) : (
-                <div className="mt-4">
-                  <SetAvailabilityCalendar
-                    value={selectedDate}
-                    minDate={minDate}
-                    disabledDates={new Set()}
-                    enabledDates={enabledDateSet}
-                    loadingDisabledDates={false}
-                    gridAriaLabel="Select appointment date"
-                    onSelect={onCalendarSelect}
-                  />
-                </div>
-              )}
-            </section>
-
-            {/* 3. Consultation Type */}
+            {/* 2. Consultation type */}
             <section className="mb-10 md:mb-12">
               <div className="flex flex-col gap-2 text-left">
                 <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
@@ -668,7 +655,7 @@ export default function BookAppointmentDoctorPage() {
                   Choose how you would like to meet your doctor.
                 </p>
               </div>
-              <div className="mt-4  max-w-md grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="mt-4 max-w-md grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Button
                   type="button"
                   variant={
@@ -676,8 +663,7 @@ export default function BookAppointmentDoctorPage() {
                   }
                   className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                   aria-pressed={consultationType === "CLINIC"}
-                  disabled={!canBookClinic}
-                  onClick={() => setConsultationType("CLINIC")}
+                  onClick={() => selectConsultationType("CLINIC")}
                 >
                   Clinic Visit
                 </Button>
@@ -688,117 +674,169 @@ export default function BookAppointmentDoctorPage() {
                   }
                   className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
                   aria-pressed={consultationType === "ONLINE"}
-                  disabled={!canBookOnline}
-                  onClick={() => setConsultationType("ONLINE")}
+                  onClick={() => selectConsultationType("ONLINE")}
                 >
                   Online Consultation
                 </Button>
               </div>
-              {selectedSlotDetail && (
+              {selectedSlotDetail?.consultationType === "BOTH" && (
                 <p className="mt-3 font-montserrat text-sm text-[#5E5E5E]">
-                  {selectedSlotDetail.consultationType === "CLINIC"
-                    ? "This slot is available for clinic visits only."
-                    : selectedSlotDetail.consultationType === "ONLINE"
-                      ? "This slot is available for online consultations only."
-                      : "This slot supports both clinic and online consultations."}
+                  This slot supports both clinic and online consultations.
                 </p>
               )}
 
-              {consultationType === "CLINIC" && (
+              {consultationType !== null && (
                 <div className="mt-5 max-w-md">
                   <p className="font-montserrat text-sm font-medium text-[#111111]">
                     Payment
                   </p>
-                  <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                    Pay securely online now, or pay when you arrive at the clinic.
-                  </p>
-                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Button
-                      type="button"
-                      variant={
-                        clinicPaymentMode === "payAtClinic" ? "default" : "outline"
-                      }
-                      className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                      aria-pressed={clinicPaymentMode === "payAtClinic"}
-                      onClick={() => setClinicPaymentMode("payAtClinic")}
-                    >
-                      Pay at clinic
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={clinicPaymentMode === "payNow" ? "default" : "outline"}
-                      className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                      aria-pressed={clinicPaymentMode === "payNow"}
-                      onClick={() => setClinicPaymentMode("payNow")}
-                    >
-                      Pay now
-                    </Button>
-                  </div>
+                  {consultationType === "CLINIC" ? (
+                    <>
+                      <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                        Pay securely online now, or pay when you arrive at the
+                        clinic.
+                      </p>
+                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Button
+                          type="button"
+                          variant={
+                            clinicPaymentMode === "payAtClinic"
+                              ? "default"
+                              : "outline"
+                          }
+                          className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                          aria-pressed={clinicPaymentMode === "payAtClinic"}
+                          onClick={() => setClinicPaymentMode("payAtClinic")}
+                        >
+                          Pay at clinic
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={
+                            clinicPaymentMode === "payNow"
+                              ? "default"
+                              : "outline"
+                          }
+                          className="flex h-11 w-full cursor-pointer items-center justify-center rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                          aria-pressed={clinicPaymentMode === "payNow"}
+                          onClick={() => setClinicPaymentMode("payNow")}
+                        >
+                          Pay now
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-1 flex min-h-25 items-start sm:min-h-27">
+                      <p className="font-montserrat text-sm leading-relaxed text-[#5E5E5E]">
+                        Online consultations require advance payment.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
-              <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-                {consultationType === "CLINIC"
-                  ? clinicPaymentMode === "payAtClinic"
-                    ? `Consultation fee (payable at clinic): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
-                    : `Consultation fee (pay online): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
-                  : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
-              </p>
-            </section>
-
-            {/* 4. Time Slot Grid */}
-            <section>
-              <div className="flex flex-col gap-2 text-left">
-                <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
-                  Available times
-                </h2>
-                {!slotsLoadingOrFetching && (
-                  <p className="font-montserrat text-sm text-[#5E5E5E]">
-                    {filteredDurationLabel}
-                  </p>
-                )}
-              </div>
-
-              {slotsLoadingOrFetching && (
-                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton
-                      key={i}
-                      className="h-11 w-full rounded-xl bg-[#e5e5e5] sm:h-12"
-                    />
-                  ))}
-                </div>
-              )}
-
-              {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
-                <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
-                  No slots available for this date.
+              {consultationType !== null && (
+                <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+                  {consultationType === "CLINIC"
+                    ? clinicPaymentMode === "payAtClinic"
+                      ? `Consultation fee (payable at clinic): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
+                      : `Consultation fee (pay online): ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`
+                    : `Online consultation fee: ${consultationPriceLabel}${shouldShowApproxEquivalent && approxEquivalentLabel ? ` ${approxEquivalentLabel}` : ""}`}
                 </p>
               )}
-
-              {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
-                <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
-                  {filteredSlots.map((time) => {
-                    const detail = slotDetailByStart.get(time);
-                    const durationForTile =
-                      detail?.slotDurationMinutes ?? slotDurationMinutes;
-                    return (
-                      <Button
-                        key={time}
-                        variant={selectedSlot === time ? "default" : "outline"}
-                        className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
-                        onClick={() => setSelectedSlot(time)}
-                      >
-                        {`${formatTimeInPatientTz(selectedDate, time, doctorTz)} · ${durationForTile} min`}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
             </section>
 
+            {/* 3. Date calendar */}
+            {consultationType !== null && (
+              <section className="mb-10 md:mb-12">
+                <div className="flex flex-col gap-2 text-left">
+                  <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                    Select date
+                  </h2>
+                </div>
+                {availableDatesLoading || availableDatesFetching ? (
+                  <div className="mt-4">
+                    <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
+                  </div>
+                ) : enabledDateSet.size === 0 ? (
+                  <p className="mt-4 font-montserrat text-sm text-[#5E5E5E]">
+                    This doctor has no upcoming availability for this
+                    consultation type yet. Please try again later, pick the other
+                    option, or choose another doctor.
+                  </p>
+                ) : (
+                  <div className="mt-4">
+                    <SetAvailabilityCalendar
+                      value={selectedDate}
+                      minDate={minDate}
+                      disabledDates={new Set()}
+                      enabledDates={enabledDateSet}
+                      loadingDisabledDates={false}
+                      gridAriaLabel="Select appointment date"
+                      onSelect={onCalendarSelect}
+                    />
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* 4. Time Slot Grid */}
+            {consultationType !== null && (
+              <section>
+                <div className="flex flex-col gap-2 text-left">
+                  <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
+                    Available times
+                  </h2>
+                  {!slotsLoadingOrFetching && (
+                    <p className="font-montserrat text-sm text-[#5E5E5E]">
+                      {filteredDurationLabel}
+                    </p>
+                  )}
+                </div>
+
+                {slotsLoadingOrFetching && (
+                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <Skeleton
+                        key={i}
+                        className="h-11 w-full rounded-xl bg-[#e5e5e5] sm:h-12"
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {!slotsLoadingOrFetching && filteredSlots.length === 0 && (
+                  <p className="mt-6 font-montserrat text-sm text-[#5E5E5E]">
+                    No slots available for this date.
+                  </p>
+                )}
+
+                {!slotsLoadingOrFetching && filteredSlots.length > 0 && (
+                  <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:gap-4">
+                    {filteredSlots.map((time) => {
+                      const detail = slotDetailByStart.get(time);
+                      const durationForTile =
+                        detail?.slotDurationMinutes ?? slotDurationMinutes;
+                      return (
+                        <Button
+                          key={time}
+                          variant={
+                            selectedSlot === time ? "default" : "outline"
+                          }
+                          className="cursor-pointer h-11 rounded-xl font-montserrat text-sm font-medium sm:h-12 md:text-base"
+                          onClick={() => setSelectedSlot(time)}
+                        >
+                          {`${formatTimeInPatientTz(selectedDate, time, doctorTz)} · ${durationForTile} min`}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* 4. Patient information form (after slot selected) */}
-            {selectedSlot && (
+            {selectedSlot && consultationType !== null && (
               <section className="mt-10 md:mt-12">
                 <div className="flex flex-col gap-2 text-left">
                   <h2 className="font-montaga text-2xl font-semibold leading-tight text-[#333333] md:text-3xl">
