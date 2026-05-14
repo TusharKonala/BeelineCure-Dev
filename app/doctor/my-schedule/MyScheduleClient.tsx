@@ -16,7 +16,7 @@ import {
   type AllowedSlotDurationMinutes,
 } from "@/lib/doctor-availability-slots";
 import { timeToMinutes } from "@/lib/time";
-import { addOneDayYmd } from "@/lib/doctor-local-date";
+import { addOneDayYmd, enumerateInclusiveYmd } from "@/lib/doctor-local-date";
 import { isDoctorTimeInPast } from "@/lib/timezone-display";
 import { cn } from "@/lib/utils";
 import { ViewSchedulePanel } from "./ViewSchedulePanel";
@@ -344,6 +344,14 @@ export function MyScheduleClient() {
     return meta.today >= rangeStart && meta.today <= rangeEnd;
   }, [meta, mode, singleDate, rangeStart, rangeEnd]);
 
+  /** True when any calendar day between range start and end already has saved rows (grey on the picker). */
+  const rangeIncludesAlreadyConfiguredDay = useMemo(() => {
+    if (!rangeStart || !rangeEnd || rangeStart > rangeEnd) return false;
+    return enumerateInclusiveYmd(rangeStart, rangeEnd).some((d) =>
+      existingAvailabilityDates.has(d),
+    );
+  }, [rangeStart, rangeEnd, existingAvailabilityDates]);
+
   const selectableSlots = useMemo(() => {
     if (!meta) return displaySlots;
     if (!scheduleIncludesToday) return displaySlots;
@@ -427,6 +435,13 @@ export function MyScheduleClient() {
       }
       if (rangeStart > rangeEnd) {
         setSaveError("Start date must be on or before end date.");
+        setSaveOk(null);
+        return;
+      }
+      if (rangeIncludesAlreadyConfiguredDay) {
+        setSaveError(
+          "Every day from start through end must have no saved availability yet. This range includes at least one day that is already configured — narrow the range or use Single day / View Schedule → Edit for those days.",
+        );
         setSaveOk(null);
         return;
       }
@@ -930,9 +945,18 @@ export function MyScheduleClient() {
                 </span>
                 <span>
                   Greyed-out dates already have availability — use View Schedule
-                  → Edit to modify them.
+                  → Edit to modify them. Range mode applies to every day in
+                  between: all of those days must be empty (no grey days inside
+                  the span).
                 </span>
               </div>
+              {rangeIncludesAlreadyConfiguredDay ? (
+                <p className="mt-3 font-montserrat text-sm text-red-600">
+                  This range includes at least one day that already has
+                  availability. Narrow the start or end date so the full span has
+                  no grey days, or edit those days in Single day mode.
+                </p>
+              ) : null}
               <p className="mt-3 font-montserrat text-xs text-[#5E5E5E]">
                 To set today&apos;s slots, use Single day mode.
               </p>
@@ -1087,7 +1111,8 @@ export function MyScheduleClient() {
               disabled={
                 saving ||
                 (mode === "single" && loadingSlots) ||
-                (mode === "range" && !rangeEnd)
+                (mode === "range" &&
+                  (!rangeEnd || rangeIncludesAlreadyConfiguredDay))
               }
               onClick={() => void handleSave()}
             >

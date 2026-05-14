@@ -551,6 +551,21 @@ export async function PUT(request: Request) {
   }
 
   const affectedDates = affectedYmd.map((date) => ymdToPrismaDate(date));
+
+  if (parsed.mode === "range" && !clearDay) {
+    const existingInRange = await prisma.doctorAvailability.count({
+      where: { doctorId: doctor.id, date: { in: affectedDates } },
+    });
+    if (existingInRange > 0) {
+      return NextResponse.json(
+        {
+          error:
+            "Range save is only allowed when every day in the range has no saved availability yet. At least one date already has availability; use single-day save or View Schedule → Edit for those days.",
+        },
+        { status: 400 },
+      );
+    }
+  }
   const activeAppointments = await prisma.appointment.findMany({
     where: {
       doctorId: doctor.id,
