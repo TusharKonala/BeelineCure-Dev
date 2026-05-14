@@ -10,10 +10,26 @@ import { isDoctorTimeInPast } from "@/lib/timezone-display";
 import { AppointmentStatus } from "@/generated/prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
-const HORIZON_DAYS = 120;
+/** Default booking horizon when `from`/`to` are omitted (matches client initial chunk). */
+const DEFAULT_HORIZON_DAYS = 60;
+/** Max inclusive calendar-day span for a single request when `from`/`to` are provided. */
+const MAX_RANGE_INCLUSIVE_DAYS = 35;
 
 function dateKeyUtc(d: Date): string {
   return d.toISOString().slice(0, 10);
+}
+
+function parseYmdUtc(value: string | null): Date | null {
+  if (value === null || value === "") return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+function inclusiveDaySpan(from: Date, to: Date): number {
+  return Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
 }
 
 export async function GET(
@@ -34,11 +50,55 @@ export async function GET(
     consultationFilter = choiceParam;
   }
 
+  const fromParam = request.nextUrl.searchParams.get("from");
+  const toParam = request.nextUrl.searchParams.get("to");
+  const hasFrom = fromParam !== null && fromParam !== "";
+  const hasTo = toParam !== null && toParam !== "";
+
+  if (hasFrom !== hasTo) {
+    return NextResponse.json(
+      { error: "from and to must both be provided or both omitted" },
+      { status: 400 },
+    );
+  }
+
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
-  const end = new Date(today);
-  end.setUTCDate(end.getUTCDate() + HORIZON_DAYS);
+  let rangeStart: Date;
+  let rangeEnd: Date;
+
+  if (!hasFrom && !hasTo) {
+    rangeStart = new Date(today);
+    rangeEnd = new Date(today);
+    rangeEnd.setUTCDate(rangeEnd.getUTCDate() + DEFAULT_HORIZON_DAYS);
+  } else {
+    const parsedFrom = parseYmdUtc(fromParam);
+    const parsedTo = parseYmdUtc(toParam);
+    if (!parsedFrom || !parsedTo) {
+      return NextResponse.json(
+        { error: "from and to must be valid YYYY-MM-DD dates" },
+        { status: 400 },
+      );
+    }
+    if (parsedFrom.getTime() > parsedTo.getTime()) {
+      return NextResponse.json(
+        { error: "from must be on or before to" },
+        { status: 400 },
+      );
+    }
+    const span = inclusiveDaySpan(parsedFrom, parsedTo);
+    if (span > MAX_RANGE_INCLUSIVE_DAYS) {
+      return NextResponse.json(
+        {
+          error: `Date range too large (max ${MAX_RANGE_INCLUSIVE_DAYS} inclusive days)`,
+        },
+        { status: 400 },
+      );
+    }
+    rangeStart = parsedFrom;
+    rangeEnd = parsedTo;
+  }
 
   const doctor = await prisma.doctor.findFirst({
     where: publicDoctorByIdWhere(doctorId),
@@ -53,7 +113,7 @@ export async function GET(
     prisma.doctorAvailability.findMany({
       where: {
         doctorId,
-        date: { gte: today, lte: end },
+        date: { gte: rangeStart, lte: rangeEnd },
       },
       select: {
         id: true,
@@ -67,7 +127,7 @@ export async function GET(
     prisma.appointment.findMany({
       where: {
         doctorId,
-        date: { gte: today, lte: end },
+        date: { gte: rangeStart, lte: rangeEnd },
         status: { not: AppointmentStatus.CANCELLED },
       },
       select: { date: true, time: true },
