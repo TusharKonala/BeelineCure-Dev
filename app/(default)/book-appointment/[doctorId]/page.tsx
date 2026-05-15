@@ -963,7 +963,7 @@ export default function BookAppointmentDoctorPage() {
                               : "outline"
                           }
                           size="sm"
-                          className="h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
+                          className="cursor-pointer h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
                           aria-pressed={selectedDurationMinutes === null}
                           onClick={() => setSelectedDurationMinutes(null)}
                         >
@@ -979,7 +979,7 @@ export default function BookAppointmentDoctorPage() {
                                 : "outline"
                             }
                             size="sm"
-                            className="h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
+                            className="cursor-pointer h-8 rounded-full px-3 font-montserrat text-xs font-medium md:text-sm"
                             aria-pressed={selectedDurationMinutes === mins}
                             onClick={() => setSelectedDurationMinutes(mins)}
                           >
