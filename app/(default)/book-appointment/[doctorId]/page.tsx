@@ -153,6 +153,13 @@ function lastYmdOfMonthUtc(year: number, month0: number): string {
   return `${year}-${pad2(month0 + 1)}-${pad2(dim)}`;
 }
 
+/** Must match `DEFAULT_HORIZON_DAYS` in `available-dates` API (inclusive span = this + 1). */
+const AVAILABILITY_RANGE_DAY_OFFSET = 60;
+
+function minYmd(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+
 function patientCurrencyFromTimezone(): SupportedCurrency {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return currencyForTimezone(timezone);
@@ -279,7 +286,9 @@ export default function BookAppointmentDoctorPage() {
     if (prevConsultationScopeRef.current === scope) return;
     prevConsultationScopeRef.current = scope;
     const from = todayISO();
-    setAvailabilityDateChunks([{ from, to: addDaysToYmd(from, 60) }]);
+    setAvailabilityDateChunks([
+      { from, to: addDaysToYmd(from, AVAILABILITY_RANGE_DAY_OFFSET) },
+    ]);
     setSelectedDurationMinutes(null);
   }, [doctorId, consultationType]);
 
@@ -645,11 +654,24 @@ export default function BookAppointmentDoctorPage() {
         const lastDay = lastYmdOfMonthUtc(year, month0);
         if (lastDay <= coverageTo) return prev;
         const fromNext = addDaysToYmd(coverageTo, 1);
-        // Always cover through end of viewed month (28–31 days).
         const toNext = lastDay;
-        if (prev.some((c) => c.from === fromNext && c.to === toNext))
-          return prev;
-        return [...prev, { from: fromNext, to: toNext }];
+        if (fromNext > toNext) return prev;
+
+        const additions: AvailabilityDateChunk[] = [];
+        let cursor = fromNext;
+        while (cursor <= toNext) {
+          const tentativeEnd = addDaysToYmd(
+            cursor,
+            AVAILABILITY_RANGE_DAY_OFFSET,
+          );
+          const chunkTo = minYmd(tentativeEnd, toNext);
+          if (!prev.some((c) => c.from === cursor && c.to === chunkTo)) {
+            additions.push({ from: cursor, to: chunkTo });
+          }
+          cursor = addDaysToYmd(chunkTo, 1);
+        }
+        if (additions.length === 0) return prev;
+        return [...prev, ...additions];
       });
     },
     [],

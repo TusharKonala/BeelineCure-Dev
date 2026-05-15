@@ -12,8 +12,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 /** Default booking horizon when `from`/`to` are omitted (matches client initial chunk). */
 const DEFAULT_HORIZON_DAYS = 60;
-/** Max inclusive calendar-day span for a single request when `from`/`to` are provided. */
-const MAX_RANGE_INCLUSIVE_DAYS = 35;
+/**
+ * Max inclusive calendar-day span when `from`/`to` are provided.
+ * Client uses `to = addDaysToYmd(from, DEFAULT_HORIZON_DAYS)` → inclusive span is
+ * DEFAULT_HORIZON_DAYS + 1 (e.g. May 14 … Jul 13 when adding 60 calendar days).
+ */
+const MAX_RANGE_INCLUSIVE_DAYS = DEFAULT_HORIZON_DAYS + 1;
 
 function dateKeyUtc(d: Date): string {
   return d.toISOString().slice(0, 10);
