@@ -62,6 +62,13 @@ enum NotificationType {
   APPOINTMENT_REMINDER
   REFUND_FAILED
   DOCTOR_PENDING_APPROVAL
+  CAREERS_NEW_APPLICATIONS
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
 }
 
 enum RefundStatus {
@@ -342,4 +349,32 @@ model Notification {
 
   @@index([userId, createdAt(sort: Desc)])
   @@index([userId, readAt])
+}
+
+model JobPosting {
+  id           String           @id @default(cuid())
+  title        String
+  description  String           @db.Text
+  type         JobType
+  isRemote     Boolean          @default(false)
+  salaryRange  String?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  applications JobApplication[]
+}
+
+model JobApplication {
+  id               String     @id @default(cuid())
+  jobPostingId     String
+  jobPosting       JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  name             String
+  email            String
+  phone            String
+  coverNote        String?    @db.Text
+  resumeUrl        String
+  createdAt        DateTime   @default(now())
+  includedInDigest Boolean    @default(false)
+
+  @@index([jobPostingId, createdAt(sort: Desc)])
+  @@index([includedInDigest])
 }
