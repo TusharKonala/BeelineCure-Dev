@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
   Bell,
+  Briefcase,
   Calendar,
   LayoutDashboard,
   Menu,
@@ -26,6 +27,7 @@ const navItems: AdminNavItem[] = [
   { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
+  { href: "/admin/careers", label: "Careers", icon: Briefcase },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
