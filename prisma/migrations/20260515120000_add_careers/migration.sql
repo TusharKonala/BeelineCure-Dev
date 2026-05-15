@@ -1,11 +1,15 @@
--- CreateEnum
-CREATE TYPE "JobType" AS ENUM ('FULL_TIME', 'PART_TIME', 'CONTRACT');
+-- CreateEnum (idempotent: prior failed deploy may have created the type)
+DO $$ BEGIN
+    CREATE TYPE "JobType" AS ENUM ('FULL_TIME', 'PART_TIME', 'CONTRACT');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- AlterEnum
-ALTER TYPE "NotificationType" ADD VALUE 'CAREERS_NEW_APPLICATIONS';
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'CAREERS_NEW_APPLICATIONS';
 
 -- CreateTable
-CREATE TABLE "JobPosting" (
+CREATE TABLE IF NOT EXISTS "JobPosting" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
     "description" TEXT NOT NULL,
@@ -19,7 +23,7 @@ CREATE TABLE "JobPosting" (
 );
 
 -- CreateTable
-CREATE TABLE "JobApplication" (
+CREATE TABLE IF NOT EXISTS "JobApplication" (
     "id" TEXT NOT NULL,
     "jobPostingId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -34,10 +38,14 @@ CREATE TABLE "JobApplication" (
 );
 
 -- CreateIndex
-CREATE INDEX "JobApplication_jobPostingId_createdAt_idx" ON "JobApplication"("jobPostingId", "createdAt" DESC);
+CREATE INDEX IF NOT EXISTS "JobApplication_jobPostingId_createdAt_idx" ON "JobApplication"("jobPostingId", "createdAt" DESC);
 
 -- CreateIndex
-CREATE INDEX "JobApplication_includedInDigest_idx" ON "JobApplication"("includedInDigest");
+CREATE INDEX IF NOT EXISTS "JobApplication_includedInDigest_idx" ON "JobApplication"("includedInDigest");
 
--- AddForeignKey
-ALTER TABLE "JobApplication" ADD CONSTRAINT "JobApplication_jobPostingId_fkey" FOREIGN KEY ("jobPostingId") REFERENCES "JobPosting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (idempotent)
+DO $$ BEGIN
+    ALTER TABLE "JobApplication" ADD CONSTRAINT "JobApplication_jobPostingId_fkey" FOREIGN KEY ("jobPostingId") REFERENCES "JobPosting"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
