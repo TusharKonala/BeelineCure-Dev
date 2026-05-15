@@ -768,3 +768,17 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
     };
   },
 );
+
+export const sendCareersApplicationDigest = inngest.createFunction(
+  {
+    id: "send-careers-application-digest",
+    retries: 1,
+    triggers: [{ cron: "0 9 * * *" }],
+  },
+  async () => {
+    const { resolveAppOrigin, runCareersApplicationDigest } = await import(
+      "@/lib/careers-digest"
+    );
+    return runCareersApplicationDigest(resolveAppOrigin());
+  },
+);
