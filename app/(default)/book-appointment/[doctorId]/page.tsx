@@ -320,9 +320,18 @@ export default function BookAppointmentDoctorPage() {
     return next;
   }, [availabilityDateQueries]);
 
-  const availabilityCalendarPending = useMemo(
+  const availabilityCalendarFetching = useMemo(
     () => availabilityDateQueries.some((q) => q.isPending),
     [availabilityDateQueries],
+  );
+  /** Full skeleton only before any dates are known — keeps calendar mounted when extending range. */
+  const availabilityCalendarInitialLoading = useMemo(
+    () => availabilityCalendarFetching && enabledDateSet.size === 0,
+    [availabilityCalendarFetching, enabledDateSet.size],
+  );
+  const availabilityCalendarExtending = useMemo(
+    () => availabilityCalendarFetching && enabledDateSet.size > 0,
+    [availabilityCalendarFetching, enabledDateSet.size],
   );
   const doctorCurrency: SupportedCurrency = useMemo(
     () => coerceSupportedCurrency(doctor?.currency),
@@ -597,7 +606,7 @@ export default function BookAppointmentDoctorPage() {
   }, [selectedDate]);
 
   useEffect(() => {
-    if (availabilityCalendarPending) return;
+    if (availabilityCalendarFetching) return;
     if (enabledDateSet.size === 0) return;
     if (enabledDateSet.has(selectedDate)) return;
     const sorted = [...enabledDateSet].sort();
@@ -606,7 +615,7 @@ export default function BookAppointmentDoctorPage() {
     setSelectedDate(next);
     setSelectedSlot(null);
     setSelectedDurationMinutes(null);
-  }, [availabilityCalendarPending, enabledDateSet, selectedDate, minDate]);
+  }, [availabilityCalendarFetching, enabledDateSet, selectedDate, minDate]);
 
   useEffect(() => {
     let cancelled = false;
@@ -898,7 +907,7 @@ export default function BookAppointmentDoctorPage() {
                   </p>
                 ) : null}
               </div>
-              {consultationType !== null && availabilityCalendarPending ? (
+              {consultationType !== null && availabilityCalendarInitialLoading ? (
                 <div className="mt-4">
                   <Skeleton className="h-[340px] w-full max-w-sm rounded-xl bg-[#e5e5e5]" />
                 </div>
@@ -929,6 +938,11 @@ export default function BookAppointmentDoctorPage() {
                     onViewingMonthChange={onCalendarViewingMonthChange}
                     onSelect={onCalendarSelect}
                   />
+                  {availabilityCalendarExtending ? (
+                    <p className="mt-2 font-montserrat text-xs text-[#5E5E5E]">
+                      Loading more dates…
+                    </p>
+                  ) : null}
                 </div>
               )}
               {consultationType !== null ? (
