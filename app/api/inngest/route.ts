@@ -3,6 +3,7 @@ import { inngest } from "@/inngest/client";
 import {
   processDoctorOverdueAppointments,
   sendAppointmentReminder,
+  sendCareersApplicationDigest,
   sendClinicAppointmentT120Reminder,
   sendOnlineAppointmentT15Reminder,
   sendPrescriptionReminder,
@@ -16,5 +17,6 @@ export const { GET, POST, PUT } = serve({
     sendClinicAppointmentT120Reminder,
     sendPrescriptionReminder,
     processDoctorOverdueAppointments,
+    sendCareersApplicationDigest,
   ],
 });
