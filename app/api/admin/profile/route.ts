@@ -39,6 +39,7 @@ export async function GET() {
       email: true,
       pendingEmail: true,
       password: true,
+      googleCalendarRefreshToken: true,
     },
   });
   if (!user) {
@@ -50,6 +51,7 @@ export async function GET() {
     email: user.email,
     pendingEmail: user.pendingEmail,
     hasPassword: Boolean(user.password),
+    googleCalendarConnected: Boolean(user.googleCalendarRefreshToken),
   });
 }
 
