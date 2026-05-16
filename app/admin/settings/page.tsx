@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Calendar, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Profile = {
@@ -8,6 +10,7 @@ type Profile = {
   email: string;
   pendingEmail: string | null;
   hasPassword: boolean;
+  googleCalendarConnected?: boolean;
 };
 
 type AdminSettingsValues = {
@@ -27,8 +30,11 @@ function emailFieldFromProfile(p: Profile): string {
   return p.email;
 }
 
-export default function AdminSettingsPage() {
+function AdminSettingsContent() {
+  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [calendarMessage, setCalendarMessage] = useState<string | null>(null);
+  const [disconnectPending, setDisconnectPending] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [initialValues, setInitialValues] = useState<AdminSettingsValues | null>(
@@ -37,6 +43,17 @@ export default function AdminSettingsPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    const calendar = searchParams.get("calendar");
+    if (calendar === "connected") {
+      setCalendarMessage("Google Calendar connected successfully.");
+    } else if (calendar === "denied") {
+      setCalendarMessage("Google Calendar connection was cancelled.");
+    } else if (calendar === "error") {
+      setCalendarMessage("Could not connect Google Calendar. Please try again.");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -91,6 +108,8 @@ export default function AdminSettingsPage() {
         email: data.email ?? profile?.email ?? "",
         pendingEmail: data.pendingEmail ?? null,
         hasPassword: data.hasPassword ?? profile?.hasPassword ?? false,
+        googleCalendarConnected:
+          data.googleCalendarConnected ?? profile?.googleCalendarConnected,
       };
       setProfile(nextProfile);
       const fieldEmail = emailFieldFromProfile(nextProfile);
@@ -115,6 +134,31 @@ export default function AdminSettingsPage() {
       setError("Could not save profile.");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function disconnectCalendar() {
+    setDisconnectPending(true);
+    setCalendarMessage(null);
+    try {
+      const res = await fetch("/api/admin/google-calendar/disconnect", {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setCalendarMessage(
+          data.error ?? "Could not disconnect Google Calendar.",
+        );
+        return;
+      }
+      setProfile((p) =>
+        p ? { ...p, googleCalendarConnected: false } : p,
+      );
+      setCalendarMessage("Google Calendar disconnected.");
+    } catch {
+      setCalendarMessage("Could not disconnect Google Calendar.");
+    } finally {
+      setDisconnectPending(false);
     }
   }
 
@@ -218,6 +262,78 @@ export default function AdminSettingsPage() {
           </Button>
         </div>
       </div>
+
+      <div className="mt-6 rounded-xl border border-[#e5e5e5] bg-white p-5">
+        <div className="flex items-start gap-3">
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[#2555F3]/10 text-[#2555F3]">
+            <Calendar className="size-5" />
+          </div>
+          <div className="flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-montaga text-lg font-semibold text-[#333333]">
+                Google Calendar
+              </h2>
+              {profile?.googleCalendarConnected ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-montserrat text-xs font-medium text-emerald-700">
+                  <CheckCircle2 className="size-3" />
+                  Connected
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-[#fafafa] px-2 py-0.5 font-montserrat text-xs font-medium text-[#5E5E5E]">
+                  Not connected
+                </span>
+              )}
+            </div>
+            <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
+              Connect your Google account to create Meet links for confirmed
+              career interviews.
+            </p>
+            {calendarMessage ? (
+              <p className="mt-3 font-montserrat text-sm text-[#333333]">
+                {calendarMessage}
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {profile?.googleCalendarConnected ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={disconnectPending}
+                  onClick={() => void disconnectCalendar()}
+                  className="cursor-pointer"
+                >
+                  {disconnectPending ? "Disconnecting..." : "Disconnect"}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    window.location.href =
+                      "/api/auth/google/calendar/admin/connect";
+                  }}
+                  className="cursor-pointer"
+                >
+                  Connect Google Calendar
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+export default function AdminSettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-2xl px-4 py-6">
+          <p className="font-montserrat text-sm text-[#5E5E5E]">Loading...</p>
+        </div>
+      }
+    >
+      <AdminSettingsContent />
+    </Suspense>
   );
 }
