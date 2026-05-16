@@ -2,6 +2,10 @@ import { createHmac, timingSafeEqual } from "crypto";
 
 const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
+export type OAuthCalendarSubject =
+  | { type: "doctor"; doctorId: string }
+  | { type: "admin"; userId: string };
+
 function getSecret(): string {
   const secret = process.env.NEXTAUTH_SECRET;
   if (!secret || secret.length < 16) {
@@ -22,20 +26,29 @@ function b64url(buf: Buffer): string {
 
 function b64urlDecode(value: string): Buffer {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  const padding =
+    padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
   return Buffer.from(padded + padding, "base64");
 }
 
-export function signOAuthState(doctorId: string): string {
-  const payload = `${doctorId}.${Date.now()}`;
+export function signOAuthState(subject: OAuthCalendarSubject): string {
+  const payload =
+    subject.type === "doctor"
+      ? `doctor:${subject.doctorId}.${Date.now()}`
+      : `admin:${subject.userId}.${Date.now()}`;
   const payloadB64 = b64url(Buffer.from(payload, "utf8"));
   const mac = createHmac("sha256", getSecret()).update(payloadB64).digest();
   return `${payloadB64}.${b64url(mac)}`;
 }
 
+/** @deprecated Use signOAuthState({ type: 'doctor', doctorId }) */
+export function signDoctorOAuthState(doctorId: string): string {
+  return signOAuthState({ type: "doctor", doctorId });
+}
+
 export function verifyOAuthState(
   state: string | null | undefined,
-): { doctorId: string } | null {
+): OAuthCalendarSubject | null {
   if (!state) return null;
   const parts = state.split(".");
   if (parts.length !== 2) return null;
@@ -58,12 +71,27 @@ export function verifyOAuthState(
   } catch {
     return null;
   }
-  const [doctorId, tsStr] = payload.split(".");
-  if (!doctorId || !tsStr) return null;
 
+  const dot = payload.lastIndexOf(".");
+  if (dot === -1) return null;
+  const subjectPart = payload.slice(0, dot);
+  const tsStr = payload.slice(dot + 1);
   const ts = Number(tsStr);
   if (!Number.isFinite(ts)) return null;
   if (Date.now() - ts > STATE_MAX_AGE_MS) return null;
 
-  return { doctorId };
+  if (subjectPart.startsWith("doctor:")) {
+    const doctorId = subjectPart.slice("doctor:".length);
+    if (!doctorId) return null;
+    return { type: "doctor", doctorId };
+  }
+  if (subjectPart.startsWith("admin:")) {
+    const userId = subjectPart.slice("admin:".length);
+    if (!userId) return null;
+    return { type: "admin", userId };
+  }
+
+  // Legacy doctor-only payload: `${doctorId}.${ts}`
+  if (!subjectPart) return null;
+  return { type: "doctor", doctorId: subjectPart };
 }
