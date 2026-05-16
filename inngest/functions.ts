@@ -769,6 +769,21 @@ export const processDoctorOverdueAppointments = inngest.createFunction(
   },
 );
 
+export const screenCareersApplication = inngest.createFunction(
+  {
+    id: "screen-careers-application",
+    retries: 2,
+    triggers: [{ event: "careers/application.submitted" }],
+  },
+  async ({ event }) => {
+    const { applicationId } = event.data as { applicationId: string };
+    const { screenCareersApplication: runScreening } = await import(
+      "@/lib/careers-ai-screening"
+    );
+    return runScreening(applicationId);
+  },
+);
+
 export const sendCareersApplicationDigest = inngest.createFunction(
   {
     id: "send-careers-application-digest",
