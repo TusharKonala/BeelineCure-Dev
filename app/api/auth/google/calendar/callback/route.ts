@@ -10,8 +10,13 @@ function getAppBaseUrl(): string {
   );
 }
 
-function redirectToSettings(status: string): NextResponse {
-  const url = new URL("/doctor/settings", getAppBaseUrl());
+function redirectAfterOAuth(
+  subject: "doctor" | "admin",
+  status: string,
+): NextResponse {
+  const path =
+    subject === "admin" ? "/admin/settings" : "/doctor/settings";
+  const url = new URL(path, getAppBaseUrl());
   url.searchParams.set("calendar", status);
   return NextResponse.redirect(url.toString());
 }
@@ -22,17 +27,19 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
 
+  const verified = verifyOAuthState(state);
+  const subjectType = verified?.type ?? "doctor";
+
   if (error) {
     console.warn("[google-calendar] OAuth error:", error);
-    return redirectToSettings("denied");
+    return redirectAfterOAuth(subjectType, "denied");
   }
   if (!code) {
-    return redirectToSettings("error");
+    return redirectAfterOAuth(subjectType, "error");
   }
 
-  const verified = verifyOAuthState(state);
   if (!verified) {
-    return redirectToSettings("error");
+    return redirectAfterOAuth("doctor", "error");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
@@ -61,7 +68,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (err) {
     console.error("[google-calendar] token exchange network error:", err);
-    return redirectToSettings("error");
+    return redirectAfterOAuth(verified.type, "error");
   }
 
   if (!tokenResponse.ok) {
@@ -71,40 +78,52 @@ export async function GET(request: NextRequest) {
       tokenResponse.status,
       text,
     );
-    return redirectToSettings("error");
+    return redirectAfterOAuth(verified.type, "error");
   }
 
   const tokenData = (await tokenResponse.json().catch(() => null)) as {
     access_token?: string;
     refresh_token?: string;
     expires_in?: number;
-    scope?: string;
   } | null;
 
   if (!tokenData?.access_token || !tokenData?.refresh_token) {
     console.error(
       "[google-calendar] token exchange missing access_token or refresh_token",
-      { hasAccess: Boolean(tokenData?.access_token), hasRefresh: Boolean(tokenData?.refresh_token) },
+      {
+        hasAccess: Boolean(tokenData?.access_token),
+        hasRefresh: Boolean(tokenData?.refresh_token),
+      },
     );
-    return redirectToSettings("error");
+    return redirectAfterOAuth(verified.type, "error");
   }
 
-  const expiresInSec = typeof tokenData.expires_in === "number" ? tokenData.expires_in : 3600;
+  const expiresInSec =
+    typeof tokenData.expires_in === "number" ? tokenData.expires_in : 3600;
   const expiresAt = new Date(Date.now() + expiresInSec * 1000);
 
+  const tokenFields = {
+    googleCalendarAccessToken: tokenData.access_token,
+    googleCalendarRefreshToken: tokenData.refresh_token,
+    googleCalendarAccessTokenExpiresAt: expiresAt,
+  };
+
   try {
-    await prisma.doctor.update({
-      where: { id: verified.doctorId },
-      data: {
-        googleCalendarAccessToken: tokenData.access_token,
-        googleCalendarRefreshToken: tokenData.refresh_token,
-        googleCalendarAccessTokenExpiresAt: expiresAt,
-      },
-    });
+    if (verified.type === "admin") {
+      await prisma.user.update({
+        where: { id: verified.userId },
+        data: tokenFields,
+      });
+    } else {
+      await prisma.doctor.update({
+        where: { id: verified.doctorId },
+        data: tokenFields,
+      });
+    }
   } catch (err) {
-    console.error("[google-calendar] failed to persist doctor tokens:", err);
-    return redirectToSettings("error");
+    console.error("[google-calendar] failed to persist tokens:", err);
+    return redirectAfterOAuth(verified.type, "error");
   }
 
-  return redirectToSettings("connected");
+  return redirectAfterOAuth(verified.type, "connected");
 }

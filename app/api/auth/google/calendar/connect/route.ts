@@ -44,7 +44,7 @@ export async function GET() {
   }
 
   const redirectUri = `${getAppBaseUrl().replace(/\/$/, "")}/api/auth/google/calendar/callback`;
-  const state = signOAuthState(doctor.id);
+  const state = signOAuthState({ type: "doctor", doctorId: doctor.id });
 
   const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   authUrl.searchParams.set("client_id", clientId);
