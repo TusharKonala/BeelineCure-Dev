@@ -71,6 +71,18 @@ enum JobType {
   CONTRACT
 }
 
+enum ApplicationStatus {
+  PENDING
+  SHORTLISTED
+  REJECTED
+  HIRED
+}
+
+enum AiRecommendation {
+  SHORTLIST
+  REJECT
+}
+
 enum RefundStatus {
   PENDING
   SUCCEEDED
@@ -109,6 +121,10 @@ model User {
   /// When null, currency can be supplied by client context (for example, browser detection).
   preferredCurrency String?
   profileComplete Boolean @default(true)
+  /// Google Calendar OAuth for admin interview Meet links.
+  googleCalendarAccessToken          String?   @db.Text
+  googleCalendarRefreshToken         String?   @db.Text
+  googleCalendarAccessTokenExpiresAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -364,17 +380,44 @@ model JobPosting {
 }
 
 model JobApplication {
-  id               String     @id @default(cuid())
+  id               String            @id @default(cuid())
   jobPostingId     String
-  jobPosting       JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+  jobPosting       JobPosting        @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
   name             String
   email            String
   phone            String
-  coverNote        String?    @db.Text
-  resumeUrl        String
-  createdAt        DateTime   @default(now())
-  includedInDigest Boolean    @default(false)
+  coverNote        String?           @db.Text
+  resumeText       String            @db.Text
+  resumeUrl        String?
+  status           ApplicationStatus @default(PENDING)
+  aiScore          Int?
+  aiSummary        String?           @db.Text
+  aiRecommendation AiRecommendation?
+  createdAt        DateTime          @default(now())
+  includedInDigest Boolean           @default(false)
+  interviewRounds  InterviewRound[]
 
   @@index([jobPostingId, createdAt(sort: Desc)])
   @@index([includedInDigest])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([aiScore, createdAt(sort: Desc)])
+}
+
+model InterviewRound {
+  id                    String         @id @default(cuid())
+  applicationId         String
+  application           JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundNumber           Int
+  scheduledAt           DateTime
+  meetLink              String?
+  confirmationToken     String         @unique
+  confirmedAt           DateTime?
+  notes                 String?        @db.Text
+  attendeeEmail         String?
+  googleCalendarEventId String?
+  scheduledByAdminId    String
+  createdAt             DateTime       @default(now())
+
+  @@unique([applicationId, roundNumber])
+  @@index([confirmationToken])
 }
