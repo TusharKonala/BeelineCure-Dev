@@ -23,11 +23,17 @@ export const updateJobPostingSchema = z.object({
 });
 
 const resumeUrlSchema = z
-  .string()
   .url("Resume link must be a valid URL")
   .refine((url) => url.startsWith("https://"), {
     message: "Resume link must use HTTPS",
   });
+
+export const applicationStatusValues = [
+  "PENDING",
+  "SHORTLISTED",
+  "REJECTED",
+  "HIRED",
+] as const;
 
 export const jobApplicationSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -38,7 +44,21 @@ export const jobApplicationSchema = z.object({
     .max(20, "Phone number is too long")
     .regex(/^\+[1-9]\d{6,14}$/, "Invalid phone number"),
   coverNote: z.string().max(2000).optional().nullable(),
-  resumeUrl: resumeUrlSchema,
+  resumeText: z
+    .string()
+    .min(50, "Please paste at least 50 characters of your resume")
+    .max(5000, "Resume text is too long"),
+  resumeUrl: z
+    .union([z.literal(""), z.null(), resumeUrlSchema])
+    .optional()
+    .transform((v) => (v === "" || v === null || v === undefined ? null : v)),
+});
+
+export const scheduleInterviewSchema = z.object({
+  roundNumber: z.number().int().min(1).max(20),
+  scheduledAt: z.iso.datetime({ message: "Invalid date and time" }),
+  notes: z.string().max(2000).optional().nullable(),
+  attendeeEmail: z.email("Invalid attendee email").optional().nullable(),
 });
 
 export function formatJobTypeLabel(type: (typeof jobTypeValues)[number]) {

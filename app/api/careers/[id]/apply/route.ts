@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 import { UserRole } from "@/generated/prisma/client";
+import { inngest } from "@/inngest/client";
 import { authOptions } from "@/lib/auth";
 import { jobApplicationSchema } from "@/lib/careers-schemas";
 import { prisma } from "@/lib/db";
@@ -48,14 +49,24 @@ export async function POST(
     );
   }
 
-  const { coverNote, ...rest } = parsed.data;
-  await prisma.jobApplication.create({
+  const { coverNote, resumeUrl, ...rest } = parsed.data;
+  const application = await prisma.jobApplication.create({
     data: {
       jobPostingId: id,
       ...rest,
       coverNote: coverNote?.trim() || null,
+      resumeUrl,
     },
   });
+
+  try {
+    await inngest.send({
+      name: "careers/application.submitted",
+      data: { applicationId: application.id },
+    });
+  } catch (err) {
+    console.error("[careers/apply] Failed to enqueue AI screening:", err);
+  }
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
