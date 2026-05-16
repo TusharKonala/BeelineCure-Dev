@@ -257,7 +257,7 @@ type ApplicationSeed = {
   status: ApplicationStatus;
   coverNote: string | null;
   resumeText: string;
-  resumeUrl: string | null;
+  resumeUrl?: string | null;
   /** If set, creates an interview round in this state */
   interview?: "pending_confirm" | "confirmed";
 };
@@ -549,7 +549,7 @@ async function main() {
         phone: app.phone,
         coverNote: app.coverNote,
         resumeText: app.resumeText,
-        resumeUrl: app.resumeUrl,
+        resumeUrl: app.resumeUrl ?? null,
         status: app.status,
         aiScore: null,
         aiSummary: null,
