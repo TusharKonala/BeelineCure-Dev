@@ -47,7 +47,7 @@ export async function runCareersApplicationDigest(origin: string) {
 
   const { totalCount, lines, message } = buildCareersDigestSummary(applications);
   const applicationIds = applications.map((a) => a.id);
-  const careersUrl = `${origin.replace(/\/$/, "")}/admin/careers`;
+  const careersUrl = `${origin.replace(/\/$/, "")}/admin/applications`;
 
   const adminUsers = await prisma.user.findMany({
     where: { role: UserRole.ADMIN },

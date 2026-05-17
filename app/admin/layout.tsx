@@ -8,6 +8,7 @@ import {
   Bell,
   Briefcase,
   Calendar,
+  ClipboardList,
   LayoutDashboard,
   Menu,
   Settings,
@@ -27,7 +28,8 @@ const navItems: AdminNavItem[] = [
   { href: "/admin/doctors", label: "Doctors", icon: Stethoscope },
   { href: "/admin/appointments", label: "Appointments", icon: Calendar },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
-  { href: "/admin/careers", label: "Careers", icon: Briefcase },
+  { href: "/admin/postings", label: "Job postings", icon: Briefcase },
+  { href: "/admin/applications", label: "Applications", icon: ClipboardList },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
