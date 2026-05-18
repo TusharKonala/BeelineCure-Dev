@@ -1,7 +1,10 @@
 import { ApplicationStatus } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/careers-admin";
-import { scheduleInterviewSchema } from "@/lib/careers-schemas";
+import {
+  MAX_INTERVIEW_ROUNDS,
+  scheduleInterviewSchema,
+} from "@/lib/careers-schemas";
 import {
   confirmationTokenExpiresAtFromNow,
   generateConfirmationToken,
@@ -60,7 +63,7 @@ export async function POST(
       name: true,
       email: true,
       candidateTimezone: true,
-      jobPosting: { select: { title: true } },
+      jobPosting: { select: { title: true, description: true } },
     },
   });
 
@@ -87,6 +90,25 @@ export async function POST(
     );
   }
 
+  if (parsed.data.roundNumber > MAX_INTERVIEW_ROUNDS) {
+    return NextResponse.json(
+      { error: `Round number cannot exceed ${MAX_INTERVIEW_ROUNDS}.` },
+      { status: 400 },
+    );
+  }
+
+  const totalRoundCount = await prisma.interviewRound.count({
+    where: { applicationId: id },
+  });
+  if (totalRoundCount >= MAX_INTERVIEW_ROUNDS) {
+    return NextResponse.json(
+      {
+        error: `Maximum of ${MAX_INTERVIEW_ROUNDS} interview rounds per application.`,
+      },
+      { status: 400 },
+    );
+  }
+
   const confirmationToken = generateConfirmationToken();
   const confirmationTokenExpiresAt = confirmationTokenExpiresAtFromNow();
   const timezone = parsed.data.timezone.trim();
@@ -103,6 +125,7 @@ export async function POST(
         confirmationTokenExpiresAt,
         notes: parsed.data.notes?.trim() || null,
         attendeeEmail: parsed.data.attendeeEmail?.trim() || null,
+        jobDescriptionSnapshot: application.jobPosting.description,
         scheduledByAdminId: auth.session.user.id,
       },
     });
