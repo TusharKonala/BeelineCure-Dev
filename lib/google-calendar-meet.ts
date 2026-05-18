@@ -513,6 +513,88 @@ export async function createMeetEventForInterviewRound(
   }
 }
 
+export async function deleteAdminInterviewCalendarEvent(
+  adminUserId: string,
+  eventId: string | null,
+): Promise<void> {
+  if (!eventId) return;
+
+  const accessToken = await getValidAdminAccessToken(adminUserId);
+  if (!accessToken) return;
+
+  const oauth2 = createOAuth2Client();
+  if (!oauth2) return;
+  oauth2.setCredentials({ access_token: accessToken });
+
+  const calendar = google.calendar({ version: "v3", auth: oauth2 });
+
+  try {
+    await calendar.events.delete({
+      calendarId: "primary",
+      eventId,
+    });
+  } catch (err) {
+    console.error("[google-calendar] admin interview events.delete failed:", err);
+  }
+}
+
+export async function updateMeetEventForInterviewRound(
+  roundId: string,
+): Promise<void> {
+  const round = await prisma.interviewRound.findUnique({
+    where: { id: roundId },
+    select: {
+      id: true,
+      roundNumber: true,
+      scheduledAt: true,
+      timezone: true,
+      googleCalendarEventId: true,
+      scheduledByAdminId: true,
+      application: {
+        select: {
+          name: true,
+          jobPosting: { select: { title: true } },
+        },
+      },
+    },
+  });
+
+  if (!round?.googleCalendarEventId) return;
+
+  const accessToken = await getValidAdminAccessToken(round.scheduledByAdminId);
+  if (!accessToken) return;
+
+  const oauth2 = createOAuth2Client();
+  if (!oauth2) return;
+  oauth2.setCredentials({ access_token: accessToken });
+
+  const start = round.scheduledAt;
+  const end = addMinutes(start, INTERVIEW_DURATION_MINUTES);
+  const timeZone = round.timezone?.trim() || "UTC";
+
+  const calendar = google.calendar({ version: "v3", auth: oauth2 });
+
+  try {
+    await calendar.events.patch({
+      calendarId: "primary",
+      eventId: round.googleCalendarEventId,
+      requestBody: {
+        summary: `Interview: ${round.application.name} — ${round.application.jobPosting.title} (Round ${round.roundNumber})`,
+        start: {
+          dateTime: start.toISOString(),
+          timeZone,
+        },
+        end: {
+          dateTime: end.toISOString(),
+          timeZone,
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[google-calendar] interview events.patch failed:", err);
+  }
+}
+
 export async function deleteMeetCalendarEvent(
   doctorId: string,
   eventId: string | null,

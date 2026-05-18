@@ -1,4 +1,4 @@
-import { fromZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
 /** IANA timezones offered in the schedule-interview form (aligned with doctor settings). */
 export const INTERVIEW_TIMEZONE_OPTIONS = [
@@ -79,4 +79,9 @@ export function minDatetimeLocalForTimezone(timezone: string): string {
   const month = parts.find((p) => p.type === "month")?.value ?? "01";
   const day = parts.find((p) => p.type === "day")?.value ?? "01";
   return `${year}-${month}-${day}T00:00`;
+}
+
+/** Format a UTC instant as `datetime-local` input value in the given timezone. */
+export function formatDatetimeLocalInTimezone(date: Date, timezone: string): string {
+  return formatInTimeZone(date, timezone, "yyyy-MM-dd'T'HH:mm");
 }
