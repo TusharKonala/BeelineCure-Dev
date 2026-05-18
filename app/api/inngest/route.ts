@@ -5,6 +5,8 @@ import {
   screenCareersApplication,
   sendAppointmentReminder,
   sendCareersApplicationDigest,
+  sendInterviewReminder24h,
+  sendInterviewReminder30m,
   sendClinicAppointmentT120Reminder,
   sendOnlineAppointmentT15Reminder,
   sendPrescriptionReminder,
@@ -19,6 +21,8 @@ export const { GET, POST, PUT } = serve({
     sendPrescriptionReminder,
     processDoctorOverdueAppointments,
     sendCareersApplicationDigest,
+    sendInterviewReminder24h,
+    sendInterviewReminder30m,
     screenCareersApplication,
   ],
 });

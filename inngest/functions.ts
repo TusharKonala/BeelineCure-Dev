@@ -1,5 +1,7 @@
 import { EmailTemplate } from "@/components/email-template";
+import { CareersInterviewReminderEmailTemplate } from "@/components/careers-interview-reminder-email-template";
 import { MedicineReminderEmailTemplate } from "@/components/medicine-reminder-email-template";
+import { formatInterviewScheduledAt } from "@/lib/careers-interview";
 import { prisma } from "@/lib/db";
 import {
   AppointmentStatus,
@@ -795,5 +797,127 @@ export const sendCareersApplicationDigest = inngest.createFunction(
       "@/lib/careers-digest"
     );
     return runCareersApplicationDigest(resolveAppOrigin());
+  },
+);
+
+type InterviewReminderRecipient = "candidate" | "attendee";
+
+async function sendInterviewReminderEmail(params: {
+  interviewRoundId: string;
+  recipient: InterviewReminderRecipient;
+  reminderLabel: string;
+}) {
+  const round = await prisma.interviewRound.findUnique({
+    where: { id: params.interviewRoundId },
+    select: {
+      id: true,
+      roundNumber: true,
+      scheduledAt: true,
+      timezone: true,
+      meetLink: true,
+      confirmedAt: true,
+      attendeeEmail: true,
+      application: {
+        select: {
+          name: true,
+          email: true,
+          candidateTimezone: true,
+          jobPosting: { select: { title: true } },
+        },
+      },
+    },
+  });
+
+  if (!round?.confirmedAt) {
+    return { skipped: true, reason: "not_confirmed" };
+  }
+
+  const scheduledAtLabel = formatInterviewScheduledAt(
+    round.scheduledAt,
+    round.timezone,
+    params.recipient === "candidate"
+      ? round.application.candidateTimezone
+      : undefined,
+  );
+
+  const to =
+    params.recipient === "attendee"
+      ? round.attendeeEmail?.trim()
+      : round.application.email;
+
+  if (!to) {
+    return { skipped: true, reason: "no_recipient" };
+  }
+
+  const recipientName =
+    params.recipient === "attendee" ? "there" : round.application.name;
+
+  if (!process.env.RESEND_API_KEY?.trim()) {
+    console.warn("[interview-reminder] RESEND_API_KEY not set");
+    return { skipped: true, reason: "no_resend_key" };
+  }
+
+  const from =
+    process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+
+  const { error } = await resend.emails.send({
+    from,
+    to,
+    subject: `Interview reminder (${params.reminderLabel}) — ${round.application.jobPosting.title}`,
+    react: CareersInterviewReminderEmailTemplate({
+      recipientName,
+      jobTitle: round.application.jobPosting.title,
+      roundNumber: round.roundNumber,
+      scheduledAtLabel,
+      meetLink: round.meetLink,
+      reminderLabel: params.reminderLabel,
+    }),
+  });
+
+  if (error) {
+    console.error(
+      `[interview-reminder] Email failed: ${JSON.stringify(error)}`,
+    );
+    throw new Error("reminder_email_failed");
+  }
+
+  return { sent: true, interviewRoundId: params.interviewRoundId };
+}
+
+export const sendInterviewReminder24h = inngest.createFunction(
+  {
+    id: "send-interview-reminder-24h",
+    retries: 2,
+    triggers: [{ event: "interview/reminder-24h.scheduled" }],
+  },
+  async ({ event }) => {
+    const { interviewRoundId, recipient } = event.data as {
+      interviewRoundId: string;
+      recipient: InterviewReminderRecipient;
+    };
+    return sendInterviewReminderEmail({
+      interviewRoundId,
+      recipient,
+      reminderLabel: "24 hours",
+    });
+  },
+);
+
+export const sendInterviewReminder30m = inngest.createFunction(
+  {
+    id: "send-interview-reminder-30m",
+    retries: 2,
+    triggers: [{ event: "interview/reminder-30m.scheduled" }],
+  },
+  async ({ event }) => {
+    const { interviewRoundId, recipient } = event.data as {
+      interviewRoundId: string;
+      recipient: InterviewReminderRecipient;
+    };
+    return sendInterviewReminderEmail({
+      interviewRoundId,
+      recipient,
+      reminderLabel: "30 minutes",
+    });
   },
 );
