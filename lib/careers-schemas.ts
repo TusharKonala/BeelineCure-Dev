@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 export const jobTypeValues = ["FULL_TIME", "PART_TIME", "CONTRACT"] as const;
+
+const salaryCurrencySchema = z.enum(SUPPORTED_CURRENCIES);
 
 export const jobTypeSchema = z.enum(jobTypeValues);
 
@@ -10,6 +13,7 @@ export const createJobPostingSchema = z.object({
   type: jobTypeSchema,
   isRemote: z.boolean().default(false),
   salaryRange: z.string().max(100).optional().nullable(),
+  salaryCurrency: salaryCurrencySchema.optional().nullable(),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -19,6 +23,7 @@ export const updateJobPostingSchema = z.object({
   type: jobTypeSchema.optional(),
   isRemote: z.boolean().optional(),
   salaryRange: z.string().max(100).optional().nullable(),
+  salaryCurrency: salaryCurrencySchema.optional().nullable(),
   isActive: z.boolean().optional(),
 });
 
@@ -52,14 +57,26 @@ export const jobApplicationSchema = z.object({
     .union([z.literal(""), z.null(), resumeUrlSchema])
     .optional()
     .transform((v) => (v === "" || v === null || v === undefined ? null : v)),
+  candidateTimezone: z.string().min(1).max(100).optional().nullable(),
 });
 
 export const scheduleInterviewSchema = z.object({
   roundNumber: z.number().int().min(1).max(20),
   scheduledAt: z.iso.datetime({ message: "Invalid date and time" }),
+  timezone: z.string().min(1, "Timezone is required").max(100),
   notes: z.string().max(2000).optional().nullable(),
   attendeeEmail: z.email("Invalid attendee email").optional().nullable(),
 });
+
+export function formatSalaryDisplay(
+  salaryRange: string | null | undefined,
+  salaryCurrency: string | null | undefined,
+): string | null {
+  const range = salaryRange?.trim();
+  if (!range) return null;
+  const currency = salaryCurrency?.trim();
+  return currency ? `${currency} ${range}` : range;
+}
 
 export function formatJobTypeLabel(type: (typeof jobTypeValues)[number]) {
   switch (type) {
