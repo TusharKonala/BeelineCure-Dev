@@ -285,8 +285,9 @@ function AdminSettingsContent() {
               )}
             </div>
             <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-              Connect your Google account to create Meet links for confirmed
-              career interviews.
+              {profile?.googleCalendarConnected
+                ? "Google Calendar is connected — Meet links will be included in confirmed career interviews."
+                : "Connect your Google account to create Meet links for confirmed career interviews."}
             </p>
             {calendarMessage ? (
               <p className="mt-3 font-montserrat text-sm text-[#333333]">
