@@ -1,11 +1,19 @@
 import { randomBytes } from "crypto";
 import { Resend } from "resend";
 import { CareersInterviewAttendeeConfirmedEmailTemplate } from "@/components/careers-interview-attendee-confirmed-email-template";
+import { CareersInterviewCancelledAttendeeEmailTemplate } from "@/components/careers-interview-cancelled-attendee-email-template";
+import { CareersInterviewCancelledCandidateEmailTemplate } from "@/components/careers-interview-cancelled-candidate-email-template";
 import { CareersInterviewConfirmedEmailTemplate } from "@/components/careers-interview-confirmed-email-template";
 import { CareersInterviewInviteEmailTemplate } from "@/components/careers-interview-invite-email-template";
+import { CareersInterviewRescheduledAttendeeEmailTemplate } from "@/components/careers-interview-rescheduled-attendee-email-template";
+import { CareersInterviewRescheduledCandidateEmailTemplate } from "@/components/careers-interview-rescheduled-candidate-email-template";
 import { inngest } from "@/inngest/client";
 import { formatInterviewTime } from "@/lib/careers-interview-time";
-import { createMeetEventForInterviewRound } from "@/lib/google-calendar-meet";
+import {
+  createMeetEventForInterviewRound,
+  deleteAdminInterviewCalendarEvent,
+  updateMeetEventForInterviewRound,
+} from "@/lib/google-calendar-meet";
 import { prisma } from "@/lib/db";
 import {
   interviewReminder24hAtMs,
@@ -18,6 +26,14 @@ const TOKEN_EXPIRY_MS = 48 * 60 * 60 * 1000;
 
 function emailFrom() {
   return process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+}
+
+export function resolveJobDescription(
+  snapshot: string,
+  fallback?: string | null,
+): string | null {
+  const text = snapshot?.trim() || fallback?.trim();
+  return text || null;
 }
 
 export function formatInterviewScheduledAt(
@@ -43,6 +59,67 @@ export function confirmationTokenExpiresAtFromNow() {
 export function isConfirmationTokenExpired(expiresAt: Date | null | undefined) {
   if (!expiresAt) return false;
   return expiresAt.getTime() < Date.now();
+}
+
+export function isInterviewRoundCancelled(cancelledAt: Date | null | undefined) {
+  return cancelledAt != null;
+}
+
+export async function cancelInterviewReminders(interviewRoundId: string) {
+  try {
+    await inngest.send({
+      name: "interview/reminder-24h.cancelled",
+      data: { interviewRoundId },
+    });
+  } catch (err) {
+    console.error("[careers-interview] Failed to cancel 24h reminder:", err);
+  }
+  try {
+    await inngest.send({
+      name: "interview/reminder-30m.cancelled",
+      data: { interviewRoundId },
+    });
+  } catch (err) {
+    console.error("[careers-interview] Failed to cancel 30m reminder:", err);
+  }
+}
+
+export async function scheduleInterviewReminders(roundId: string) {
+  const round = await prisma.interviewRound.findUnique({
+    where: { id: roundId },
+    select: { scheduledAt: true, cancelledAt: true },
+  });
+  if (!round || round.cancelledAt) return;
+
+  const ts24h = interviewReminder24hAtMs(round.scheduledAt);
+  const ts30m = interviewReminder30mAtMs(round.scheduledAt);
+
+  const recipients: Array<"candidate" | "attendee"> = ["candidate", "attendee"];
+
+  for (const recipient of recipients) {
+    if (ts24h !== null) {
+      try {
+        await inngest.send({
+          name: "interview/reminder-24h.scheduled",
+          data: { interviewRoundId: roundId, recipient },
+          ts: ts24h,
+        });
+      } catch (err) {
+        console.error("[careers-interview] Failed to schedule 24h reminder:", err);
+      }
+    }
+    if (ts30m !== null) {
+      try {
+        await inngest.send({
+          name: "interview/reminder-30m.scheduled",
+          data: { interviewRoundId: roundId, recipient },
+          ts: ts30m,
+        });
+      } catch (err) {
+        console.error("[careers-interview] Failed to schedule 30m reminder:", err);
+      }
+    }
+  }
 }
 
 export async function sendInterviewInviteEmail(params: {
@@ -127,6 +204,7 @@ export async function sendInterviewAttendeeConfirmedEmail(params: {
   scheduledAt: Date;
   adminTimezone: string;
   meetLink: string | null;
+  jobDescription?: string | null;
 }) {
   const scheduledAtLabel = formatInterviewScheduledAt(
     params.scheduledAt,
@@ -150,50 +228,302 @@ export async function sendInterviewAttendeeConfirmedEmail(params: {
       roundNumber: params.roundNumber,
       scheduledAtLabel,
       meetLink: params.meetLink,
+      jobDescription: params.jobDescription,
     }),
   });
 }
 
-async function scheduleInterviewReminders(roundId: string) {
-  const round = await prisma.interviewRound.findUnique({
-    where: { id: roundId },
-    select: { scheduledAt: true },
+async function sendInterviewCancelledEmails(round: {
+  roundNumber: number;
+  scheduledAt: Date;
+  timezone: string;
+  attendeeEmail: string | null;
+  application: {
+    name: string;
+    email: string;
+    candidateTimezone: string | null;
+    jobPosting: { title: string };
+  };
+}) {
+  const candidateScheduledAtLabel = formatInterviewScheduledAt(
+    round.scheduledAt,
+    round.timezone,
+    round.application.candidateTimezone,
+  );
+  const attendeeScheduledAtLabel = formatInterviewScheduledAt(
+    round.scheduledAt,
+    round.timezone,
+  );
+
+  if (!process.env.RESEND_API_KEY?.trim()) return;
+
+  await resend.emails.send({
+    from: emailFrom(),
+    to: round.application.email,
+    subject: `Interview cancelled — ${round.application.jobPosting.title}`,
+    react: CareersInterviewCancelledCandidateEmailTemplate({
+      candidateName: round.application.name,
+      jobTitle: round.application.jobPosting.title,
+      roundNumber: round.roundNumber,
+      scheduledAtLabel: candidateScheduledAtLabel,
+    }),
   });
-  if (!round) return;
 
-  const ts24h = interviewReminder24hAtMs(round.scheduledAt);
-  const ts30m = interviewReminder30mAtMs(round.scheduledAt);
+  const attendee = round.attendeeEmail?.trim();
+  if (attendee) {
+    await resend.emails.send({
+      from: emailFrom(),
+      to: attendee,
+      subject: `Interview cancelled — ${round.application.jobPosting.title}`,
+      react: CareersInterviewCancelledAttendeeEmailTemplate({
+        candidateName: round.application.name,
+        jobTitle: round.application.jobPosting.title,
+        roundNumber: round.roundNumber,
+        scheduledAtLabel: attendeeScheduledAtLabel,
+      }),
+    });
+  }
+}
 
-  const recipients: Array<"candidate" | "attendee"> = ["candidate", "attendee"];
+async function sendInterviewRescheduledEmails(params: {
+  round: {
+    roundNumber: number;
+    scheduledAt: Date;
+    timezone: string;
+    meetLink: string | null;
+    confirmationToken: string;
+    jobDescriptionSnapshot: string;
+    attendeeEmail: string | null;
+  };
+  previousScheduledAt: Date;
+  application: {
+    name: string;
+    email: string;
+    candidateTimezone: string | null;
+    jobPosting: { title: string; description: string };
+  };
+  wasConfirmed: boolean;
+}) {
+  const { round, previousScheduledAt, application, wasConfirmed } = params;
+  const jobDescription = resolveJobDescription(
+    round.jobDescriptionSnapshot,
+    application.jobPosting.description,
+  );
+  const candidateScheduledAtLabel = formatInterviewScheduledAt(
+    round.scheduledAt,
+    round.timezone,
+    application.candidateTimezone,
+  );
+  const candidatePreviousScheduledAtLabel = formatInterviewScheduledAt(
+    previousScheduledAt,
+    round.timezone,
+    application.candidateTimezone,
+  );
+  const attendeeScheduledAtLabel = formatInterviewScheduledAt(
+    round.scheduledAt,
+    round.timezone,
+  );
+  const attendeePreviousScheduledAtLabel = formatInterviewScheduledAt(
+    previousScheduledAt,
+    round.timezone,
+  );
 
-  for (const recipient of recipients) {
-    if (ts24h !== null) {
-      try {
-        await inngest.send({
-          name: "interview/reminder-24h.scheduled",
-          data: { interviewRoundId: roundId, recipient },
-          ts: ts24h,
-        });
-      } catch (err) {
-        console.error("[careers-interview] Failed to schedule 24h reminder:", err);
-      }
-    }
-    if (ts30m !== null) {
-      try {
-        await inngest.send({
-          name: "interview/reminder-30m.scheduled",
-          data: { interviewRoundId: roundId, recipient },
-          ts: ts30m,
-        });
-      } catch (err) {
-        console.error("[careers-interview] Failed to schedule 30m reminder:", err);
-      }
-    }
+  if (!process.env.RESEND_API_KEY?.trim()) return;
+
+  await resend.emails.send({
+    from: emailFrom(),
+    to: application.email,
+    subject: `Interview rescheduled — ${application.jobPosting.title}`,
+    react: CareersInterviewRescheduledCandidateEmailTemplate({
+      candidateName: application.name,
+      jobTitle: application.jobPosting.title,
+      roundNumber: round.roundNumber,
+      previousScheduledAtLabel: candidatePreviousScheduledAtLabel,
+      scheduledAtLabel: candidateScheduledAtLabel,
+      meetLink: wasConfirmed ? round.meetLink : null,
+    }),
+  });
+
+  const attendee = round.attendeeEmail?.trim();
+  if (attendee) {
+    await resend.emails.send({
+      from: emailFrom(),
+      to: attendee,
+      subject: `Interview rescheduled — ${application.jobPosting.title}`,
+      react: CareersInterviewRescheduledAttendeeEmailTemplate({
+        candidateName: application.name,
+        jobTitle: application.jobPosting.title,
+        roundNumber: round.roundNumber,
+        previousScheduledAtLabel: attendeePreviousScheduledAtLabel,
+        scheduledAtLabel: attendeeScheduledAtLabel,
+        meetLink: wasConfirmed ? round.meetLink : null,
+        jobDescription,
+      }),
+    });
   }
 }
 
 export function generateConfirmationToken() {
   return randomBytes(32).toString("hex");
+}
+
+export async function cancelInterviewRound(roundId: string) {
+  const round = await prisma.interviewRound.findUnique({
+    where: { id: roundId },
+    include: {
+      application: {
+        select: {
+          name: true,
+          email: true,
+          candidateTimezone: true,
+          jobPosting: { select: { title: true, description: true } },
+        },
+      },
+    },
+  });
+
+  if (!round) {
+    return { error: "not_found" as const };
+  }
+  if (round.cancelledAt) {
+    return { error: "already_cancelled" as const };
+  }
+
+  const wasConfirmed = Boolean(round.confirmedAt);
+
+  await prisma.interviewRound.update({
+    where: { id: roundId },
+    data: { cancelledAt: new Date() },
+  });
+
+  if (wasConfirmed) {
+    await cancelInterviewReminders(roundId);
+    await deleteAdminInterviewCalendarEvent(
+      round.scheduledByAdminId,
+      round.googleCalendarEventId,
+    );
+  }
+
+  try {
+    await sendInterviewCancelledEmails(round);
+  } catch (err) {
+    console.error("[careers-interview] Failed to send cancellation emails:", err);
+  }
+
+  return { ok: true as const };
+}
+
+export type RescheduleInterviewInput = {
+  scheduledAt: Date;
+  timezone: string;
+  notes?: string | null;
+  attendeeEmail?: string | null;
+};
+
+export async function rescheduleInterviewRound(
+  roundId: string,
+  input: RescheduleInterviewInput,
+) {
+  const round = await prisma.interviewRound.findUnique({
+    where: { id: roundId },
+    include: {
+      application: {
+        select: {
+          name: true,
+          email: true,
+          candidateTimezone: true,
+          jobPosting: { select: { title: true, description: true } },
+        },
+      },
+    },
+  });
+
+  if (!round) {
+    return { error: "not_found" as const };
+  }
+  if (round.cancelledAt) {
+    return { error: "cancelled" as const };
+  }
+
+  const notes = input.notes?.trim() || null;
+  const attendeeEmail = input.attendeeEmail?.trim() || null;
+  const timezone = input.timezone.trim();
+
+  const unchanged =
+    round.scheduledAt.getTime() === input.scheduledAt.getTime() &&
+    round.timezone === timezone &&
+    (round.notes?.trim() || null) === notes &&
+    (round.attendeeEmail?.trim() || null) === attendeeEmail;
+
+  if (unchanged) {
+    return { error: "unchanged" as const };
+  }
+
+  if (input.scheduledAt.getTime() <= Date.now()) {
+    return { error: "past_time" as const };
+  }
+
+  const previousScheduledAt = round.scheduledAt;
+  const wasConfirmed = Boolean(round.confirmedAt);
+
+  const updated = await prisma.interviewRound.update({
+    where: { id: roundId },
+    data: {
+      scheduledAt: input.scheduledAt,
+      timezone,
+      notes,
+      attendeeEmail,
+      ...(!wasConfirmed
+        ? { confirmationTokenExpiresAt: confirmationTokenExpiresAtFromNow() }
+        : {}),
+    },
+  });
+
+  if (wasConfirmed) {
+    await cancelInterviewReminders(roundId);
+    await updateMeetEventForInterviewRound(roundId);
+    await scheduleInterviewReminders(roundId);
+
+    try {
+      await sendInterviewRescheduledEmails({
+        round: {
+          roundNumber: updated.roundNumber,
+          scheduledAt: updated.scheduledAt,
+          timezone: updated.timezone,
+          meetLink: updated.meetLink,
+          confirmationToken: updated.confirmationToken,
+          jobDescriptionSnapshot: updated.jobDescriptionSnapshot,
+          attendeeEmail: updated.attendeeEmail,
+        },
+        previousScheduledAt,
+        application: round.application,
+        wasConfirmed: true,
+      });
+    } catch (err) {
+      console.error("[careers-interview] Failed to send reschedule emails:", err);
+    }
+  } else {
+    try {
+      await sendInterviewInviteEmail({
+        to: round.application.email,
+        candidateName: round.application.name,
+        jobTitle: round.application.jobPosting.title,
+        roundNumber: updated.roundNumber,
+        scheduledAt: updated.scheduledAt,
+        adminTimezone: timezone,
+        candidateTimezone: round.application.candidateTimezone,
+        confirmationToken: updated.confirmationToken,
+        notes: updated.notes,
+      });
+    } catch (err) {
+      console.error(
+        "[careers-interview] Failed to send updated invite email:",
+        err,
+      );
+    }
+  }
+
+  return { ok: true as const, round: updated };
 }
 
 export async function confirmInterviewRound(token: string) {
@@ -205,7 +535,7 @@ export async function confirmInterviewRound(token: string) {
           name: true,
           email: true,
           candidateTimezone: true,
-          jobPosting: { select: { title: true } },
+          jobPosting: { select: { title: true, description: true } },
         },
       },
     },
@@ -215,12 +545,20 @@ export async function confirmInterviewRound(token: string) {
     return { error: "invalid_token" as const };
   }
 
+  if (isInterviewRoundCancelled(round.cancelledAt)) {
+    return { error: "cancelled" as const };
+  }
+
   if (isConfirmationTokenExpired(round.confirmationTokenExpiresAt)) {
     return { error: "expired_token" as const };
   }
 
   const adminTimezone = round.timezone;
   const candidateTimezone = round.application.candidateTimezone;
+  const jobDescription = resolveJobDescription(
+    round.jobDescriptionSnapshot,
+    round.application.jobPosting.description,
+  );
 
   if (round.confirmedAt) {
     return {
@@ -283,6 +621,7 @@ export async function confirmInterviewRound(token: string) {
         scheduledAt: round.scheduledAt,
         adminTimezone,
         meetLink: finalMeetLink,
+        jobDescription,
       });
     } catch (err) {
       console.error(
