@@ -1,18 +1,29 @@
 import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/careers-admin";
+import { jobPostingSelect, mapJobPosting } from "@/lib/careers-postings";
 import { updateJobPostingSchema } from "@/lib/careers-schemas";
 import { prisma } from "@/lib/db";
 
-const jobPostingSelect = {
-  id: true,
-  title: true,
-  description: true,
-  type: true,
-  isRemote: true,
-  salaryRange: true,
-  isActive: true,
-  createdAt: true,
-} as const;
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params;
+  if (!id) {
+    return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
+  }
+
+  const posting = await prisma.jobPosting.findFirst({
+    where: { id, isActive: true },
+    select: jobPostingSelect,
+  });
+
+  if (!posting) {
+    return NextResponse.json({ error: "Job posting not found" }, { status: 404 });
+  }
+
+  return NextResponse.json({ posting: mapJobPosting(posting) });
+}
 
 export async function PATCH(
   request: Request,
@@ -65,15 +76,15 @@ export async function PATCH(
       ...(data.salaryRange !== undefined
         ? { salaryRange: data.salaryRange?.trim() || null }
         : {}),
+      ...(data.salaryCurrency !== undefined
+        ? { salaryCurrency: data.salaryCurrency ?? null }
+        : {}),
     },
     select: jobPostingSelect,
   });
 
   return NextResponse.json({
-    posting: {
-      ...posting,
-      createdAt: posting.createdAt.toISOString(),
-    },
+    posting: mapJobPosting(posting),
   });
 }
 

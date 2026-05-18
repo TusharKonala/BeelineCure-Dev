@@ -1,31 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/careers-admin";
+import { jobPostingSelect, mapJobPosting } from "@/lib/careers-postings";
 import { createJobPostingSchema } from "@/lib/careers-schemas";
+import {
+  cursorPageResult,
+  parseCursorLimit,
+} from "@/lib/careers-pagination";
 import { prisma } from "@/lib/db";
 
-const jobPostingSelect = {
-  id: true,
-  title: true,
-  description: true,
-  type: true,
-  isRemote: true,
-  salaryRange: true,
-  isActive: true,
-  createdAt: true,
-} as const;
+export async function GET(request: NextRequest) {
+  const { limit, cursor } = parseCursorLimit(request.nextUrl.searchParams);
 
-export async function GET() {
-  const postings = await prisma.jobPosting.findMany({
+  const rows = await prisma.jobPosting.findMany({
     where: { isActive: true },
-    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: jobPostingSelect,
   });
 
+  const { items, hasMore, nextCursor } = cursorPageResult(rows, limit);
+
   return NextResponse.json({
-    postings: postings.map((p) => ({
-      ...p,
-      createdAt: p.createdAt.toISOString(),
-    })),
+    items: items.map(mapJobPosting),
+    hasMore,
+    nextCursor,
   });
 }
 
@@ -50,21 +49,19 @@ export async function POST(request: Request) {
     );
   }
 
-  const { salaryRange, ...rest } = parsed.data;
+  const { salaryRange, salaryCurrency, ...rest } = parsed.data;
   const posting = await prisma.jobPosting.create({
     data: {
       ...rest,
       salaryRange: salaryRange?.trim() || null,
+      salaryCurrency: salaryCurrency ?? null,
     },
     select: jobPostingSelect,
   });
 
   return NextResponse.json(
     {
-      posting: {
-        ...posting,
-        createdAt: posting.createdAt.toISOString(),
-      },
+      posting: mapJobPosting(posting),
     },
     { status: 201 },
   );
