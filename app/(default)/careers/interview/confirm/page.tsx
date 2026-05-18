@@ -96,7 +96,7 @@ function ConfirmContent() {
 
   if (loading) {
     return (
-      <main className="py-12 md:py-16">
+      <main className="min-h-[50vh] py-12 md:py-16">
         <Container>
           <p className="font-montserrat text-sm text-[#5e5e5e]">Loading...</p>
         </Container>
@@ -106,7 +106,7 @@ function ConfirmContent() {
 
   if (error && !details) {
     return (
-      <main className="py-12 md:py-16">
+      <main className="min-h-[50vh] py-12 md:py-16">
         <Container>
           <div className="max-w-xl rounded-xl border border-dashed border-[#ffd0d0] bg-[#fff6f6] p-8">
             <h1 className="font-montaga text-2xl text-[#b42318]">
@@ -129,7 +129,7 @@ function ConfirmContent() {
 
   if (confirmed) {
     return (
-      <main className="py-12 md:py-16">
+      <main className="min-h-[50vh] py-12 md:py-16">
         <Container>
           <div className="max-w-xl rounded-xl border border-[#d7f2d9] bg-[#effcf0] p-8">
             <h1 className="font-montaga text-2xl text-[#1f7a36]">
@@ -139,6 +139,10 @@ function ConfirmContent() {
               Hi {details.candidateName}, your Round {details.roundNumber}{" "}
               interview for <strong>{details.jobTitle}</strong> is confirmed for{" "}
               <strong>{details.scheduledAtLabel}</strong>.
+            </p>
+            <p className="mt-4 font-montserrat text-sm text-[#333333]">
+              Join the Google Meet link at the scheduled time. We have also
+              emailed you the link and joining instructions.
             </p>
             {meetLink ? (
               <p className="mt-4">
@@ -169,7 +173,7 @@ function ConfirmContent() {
   }
 
   return (
-    <main className="py-12 md:py-16">
+    <main className="min-h-[50vh] py-12 md:py-16">
       <Container>
         <div className="max-w-xl">
           <h1 className="font-montaga text-3xl text-[#333333]">
@@ -203,7 +207,7 @@ export default function InterviewConfirmPage() {
   return (
     <Suspense
       fallback={
-        <main className="py-12 md:py-16">
+        <main className="min-h-[50vh] py-12 md:py-16">
           <Container>
             <p className="font-montserrat text-sm text-[#5e5e5e]">Loading...</p>
           </Container>
