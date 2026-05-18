@@ -1,4 +1,5 @@
 import * as React from "react";
+import { CareersInterviewJdEmailBlock } from "@/components/careers-interview-jd-email-block";
 
 export interface CareersInterviewAttendeeConfirmedEmailProps {
   candidateName: string;
@@ -6,6 +7,7 @@ export interface CareersInterviewAttendeeConfirmedEmailProps {
   roundNumber: number;
   scheduledAtLabel: string;
   meetLink: string | null;
+  jobDescription?: string | null;
 }
 
 export function CareersInterviewAttendeeConfirmedEmailTemplate({
@@ -14,6 +16,7 @@ export function CareersInterviewAttendeeConfirmedEmailTemplate({
   roundNumber,
   scheduledAtLabel,
   meetLink,
+  jobDescription,
 }: CareersInterviewAttendeeConfirmedEmailProps) {
   return (
     <div
@@ -54,6 +57,7 @@ export function CareersInterviewAttendeeConfirmedEmailTemplate({
           The meeting link will be shared when available.
         </p>
       )}
+      <CareersInterviewJdEmailBlock jobDescription={jobDescription} />
     </div>
   );
 }

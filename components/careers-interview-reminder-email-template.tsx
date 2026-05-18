@@ -1,4 +1,5 @@
 import * as React from "react";
+import { CareersInterviewJdEmailBlock } from "@/components/careers-interview-jd-email-block";
 
 export interface CareersInterviewReminderEmailProps {
   recipientName: string;
@@ -7,6 +8,7 @@ export interface CareersInterviewReminderEmailProps {
   scheduledAtLabel: string;
   meetLink: string | null;
   reminderLabel: string;
+  jobDescription?: string | null;
 }
 
 export function CareersInterviewReminderEmailTemplate({
@@ -16,6 +18,7 @@ export function CareersInterviewReminderEmailTemplate({
   scheduledAtLabel,
   meetLink,
   reminderLabel,
+  jobDescription,
 }: CareersInterviewReminderEmailProps) {
   return (
     <div
@@ -52,6 +55,7 @@ export function CareersInterviewReminderEmailTemplate({
           </a>
         </p>
       ) : null}
+      <CareersInterviewJdEmailBlock jobDescription={jobDescription} />
     </div>
   );
 }
