@@ -15,6 +15,12 @@ import {
   type ApplicationStatus,
   type ScoreBand,
 } from "@/lib/admin-careers-ui";
+import {
+  defaultInterviewTimezone,
+  INTERVIEW_TIMEZONE_OPTIONS,
+  minDatetimeLocalForTimezone,
+  parseDatetimeLocalInTimezone,
+} from "@/lib/careers-interview-time";
 
 type JobApplication = {
   id: string;
@@ -31,7 +37,10 @@ type JobApplication = {
   createdAt: string;
   jobPostingId: string;
   jobTitle: string;
+  latestInterviewRound: number | null;
 };
+
+type InterviewRoundFilter = "ALL" | "1" | "2" | "3" | "4" | "5";
 
 export default function AdminCareersApplicationsPage() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -44,6 +53,8 @@ export default function AdminCareersApplicationsPage() {
     "ALL",
   );
   const [scoreBand, setScoreBand] = useState<ScoreBand>("all");
+  const [interviewRoundFilter, setInterviewRoundFilter] =
+    useState<InterviewRoundFilter>("ALL");
 
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -54,6 +65,9 @@ export default function AdminCareersApplicationsPage() {
   );
   const [scheduleRound, setScheduleRound] = useState("1");
   const [scheduleAt, setScheduleAt] = useState("");
+  const [scheduleTimezone, setScheduleTimezone] = useState(() =>
+    defaultInterviewTimezone(),
+  );
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [scheduleAttendee, setScheduleAttendee] = useState("");
   const [scheduleError, setScheduleError] = useState<string | null>(null);
@@ -65,12 +79,18 @@ export default function AdminCareersApplicationsPage() {
   const loadApplications = useCallback(
     async (cursor: string | null, append: boolean) => {
       const requestId = ++appsRequestIdRef.current;
+      if (!append) {
+        setApplications([]);
+      }
       setAppsLoading(true);
       setError(null);
       try {
         const params = new URLSearchParams({ limit: "10" });
         if (cursor) params.set("cursor", cursor);
         if (statusFilter !== "ALL") params.set("status", statusFilter);
+        if (interviewRoundFilter !== "ALL") {
+          params.set("interviewRound", interviewRoundFilter);
+        }
         const band = scoreBandParams(scoreBand);
         if (band.scoreMin) params.set("scoreMin", band.scoreMin);
         if (band.scoreMax) params.set("scoreMax", band.scoreMax);
@@ -94,7 +114,7 @@ export default function AdminCareersApplicationsPage() {
         if (appsRequestIdRef.current === requestId) setAppsLoading(false);
       }
     },
-    [statusFilter, scoreBand],
+    [statusFilter, scoreBand, interviewRoundFilter],
   );
 
   useEffect(() => {
@@ -162,8 +182,10 @@ export default function AdminCareersApplicationsPage() {
       setScheduleTarget(null);
       setScheduleRound("1");
       setScheduleAt("");
+      setScheduleTimezone(defaultInterviewTimezone());
       setScheduleNotes("");
       setScheduleAttendee("");
+      void loadApplications(null, false);
     } catch (err) {
       setScheduleError(
         err instanceof Error ? err.message : "Failed to schedule interview",
@@ -273,6 +295,11 @@ export default function AdminCareersApplicationsPage() {
                     <span className={statusBadgeClass(app.status)}>
                       {app.status}
                     </span>
+                    {app.latestInterviewRound !== null ? (
+                      <span className="inline-flex items-center rounded-full border border-[#d7e4ff] bg-[#eef3ff] px-2.5 py-1 font-montserrat text-xs font-medium text-[#2555F3]">
+                        Round {app.latestInterviewRound} scheduled
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 {app.aiSummary ? (
@@ -377,15 +404,45 @@ export default function AdminCareersApplicationsPage() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block font-montserrat text-sm font-medium text-[#333333]">
+                    <label
+                      htmlFor="schedule-timezone"
+                      className="mb-1 block font-montserrat text-sm font-medium text-[#333333]"
+                    >
+                      Timezone
+                    </label>
+                    <select
+                      id="schedule-timezone"
+                      value={scheduleTimezone}
+                      onChange={(e) => setScheduleTimezone(e.target.value)}
+                      className={`w-full cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] ${SELECT_CHEVRON}`}
+                    >
+                      {INTERVIEW_TIMEZONE_OPTIONS.map((tz) => (
+                        <option key={tz} value={tz}>
+                          {tz}
+                        </option>
+                      ))}
+                      {!INTERVIEW_TIMEZONE_OPTIONS.includes(
+                        scheduleTimezone as (typeof INTERVIEW_TIMEZONE_OPTIONS)[number],
+                      ) ? (
+                        <option value={scheduleTimezone}>{scheduleTimezone}</option>
+                      ) : null}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="schedule-datetime"
+                      className="mb-1 block cursor-pointer font-montserrat text-sm font-medium text-[#333333]"
+                    >
                       Proposed date & time
                     </label>
                     <input
+                      id="schedule-datetime"
                       type="datetime-local"
                       required
+                      min={minDatetimeLocalForTimezone(scheduleTimezone)}
                       value={scheduleAt}
                       onChange={(e) => setScheduleAt(e.target.value)}
-                      className="w-full rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm"
+                      className="w-full cursor-pointer rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm"
                     />
                   </div>
                   <div>
