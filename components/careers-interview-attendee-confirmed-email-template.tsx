@@ -1,0 +1,59 @@
+import * as React from "react";
+
+export interface CareersInterviewAttendeeConfirmedEmailProps {
+  candidateName: string;
+  jobTitle: string;
+  roundNumber: number;
+  scheduledAtLabel: string;
+  meetLink: string | null;
+}
+
+export function CareersInterviewAttendeeConfirmedEmailTemplate({
+  candidateName,
+  jobTitle,
+  roundNumber,
+  scheduledAtLabel,
+  meetLink,
+}: CareersInterviewAttendeeConfirmedEmailProps) {
+  return (
+    <div
+      style={{ fontFamily: "sans-serif", maxWidth: "640px", margin: "0 auto" }}
+    >
+      <h1 style={{ color: "#111111", marginBottom: "1rem" }}>
+        Career interview scheduled
+      </h1>
+      <p style={{ color: "#333333", lineHeight: 1.6, fontStyle: "normal" }}>
+        Hi,
+      </p>
+      <p style={{ color: "#333333", lineHeight: 1.6 }}>
+        <strong>Round {roundNumber}</strong> for <strong>{jobTitle}</strong> with{" "}
+        <strong>{candidateName}</strong> is confirmed for:
+      </p>
+      <p style={{ color: "#333333", lineHeight: 1.6, fontWeight: 600 }}>
+        {scheduledAtLabel}
+      </p>
+      <p style={{ color: "#333333", lineHeight: 1.6 }}>
+        Join the Google Meet link at the scheduled time. The candidate has been
+        notified with the same details.
+      </p>
+      {meetLink ? (
+        <p style={{ marginTop: "1.5rem" }}>
+          <a
+            href={meetLink}
+            style={{
+              color: "#2555F3",
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Join Google Meet
+          </a>
+        </p>
+      ) : (
+        <p style={{ color: "#5e5e5e", lineHeight: 1.6 }}>
+          The meeting link will be shared when available.
+        </p>
+      )}
+    </div>
+  );
+}
