@@ -1,7 +1,10 @@
 import { EmailTemplate } from "@/components/email-template";
 import { CareersInterviewReminderEmailTemplate } from "@/components/careers-interview-reminder-email-template";
 import { MedicineReminderEmailTemplate } from "@/components/medicine-reminder-email-template";
-import { formatInterviewScheduledAt } from "@/lib/careers-interview";
+import {
+  formatInterviewScheduledAt,
+  resolveJobDescription,
+} from "@/lib/careers-interview";
 import { prisma } from "@/lib/db";
 import {
   AppointmentStatus,
@@ -816,21 +819,31 @@ async function sendInterviewReminderEmail(params: {
       timezone: true,
       meetLink: true,
       confirmedAt: true,
+      cancelledAt: true,
+      jobDescriptionSnapshot: true,
       attendeeEmail: true,
       application: {
         select: {
           name: true,
           email: true,
           candidateTimezone: true,
-          jobPosting: { select: { title: true } },
+          jobPosting: { select: { title: true, description: true } },
         },
       },
     },
   });
 
-  if (!round?.confirmedAt) {
-    return { skipped: true, reason: "not_confirmed" };
+  if (!round?.confirmedAt || round.cancelledAt) {
+    return {
+      skipped: true,
+      reason: round?.cancelledAt ? "cancelled" : "not_confirmed",
+    };
   }
+
+  const jobDescription = resolveJobDescription(
+    round.jobDescriptionSnapshot,
+    round.application.jobPosting.description,
+  );
 
   const scheduledAtLabel = formatInterviewScheduledAt(
     round.scheduledAt,
@@ -871,6 +884,8 @@ async function sendInterviewReminderEmail(params: {
       scheduledAtLabel,
       meetLink: round.meetLink,
       reminderLabel: params.reminderLabel,
+      jobDescription:
+        params.recipient === "attendee" ? jobDescription : undefined,
     }),
   });
 
@@ -889,6 +904,12 @@ export const sendInterviewReminder24h = inngest.createFunction(
     id: "send-interview-reminder-24h",
     retries: 2,
     triggers: [{ event: "interview/reminder-24h.scheduled" }],
+    cancelOn: [
+      {
+        event: "interview/reminder-24h.cancelled",
+        match: "data.interviewRoundId",
+      },
+    ],
   },
   async ({ event }) => {
     const { interviewRoundId, recipient } = event.data as {
@@ -908,6 +929,12 @@ export const sendInterviewReminder30m = inngest.createFunction(
     id: "send-interview-reminder-30m",
     retries: 2,
     triggers: [{ event: "interview/reminder-30m.scheduled" }],
+    cancelOn: [
+      {
+        event: "interview/reminder-30m.cancelled",
+        match: "data.interviewRoundId",
+      },
+    ],
   },
   async ({ event }) => {
     const { interviewRoundId, recipient } = event.data as {
