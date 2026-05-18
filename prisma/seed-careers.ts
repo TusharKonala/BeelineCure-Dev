@@ -540,6 +540,8 @@ async function main() {
     if (!jobPostingId) {
       throw new Error(`Unknown posting slug: ${app.postingSlug}`);
     }
+    const postingSeed = POSTINGS.find((p) => p.slug === app.postingSlug);
+    const jobDescriptionSnapshot = postingSeed?.description ?? "";
 
     const application = await prisma.jobApplication.create({
       data: {
@@ -566,6 +568,7 @@ async function main() {
           confirmationToken: confirmationToken(),
           notes: "Seed: invite sent — use confirm link flow.",
           scheduledByAdminId: adminId,
+          jobDescriptionSnapshot,
         },
       });
     }
@@ -581,6 +584,7 @@ async function main() {
           meetLink: "https://meet.google.com/seed-grace-patel-demo",
           notes: "Seed: already confirmed with placeholder Meet link.",
           scheduledByAdminId: adminId,
+          jobDescriptionSnapshot,
         },
       });
     }

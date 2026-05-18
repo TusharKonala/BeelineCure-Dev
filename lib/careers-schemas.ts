@@ -33,12 +33,18 @@ const resumeUrlSchema = z
     message: "Resume link must use HTTPS",
   });
 
+export const MAX_INTERVIEW_ROUNDS = 4;
+
 export const applicationStatusValues = [
   "PENDING",
   "SHORTLISTED",
   "REJECTED",
   "HIRED",
 ] as const;
+
+export const applicationStatusDropdownValues = applicationStatusValues.filter(
+  (s) => s !== "HIRED",
+);
 
 export const jobApplicationSchema = z.object({
   name: z.string().min(1, "Name is required").max(255),
@@ -61,7 +67,14 @@ export const jobApplicationSchema = z.object({
 });
 
 export const scheduleInterviewSchema = z.object({
-  roundNumber: z.number().int().min(1).max(20),
+  roundNumber: z.number().int().min(1).max(MAX_INTERVIEW_ROUNDS),
+  scheduledAt: z.iso.datetime({ message: "Invalid date and time" }),
+  timezone: z.string().min(1, "Timezone is required").max(100),
+  notes: z.string().max(2000).optional().nullable(),
+  attendeeEmail: z.email("Invalid attendee email").optional().nullable(),
+});
+
+export const rescheduleInterviewSchema = z.object({
   scheduledAt: z.iso.datetime({ message: "Invalid date and time" }),
   timezone: z.string().min(1, "Timezone is required").max(100),
   notes: z.string().max(2000).optional().nullable(),
