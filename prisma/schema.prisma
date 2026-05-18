@@ -418,8 +418,10 @@ model InterviewRound {
   confirmedAt                 DateTime?
   notes                       String?        @db.Text
   attendeeEmail               String?
+  jobDescriptionSnapshot      String         @db.Text
   googleCalendarEventId       String?
   scheduledByAdminId          String
+  cancelledAt                 DateTime?
   createdAt                   DateTime       @default(now())
 
   @@unique([applicationId, roundNumber])
