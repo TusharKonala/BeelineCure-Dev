@@ -368,15 +368,16 @@ model Notification {
 }
 
 model JobPosting {
-  id           String           @id @default(cuid())
-  title        String
-  description  String           @db.Text
-  type         JobType
-  isRemote     Boolean          @default(false)
-  salaryRange  String?
-  isActive     Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  applications JobApplication[]
+  id             String           @id @default(cuid())
+  title          String
+  description    String           @db.Text
+  type           JobType
+  isRemote       Boolean          @default(false)
+  salaryRange    String?
+  salaryCurrency String?
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  applications   JobApplication[]
 }
 
 model JobApplication {
@@ -388,8 +389,9 @@ model JobApplication {
   phone            String
   coverNote        String?           @db.Text
   resumeText       String            @db.Text
-  resumeUrl        String?
-  status           ApplicationStatus @default(PENDING)
+  resumeUrl          String?
+  candidateTimezone  String?
+  status             ApplicationStatus @default(PENDING)
   aiScore          Int?
   aiSummary        String?           @db.Text
   aiRecommendation AiRecommendation?
@@ -404,19 +406,21 @@ model JobApplication {
 }
 
 model InterviewRound {
-  id                    String         @id @default(cuid())
-  applicationId         String
-  application           JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  roundNumber           Int
-  scheduledAt           DateTime
-  meetLink              String?
-  confirmationToken     String         @unique
-  confirmedAt           DateTime?
-  notes                 String?        @db.Text
-  attendeeEmail         String?
-  googleCalendarEventId String?
-  scheduledByAdminId    String
-  createdAt             DateTime       @default(now())
+  id                          String         @id @default(cuid())
+  applicationId               String
+  application                 JobApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  roundNumber                 Int
+  scheduledAt                 DateTime
+  timezone                    String         @default("UTC")
+  meetLink                    String?
+  confirmationToken           String         @unique
+  confirmationTokenExpiresAt  DateTime?
+  confirmedAt                 DateTime?
+  notes                       String?        @db.Text
+  attendeeEmail               String?
+  googleCalendarEventId       String?
+  scheduledByAdminId          String
+  createdAt                   DateTime       @default(now())
 
   @@unique([applicationId, roundNumber])
   @@index([confirmationToken])
