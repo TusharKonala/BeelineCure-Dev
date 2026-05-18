@@ -5,16 +5,18 @@ import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
-import { formatJobTypeLabel } from "@/lib/careers-schemas";
+import { formatJobTypeLabel, formatSalaryDisplay } from "@/lib/careers-schemas";
 import {
   activeBadgeClass,
   emptyPostingForm,
   formatCreatedDate,
   jobTypeBadgeClass,
+  postingFormsEqual,
   PostingFormFields,
   type JobType,
   type PostingForm,
 } from "@/lib/admin-careers-ui";
+import type { SupportedCurrency } from "@/lib/currency";
 
 type JobPosting = {
   id: string;
@@ -23,6 +25,7 @@ type JobPosting = {
   type: JobType;
   isRemote: boolean;
   salaryRange: string | null;
+  salaryCurrency: string | null;
   isActive: boolean;
   createdAt: string;
   applicationCount: number;
@@ -40,6 +43,9 @@ export default function AdminCareersPostingsPage() {
   const [createForm, setCreateForm] = useState<PostingForm>(emptyPostingForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<PostingForm>(emptyPostingForm);
+  const [editBaseline, setEditBaseline] = useState<PostingForm | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<JobPosting | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -48,13 +54,24 @@ export default function AdminCareersPostingsPage() {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
+
   const loadPostings = useCallback(async (cursor: string | null, append: boolean) => {
     const requestId = ++postingsRequestIdRef.current;
+    if (!append) {
+      setPostings([]);
+    }
     setPostingsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({ limit: "10" });
       if (cursor) params.set("cursor", cursor);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await fetch(`/api/admin/careers/postings?${params}`, {
         cache: "no-store",
       });
@@ -71,7 +88,7 @@ export default function AdminCareersPostingsPage() {
     } finally {
       if (postingsRequestIdRef.current === requestId) setPostingsLoading(false);
     }
-  }, []);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     void loadPostings(null, false);
@@ -111,6 +128,9 @@ export default function AdminCareersPostingsPage() {
         body: JSON.stringify({
           ...createForm,
           salaryRange: createForm.salaryRange.trim() || null,
+          salaryCurrency: createForm.salaryRange.trim()
+            ? createForm.salaryCurrency
+            : null,
         }),
       });
       const data = await res.json();
@@ -135,6 +155,9 @@ export default function AdminCareersPostingsPage() {
         body: JSON.stringify({
           ...editForm,
           salaryRange: editForm.salaryRange.trim() || null,
+          salaryCurrency: editForm.salaryRange.trim()
+            ? editForm.salaryCurrency
+            : null,
         }),
       });
       const data = await res.json();
@@ -187,16 +210,23 @@ export default function AdminCareersPostingsPage() {
   }
 
   function startEdit(posting: JobPosting) {
-    setEditingId(posting.id);
-    setEditForm({
+    const baseline: PostingForm = {
       title: posting.title,
       description: posting.description,
       type: posting.type,
       isRemote: posting.isRemote,
       salaryRange: posting.salaryRange ?? "",
+      salaryCurrency:
+        (posting.salaryCurrency as SupportedCurrency | null) ?? "USD",
       isActive: posting.isActive,
-    });
+    };
+    setEditingId(posting.id);
+    setEditForm(baseline);
+    setEditBaseline(baseline);
   }
+
+  const editUnchanged =
+    editBaseline !== null && postingFormsEqual(editForm, editBaseline);
 
   return (
     <div className="py-8 lg:py-10">
@@ -252,8 +282,20 @@ export default function AdminCareersPostingsPage() {
           </form>
         ) : null}
 
+        <div className="mt-6">
+          <input
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by posting title..."
+            className="w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+          />
+        </div>
+
         {postingsLoading && postings.length === 0 ? (
-          <p className="mt-6 font-montserrat text-sm text-[#5e5e5e]">Loading...</p>
+          <p className="mt-6 text-center font-montserrat text-sm text-[#5e5e5e]">
+            Loading...
+          </p>
         ) : postings.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
             <p className="font-montserrat text-sm text-[#5e5e5e]">
@@ -280,7 +322,7 @@ export default function AdminCareersPostingsPage() {
                       <div className="mt-4 flex flex-wrap gap-2">
                         <Button
                           type="button"
-                          disabled={isBusy}
+                          disabled={isBusy || editUnchanged}
                           onClick={() => void handleUpdate(posting.id)}
                           className="cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7]"
                         >
@@ -323,9 +365,15 @@ export default function AdminCareersPostingsPage() {
                           {posting.applicationCount === 1 ? "" : "s"}
                         </p>
                       </div>
-                      {posting.salaryRange ? (
+                      {formatSalaryDisplay(
+                        posting.salaryRange,
+                        posting.salaryCurrency,
+                      ) ? (
                         <p className="mt-2 font-montserrat text-sm text-[#5e5e5e]">
-                          {posting.salaryRange}
+                          {formatSalaryDisplay(
+                            posting.salaryRange,
+                            posting.salaryCurrency,
+                          )}
                         </p>
                       ) : null}
                       <p className="mt-3 whitespace-pre-wrap font-montserrat text-sm text-[#333333]">

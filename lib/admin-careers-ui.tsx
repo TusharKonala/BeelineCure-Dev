@@ -3,6 +3,11 @@ import {
   formatJobTypeLabel,
   jobTypeValues,
 } from "@/lib/careers-schemas";
+import {
+  CURRENCY_LABELS,
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrency,
+} from "@/lib/currency";
 
 export type JobType = (typeof jobTypeValues)[number];
 export type ApplicationStatus = (typeof applicationStatusValues)[number];
@@ -14,6 +19,7 @@ export type PostingForm = {
   type: JobType;
   isRemote: boolean;
   salaryRange: string;
+  salaryCurrency: SupportedCurrency;
   isActive: boolean;
 };
 
@@ -23,8 +29,21 @@ export const emptyPostingForm: PostingForm = {
   type: "FULL_TIME",
   isRemote: false,
   salaryRange: "",
+  salaryCurrency: "USD",
   isActive: true,
 };
+
+export function postingFormsEqual(a: PostingForm, b: PostingForm): boolean {
+  return (
+    a.title === b.title &&
+    a.description === b.description &&
+    a.type === b.type &&
+    a.isRemote === b.isRemote &&
+    a.salaryRange.trim() === b.salaryRange.trim() &&
+    a.salaryCurrency === b.salaryCurrency &&
+    a.isActive === b.isActive
+  );
+}
 
 export const SELECT_CHEVRON =
   'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23333333%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
@@ -155,6 +174,31 @@ export function PostingFormFields({
         </div>
         <div>
           <label
+            htmlFor={`${idPrefix}-currency`}
+            className="mb-1 block font-montserrat text-sm font-medium text-[#333333]"
+          >
+            Salary currency
+          </label>
+          <select
+            id={`${idPrefix}-currency`}
+            value={form.salaryCurrency}
+            onChange={(e) =>
+              onChange({
+                ...form,
+                salaryCurrency: e.target.value as SupportedCurrency,
+              })
+            }
+            className={`w-full cursor-pointer rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 pr-10 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 ${SELECT_CHEVRON}`}
+          >
+            {SUPPORTED_CURRENCIES.map((code) => (
+              <option key={code} value={code}>
+                {CURRENCY_LABELS[code]}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label
             htmlFor={`${idPrefix}-salary`}
             className="mb-1 block font-montserrat text-sm font-medium text-[#333333]"
           >
@@ -164,7 +208,7 @@ export function PostingFormFields({
             id={`${idPrefix}-salary`}
             value={form.salaryRange}
             onChange={(e) => onChange({ ...form, salaryRange: e.target.value })}
-            placeholder="e.g. $80k–$100k"
+            placeholder="e.g. 80k–100k"
             className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
           />
         </div>
