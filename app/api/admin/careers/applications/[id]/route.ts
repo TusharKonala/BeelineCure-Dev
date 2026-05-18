@@ -2,6 +2,7 @@ import { ApplicationStatus } from "@/generated/prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/careers-admin";
+import { sendApplicationStatusChangeEmail } from "@/lib/careers-application-status-email";
 import { prisma } from "@/lib/db";
 
 const patchSchema = z.object({
@@ -44,10 +45,26 @@ export async function PATCH(
 
   const existing = await prisma.jobApplication.findUnique({
     where: { id },
-    select: { id: true },
+    select: {
+      id: true,
+      status: true,
+      name: true,
+      email: true,
+      jobPosting: { select: { title: true } },
+    },
   });
   if (!existing) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  if (
+    parsed.data.status === ApplicationStatus.HIRED &&
+    existing.status !== ApplicationStatus.SHORTLISTED
+  ) {
+    return NextResponse.json(
+      { error: "Only shortlisted applications can be marked as hired." },
+      { status: 400 },
+    );
   }
 
   const updated = await prisma.jobApplication.update({
@@ -58,6 +75,27 @@ export async function PATCH(
       status: true,
     },
   });
+
+  const statusChanged = existing.status !== parsed.data.status;
+  if (
+    statusChanged &&
+    (parsed.data.status === ApplicationStatus.SHORTLISTED ||
+      parsed.data.status === ApplicationStatus.REJECTED)
+  ) {
+    try {
+      await sendApplicationStatusChangeEmail({
+        status: parsed.data.status,
+        to: existing.email,
+        candidateName: existing.name,
+        jobTitle: existing.jobPosting.title,
+      });
+    } catch (err) {
+      console.error(
+        "[careers-application-status] Failed to send status email:",
+        err,
+      );
+    }
+  }
 
   return NextResponse.json({ application: updated });
 }

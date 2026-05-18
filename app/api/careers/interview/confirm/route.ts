@@ -3,6 +3,7 @@ import {
   confirmInterviewRound,
   formatInterviewScheduledAt,
   isConfirmationTokenExpired,
+  isInterviewRoundCancelled,
 } from "@/lib/careers-interview";
 import { prisma } from "@/lib/db";
 
@@ -21,6 +22,7 @@ export async function GET(request: NextRequest) {
       confirmedAt: true,
       meetLink: true,
       confirmationTokenExpiresAt: true,
+      cancelledAt: true,
       application: {
         select: {
           name: true,
@@ -35,7 +37,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
   }
 
-  if (isConfirmationTokenExpired(round.confirmationTokenExpiresAt)) {
+  if (
+    isInterviewRoundCancelled(round.cancelledAt) ||
+    isConfirmationTokenExpired(round.confirmationTokenExpiresAt)
+  ) {
     return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
   }
 
@@ -69,11 +74,7 @@ export async function POST(request: NextRequest) {
   const result = await confirmInterviewRound(token);
 
   if ("error" in result) {
-    const message =
-      result.error === "expired_token"
-        ? "Invalid or expired link"
-        : "Invalid or expired link";
-    return NextResponse.json({ error: message }, { status: 404 });
+    return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
   }
 
   return NextResponse.json({
