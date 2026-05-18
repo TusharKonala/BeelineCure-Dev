@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/careers-admin";
 import { scheduleInterviewSchema } from "@/lib/careers-schemas";
 import {
+  confirmationTokenExpiresAtFromNow,
   generateConfirmationToken,
   sendInterviewInviteEmail,
 } from "@/lib/careers-interview";
@@ -58,6 +59,7 @@ export async function POST(
       status: true,
       name: true,
       email: true,
+      candidateTimezone: true,
       jobPosting: { select: { title: true } },
     },
   });
@@ -86,6 +88,8 @@ export async function POST(
   }
 
   const confirmationToken = generateConfirmationToken();
+  const confirmationTokenExpiresAt = confirmationTokenExpiresAtFromNow();
+  const timezone = parsed.data.timezone.trim();
 
   let round;
   try {
@@ -94,7 +98,9 @@ export async function POST(
         applicationId: id,
         roundNumber: parsed.data.roundNumber,
         scheduledAt,
+        timezone,
         confirmationToken,
+        confirmationTokenExpiresAt,
         notes: parsed.data.notes?.trim() || null,
         attendeeEmail: parsed.data.attendeeEmail?.trim() || null,
         scheduledByAdminId: auth.session.user.id,
@@ -114,6 +120,8 @@ export async function POST(
       jobTitle: application.jobPosting.title,
       roundNumber: round.roundNumber,
       scheduledAt: round.scheduledAt,
+      adminTimezone: timezone,
+      candidateTimezone: application.candidateTimezone,
       confirmationToken: round.confirmationToken,
       notes: round.notes,
     });

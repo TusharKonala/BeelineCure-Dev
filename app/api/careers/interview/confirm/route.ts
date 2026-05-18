@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   confirmInterviewRound,
   formatInterviewScheduledAt,
+  isConfirmationTokenExpired,
 } from "@/lib/careers-interview";
 import { prisma } from "@/lib/db";
 
@@ -16,11 +17,14 @@ export async function GET(request: NextRequest) {
     select: {
       roundNumber: true,
       scheduledAt: true,
+      timezone: true,
       confirmedAt: true,
       meetLink: true,
+      confirmationTokenExpiresAt: true,
       application: {
         select: {
           name: true,
+          candidateTimezone: true,
           jobPosting: { select: { title: true } },
         },
       },
@@ -31,12 +35,20 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
   }
 
+  if (isConfirmationTokenExpired(round.confirmationTokenExpiresAt)) {
+    return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
+  }
+
   return NextResponse.json({
     jobTitle: round.application.jobPosting.title,
     candidateName: round.application.name,
     roundNumber: round.roundNumber,
     scheduledAt: round.scheduledAt.toISOString(),
-    scheduledAtLabel: formatInterviewScheduledAt(round.scheduledAt),
+    scheduledAtLabel: formatInterviewScheduledAt(
+      round.scheduledAt,
+      round.timezone,
+      round.application.candidateTimezone,
+    ),
     confirmed: Boolean(round.confirmedAt),
     confirmedAt: round.confirmedAt?.toISOString() ?? null,
     meetLink: round.meetLink,
@@ -57,7 +69,11 @@ export async function POST(request: NextRequest) {
   const result = await confirmInterviewRound(token);
 
   if ("error" in result) {
-    return NextResponse.json({ error: "Invalid or expired link" }, { status: 404 });
+    const message =
+      result.error === "expired_token"
+        ? "Invalid or expired link"
+        : "Invalid or expired link";
+    return NextResponse.json({ error: message }, { status: 404 });
   }
 
   return NextResponse.json({
@@ -65,9 +81,7 @@ export async function POST(request: NextRequest) {
     alreadyConfirmed: result.alreadyConfirmed,
     round: {
       ...result.round,
-      scheduledAtLabel: formatInterviewScheduledAt(
-        new Date(result.round.scheduledAt),
-      ),
+      scheduledAtLabel: result.round.scheduledAtLabel,
     },
   });
 }
