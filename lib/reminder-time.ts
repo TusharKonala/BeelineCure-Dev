@@ -112,3 +112,17 @@ export function prescriptionReminderTsFromSavedAt(
 
   return { halfwayTs, completedTs };
 }
+
+/** 24 hours before interview start (UTC instant). */
+export function interviewReminder24hAtMs(scheduledAt: Date): number | null {
+  const target = scheduledAt.getTime() - 24 * 60 * 60 * 1000;
+  if (target <= Date.now()) return null;
+  return target;
+}
+
+/** 30 minutes before interview start (UTC instant). */
+export function interviewReminder30mAtMs(scheduledAt: Date): number | null {
+  const target = scheduledAt.getTime() - 30 * 60 * 1000;
+  if (target <= Date.now()) return null;
+  return target;
+}

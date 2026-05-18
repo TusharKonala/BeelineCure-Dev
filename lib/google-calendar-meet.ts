@@ -414,6 +414,7 @@ export async function createMeetEventForInterviewRound(
       id: true,
       roundNumber: true,
       scheduledAt: true,
+      timezone: true,
       meetLink: true,
       googleCalendarEventId: true,
       attendeeEmail: true,
@@ -453,7 +454,7 @@ export async function createMeetEventForInterviewRound(
 
   const start = round.scheduledAt;
   const end = addMinutes(start, INTERVIEW_DURATION_MINUTES);
-  const timeZone = "UTC";
+  const timeZone = round.timezone?.trim() || "UTC";
 
   const attendees: { email: string }[] = [
     { email: round.application.email },
