@@ -22,7 +22,7 @@ export function CareersInterviewConfirmedEmailTemplate({
       <h1 style={{ color: "#111111", marginBottom: "1rem" }}>
         Interview confirmed
       </h1>
-      <p style={{ color: "#333333", lineHeight: 1.6 }}>
+      <p style={{ color: "#333333", lineHeight: 1.6, fontStyle: "normal" }}>
         Hi {candidateName},
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
@@ -31,6 +31,10 @@ export function CareersInterviewConfirmedEmailTemplate({
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6, fontWeight: 600 }}>
         {scheduledAtLabel}
+      </p>
+      <p style={{ color: "#333333", lineHeight: 1.6 }}>
+        Join the Google Meet link at the scheduled time. Please have a stable
+        internet connection and join a few minutes early if possible.
       </p>
       {meetLink ? (
         <p style={{ marginTop: "1.5rem" }}>
