@@ -38,6 +38,14 @@ export async function GET(request: NextRequest) {
       ? Number(scoreMaxRaw)
       : null;
 
+  const interviewRoundRaw = params.get("interviewRound")?.trim();
+  const interviewRound =
+    interviewRoundRaw !== undefined &&
+    interviewRoundRaw !== "" &&
+    interviewRoundRaw !== "ALL"
+      ? Number(interviewRoundRaw)
+      : null;
+
   const where: Prisma.JobApplicationWhereInput = {};
   if (status) where.status = status;
   if (scoreMin !== null && Number.isFinite(scoreMin)) {
@@ -54,6 +62,18 @@ export async function GET(request: NextRequest) {
       ...(typeof where.aiScore === "object" ? where.aiScore : {}),
       not: null,
     };
+  }
+
+  if (interviewRound !== null && Number.isInteger(interviewRound) && interviewRound >= 1) {
+    where.AND = [
+      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+      { interviewRounds: { some: { roundNumber: interviewRound } } },
+      {
+        NOT: {
+          interviewRounds: { some: { roundNumber: { gt: interviewRound } } },
+        },
+      },
+    ];
   }
 
   const rows = await prisma.jobApplication.findMany({
@@ -75,6 +95,11 @@ export async function GET(request: NextRequest) {
       aiRecommendation: true,
       createdAt: true,
       jobPosting: { select: { id: true, title: true } },
+      interviewRounds: {
+        select: { roundNumber: true },
+        orderBy: { roundNumber: "desc" },
+        take: 1,
+      },
     },
   });
 
@@ -96,6 +121,7 @@ export async function GET(request: NextRequest) {
       createdAt: a.createdAt.toISOString(),
       jobPostingId: a.jobPosting.id,
       jobTitle: a.jobPosting.title,
+      latestInterviewRound: a.interviewRounds[0]?.roundNumber ?? null,
     })),
     hasMore,
     nextCursor,
