@@ -49,13 +49,14 @@ export async function POST(
     );
   }
 
-  const { coverNote, resumeUrl, ...rest } = parsed.data;
+  const { coverNote, resumeUrl, candidateTimezone, ...rest } = parsed.data;
   const application = await prisma.jobApplication.create({
     data: {
       jobPostingId: id,
       ...rest,
       coverNote: coverNote?.trim() || null,
       resumeUrl,
+      candidateTimezone: candidateTimezone?.trim() || null,
     },
   });
 
