@@ -413,14 +413,6 @@ export async function cancelInterviewRound(roundId: string) {
   return { ok: true as const };
 }
 
-export function countActiveFutureInterviewRoundsFromList(
-  rounds: { scheduledAt: string }[],
-  now = new Date(),
-): number {
-  const nowMs = now.getTime();
-  return rounds.filter((r) => new Date(r.scheduledAt).getTime() > nowMs).length;
-}
-
 export async function cancelActiveFutureInterviewRounds(applicationId: string) {
   const rounds = await prisma.interviewRound.findMany({
     where: {
