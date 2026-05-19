@@ -14,6 +14,34 @@ export const INTERVIEW_TIMEZONE_OPTIONS = [
   "Australia/Sydney",
 ] as const;
 
+/** Fixed-offset or stable IANA zones where a static label is always correct. */
+const IANA_TIMEZONE_ABBREVIATIONS: Record<string, string> = {
+  UTC: "UTC",
+  "Asia/Kolkata": "IST",
+  "Asia/Dubai": "GST",
+  "Asia/Singapore": "SGT",
+};
+
+/** Map normalized UTC offset keys to a common abbreviation (used when Intl returns GMT offsets). */
+const OFFSET_TO_ABBREVIATION: Record<string, string> = {
+  "+00:00": "GMT",
+  "+01:00": "CET",
+  "+02:00": "CEST",
+  "+04:00": "GST",
+  "+05:30": "IST",
+  "+08:00": "SGT",
+  "+09:00": "JST",
+  "+10:00": "AEST",
+  "+11:00": "AEDT",
+  "-04:00": "EDT",
+  "-05:00": "EST",
+  "-06:00": "CST",
+  "-07:00": "MST",
+  "-08:00": "PST",
+};
+
+const INTL_ABBREV_LOCALES = ["en-US", "en-GB", "en-AU", "en-IN"] as const;
+
 export function defaultInterviewTimezone(): string {
   if (typeof Intl !== "undefined") {
     return Intl.DateTimeFormat().resolvedOptions().timeZone ?? "UTC";
@@ -34,8 +62,101 @@ export function parseDatetimeLocalInTimezone(
   return fromZonedTime(withSeconds, timezone);
 }
 
+function getTimeZoneNamePart(
+  date: Date,
+  timeZone: string,
+  timeZoneName: "short" | "longOffset" | "shortOffset",
+  locale?: string,
+): string | null {
+  try {
+    const parts = new Intl.DateTimeFormat(locale ?? "en-US", {
+      timeZone,
+      timeZoneName,
+    }).formatToParts(date);
+    return parts.find((p) => p.type === "timeZoneName")?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isTimezoneAbbreviation(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (/^GMT/i.test(trimmed) || /^UTC/i.test(trimmed)) return false;
+  return /^[A-Z]{2,6}$/.test(trimmed);
+}
+
+function normalizeOffsetKey(raw: string): string | null {
+  const trimmed = raw.trim();
+  const gmtMatch = trimmed.match(
+    /^(?:GMT|UTC)\s*([+-])(\d{1,2})(?::(\d{2}))?$/i,
+  );
+  const directMatch = trimmed.match(/^([+-])(\d{1,2})(?::(\d{2}))?$/);
+  const match = gmtMatch ?? directMatch;
+  if (!match) return null;
+
+  const sign = match[1];
+  const hours = match[2].padStart(2, "0");
+  const minutes = (match[3] ?? "00").padStart(2, "0");
+  return `${sign}${hours}:${minutes}`;
+}
+
+function getOffsetKey(date: Date, timeZone: string): string | null {
+  const raw =
+    getTimeZoneNamePart(date, timeZone, "longOffset") ??
+    getTimeZoneNamePart(date, timeZone, "shortOffset");
+  return raw ? normalizeOffsetKey(raw) : null;
+}
+
+function getIntlShortAbbreviation(date: Date, timeZone: string): string | null {
+  for (const locale of INTL_ABBREV_LOCALES) {
+    const name = getTimeZoneNamePart(date, timeZone, "short", locale);
+    if (name && isTimezoneAbbreviation(name)) return name;
+  }
+  return null;
+}
+
+function getDateFnsAbbreviation(date: Date, timeZone: string): string | null {
+  try {
+    const zzz = formatInTimeZone(date, timeZone, "zzz");
+    if (zzz && isTimezoneAbbreviation(zzz)) return zzz;
+  } catch {
+    // ignore invalid timezone for date-fns
+  }
+  return null;
+}
+
+function formatGmtOffsetFallback(date: Date, timeZone: string): string {
+  const raw =
+    getTimeZoneNamePart(date, timeZone, "longOffset") ??
+    getTimeZoneNamePart(date, timeZone, "shortOffset") ??
+    "GMT";
+  if (/^UTC/i.test(raw)) return raw.replace(/^UTC/i, "GMT");
+  return raw;
+}
+
+function getTimezoneAbbreviation(date: Date, ianaTimeZone: string): string {
+  const timeZone = ianaTimeZone.trim() || "UTC";
+
+  const intlAbbrev = getIntlShortAbbreviation(date, timeZone);
+  if (intlAbbrev) return intlAbbrev;
+
+  const dateFnsAbbrev = getDateFnsAbbreviation(date, timeZone);
+  if (dateFnsAbbrev) return dateFnsAbbrev;
+
+  const offsetKey = getOffsetKey(date, timeZone);
+  if (offsetKey && OFFSET_TO_ABBREVIATION[offsetKey]) {
+    return OFFSET_TO_ABBREVIATION[offsetKey];
+  }
+
+  const ianaAbbrev = IANA_TIMEZONE_ABBREVIATIONS[timeZone];
+  if (ianaAbbrev) return ianaAbbrev;
+
+  return formatGmtOffsetFallback(date, timeZone);
+}
+
 function formatInTimezone(date: Date, timezone: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+  const dateTime = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -43,8 +164,9 @@ function formatInTimezone(date: Date, timezone: string): string {
     hour: "numeric",
     minute: "2-digit",
     timeZone: timezone,
-    timeZoneName: "short",
   }).format(date);
+  const abbrev = getTimezoneAbbreviation(date, timezone);
+  return `${dateTime} ${abbrev}`;
 }
 
 /**
