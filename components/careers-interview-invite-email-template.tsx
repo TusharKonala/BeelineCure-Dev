@@ -35,8 +35,8 @@ export function CareersInterviewInviteEmailTemplate({
         {scheduledAtLabel}
       </p>
       {notes ? (
-        <p style={{ color: "#5e5e5e", lineHeight: 1.6 }}>
-          <em>{notes}</em>
+        <p style={{ color: "#333333", lineHeight: 1.6, fontStyle: "normal" }}>
+          {notes}
         </p>
       ) : null}
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
