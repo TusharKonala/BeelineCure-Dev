@@ -13,6 +13,7 @@ export default function CareersPage() {
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -27,6 +28,7 @@ export default function CareersPage() {
 
   const loadPostings = useCallback(async (nextCursor: string | null, append: boolean) => {
     const requestId = ++requestIdRef.current;
+    if (!append) setRefreshing(true);
     setLoading(true);
     setError(null);
     try {
@@ -49,7 +51,10 @@ export default function CareersPage() {
         err instanceof Error ? err.message : "Failed to load job postings",
       );
     } finally {
-      if (requestIdRef.current === requestId) setLoading(false);
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+        if (!append) setRefreshing(false);
+      }
     }
   }, [debouncedSearch]);
 
@@ -98,7 +103,7 @@ export default function CareersPage() {
           </div>
         ) : null}
 
-        {loading && postings.length === 0 ? (
+        {refreshing ? (
           <p className="mt-10 font-montserrat text-sm text-[#5e5e5e]">
             Loading openings...
           </p>
