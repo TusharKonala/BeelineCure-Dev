@@ -424,6 +424,7 @@ model InterviewRound {
   cancelledAt                 DateTime?
   createdAt                   DateTime       @default(now())
 
-  @@unique([applicationId, roundNumber])
+  // Unique (applicationId, roundNumber) only among non-cancelled rounds — see migration partial index.
+  @@index([applicationId, roundNumber])
   @@index([confirmationToken])
 }
