@@ -83,7 +83,7 @@ export default function CareersPage() {
           </p>
         </div>
 
-        <div className="mt-8">
+        <div className="relative mt-8 w-full max-w-md">
           <label className="sr-only" htmlFor="careers-search">
             Search job postings
           </label>
@@ -93,8 +93,17 @@ export default function CareersPage() {
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by job title..."
-            className="w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+            className="w-full rounded-xl border border-[#e5e5e5] bg-white py-2 pl-3 pr-14 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-results-button]:hidden"
           />
+          {searchInput ? (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer font-montserrat text-sm text-[#5e5e5e] hover:text-[#333333]"
+            >
+              Clear
+            </button>
+          ) : null}
         </div>
 
         {error ? (
