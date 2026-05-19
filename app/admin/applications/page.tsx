@@ -92,6 +92,30 @@ function roundStatusLabel(round: ActiveInterviewRound): string {
   return round.confirmedAt ? "Confirmed" : "Pending";
 }
 
+type BulkAction = "reject" | "shortlist";
+
+type BulkConfirmState = {
+  action: BulkAction;
+  count: number | null;
+  loading: boolean;
+};
+
+const SCORE_BAND_LABELS: Record<Exclude<ScoreBand, "all">, string> = {
+  low: "1–4",
+  mid: "5–7",
+  high: "8–10",
+};
+
+function bulkConfirmMessage(
+  action: BulkAction,
+  count: number,
+  bandLabel: string,
+): string {
+  const verb = action === "reject" ? "reject" : "shortlist";
+  const noun = count === 1 ? "application" : "applications";
+  return `${verb.charAt(0).toUpperCase() + verb.slice(1)} ${count} pending ${noun} with AI scores ${bandLabel}? Candidates will be notified by email.`;
+}
+
 export default function AdminCareersApplicationsPage() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [appsCursor, setAppsCursor] = useState<string | null>(null);
@@ -132,10 +156,27 @@ export default function AdminCareersApplicationsPage() {
     round: ActiveInterviewRound;
   } | null>(null);
   const [hireTarget, setHireTarget] = useState<JobApplication | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const scoreBandActive = scoreBand !== "all";
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (statusFilter !== "SHORTLISTED" && interviewRoundFilter !== "ALL") {
+      setInterviewRoundFilter("ALL");
+    }
+  }, [statusFilter, interviewRoundFilter]);
+
+  function handleScoreBandChange(band: ScoreBand) {
+    setScoreBand(band);
+    if (band !== "all") {
+      setStatusFilter("PENDING");
+    }
+  }
 
   const loadApplications = useCallback(
     async (cursor: string | null, append: boolean) => {
@@ -149,7 +190,10 @@ export default function AdminCareersApplicationsPage() {
         const params = new URLSearchParams({ limit: "10" });
         if (cursor) params.set("cursor", cursor);
         if (statusFilter !== "ALL") params.set("status", statusFilter);
-        if (interviewRoundFilter !== "ALL") {
+        if (
+          statusFilter === "SHORTLISTED" &&
+          interviewRoundFilter !== "ALL"
+        ) {
           params.set("interviewRound", interviewRoundFilter);
         }
         const band = scoreBandParams(scoreBand);
@@ -215,9 +259,12 @@ export default function AdminCareersApplicationsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to update status");
-      setApplications((cur) =>
-        cur.map((a) => (a.id === app.id ? { ...a, status } : a)),
-      );
+      setApplications((cur) => {
+        if (statusFilter !== "ALL" && status !== statusFilter) {
+          return cur.filter((a) => a.id !== app.id);
+        }
+        return cur.map((a) => (a.id === app.id ? { ...a, status } : a));
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status");
     } finally {
@@ -404,6 +451,71 @@ export default function AdminCareersApplicationsPage() {
     }
   }
 
+  async function openBulkConfirm(action: BulkAction) {
+    const band = scoreBandParams(scoreBand);
+    if (!band.scoreMin || !band.scoreMax) return;
+
+    setBulkConfirm({ action, count: null, loading: true });
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        status: "PENDING",
+        scoreMin: band.scoreMin,
+        scoreMax: band.scoreMax,
+      });
+      const res = await fetch(
+        `/api/admin/careers/applications/count?${params}`,
+        { cache: "no-store" },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load count");
+      setBulkConfirm({
+        action,
+        count: typeof data.count === "number" ? data.count : 0,
+        loading: false,
+      });
+    } catch (err) {
+      setBulkConfirm(null);
+      setError(err instanceof Error ? err.message : "Failed to load count");
+    }
+  }
+
+  async function handleBulkConfirm() {
+    if (!bulkConfirm || bulkConfirm.loading) return;
+    const band = scoreBandParams(scoreBand);
+    if (!band.scoreMin || !band.scoreMax) return;
+
+    const status =
+      bulkConfirm.action === "reject" ? "REJECTED" : "SHORTLISTED";
+
+    setBulkBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/careers/applications/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status,
+          scoreMin: Number(band.scoreMin),
+          scoreMax: Number(band.scoreMax),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to update applications");
+      }
+      setBulkConfirm(null);
+      setScoreBand("all");
+      void loadApplications(null, false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to update applications",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function handleCancelInterview() {
     if (!cancelTarget) return;
     const { app, round } = cancelTarget;
@@ -447,32 +559,72 @@ export default function AdminCareersApplicationsPage() {
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 flex flex-wrap items-center gap-2">
           <button
             type="button"
+            disabled={scoreBandActive}
             onClick={() => setStatusFilter("ALL")}
-            className={`cursor-pointer rounded-full border px-3 py-1 font-montserrat text-xs font-medium ${
-              statusFilter === "ALL"
-                ? "border-[#2555F3] bg-[#eef3ff] text-[#2555F3]"
-                : "border-[#e5e5e5] bg-white text-[#333333]"
+            className={`rounded-full border px-3 py-1 font-montserrat text-xs font-medium ${
+              scoreBandActive
+                ? "cursor-not-allowed border-[#e5e5e5] bg-[#f5f5f5] text-[#9e9e9e] opacity-60"
+                : statusFilter === "ALL"
+                  ? "cursor-pointer border-[#2555F3] bg-[#eef3ff] text-[#2555F3]"
+                  : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333]"
             }`}
           >
             All
           </button>
-          {applicationStatusValues.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setStatusFilter(s)}
-              className={`cursor-pointer rounded-full border px-3 py-1 font-montserrat text-xs font-medium ${
-                statusFilter === s
-                  ? "border-[#2555F3] bg-[#eef3ff] text-[#2555F3]"
-                  : "border-[#e5e5e5] bg-white text-[#333333]"
-              }`}
-            >
-              {s.charAt(0) + s.slice(1).toLowerCase()}
-            </button>
-          ))}
+          {applicationStatusValues.map((s) => {
+            const isPending = s === "PENDING";
+            const disabled = scoreBandActive && !isPending;
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={disabled}
+                onClick={() => setStatusFilter(s)}
+                className={`rounded-full border px-3 py-1 font-montserrat text-xs font-medium ${
+                  disabled
+                    ? "cursor-not-allowed border-[#e5e5e5] bg-[#f5f5f5] text-[#9e9e9e] opacity-60"
+                    : statusFilter === s
+                      ? "cursor-pointer border-[#2555F3] bg-[#eef3ff] text-[#2555F3]"
+                      : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333]"
+                }`}
+              >
+                {s.charAt(0) + s.slice(1).toLowerCase()}
+              </button>
+            );
+          })}
+          {statusFilter === "SHORTLISTED" ? (
+            <div className="flex items-center gap-2 sm:ml-1">
+              <label
+                htmlFor="interview-round-filter"
+                className="font-montserrat text-xs font-medium text-[#5e5e5e]"
+              >
+                Round
+              </label>
+              <select
+                id="interview-round-filter"
+                value={interviewRoundFilter}
+                onChange={(e) =>
+                  setInterviewRoundFilter(
+                    e.target.value as InterviewRoundFilter,
+                  )
+                }
+                className={`${SELECT_CHEVRON} cursor-pointer rounded-full border border-[#e5e5e5] bg-white py-1 pl-3 pr-9 font-montserrat text-xs font-medium text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20`}
+              >
+                <option value="ALL">All rounds</option>
+                {Array.from({ length: MAX_INTERVIEW_ROUNDS }, (_, i) => {
+                  const round = i + 1;
+                  return (
+                    <option key={round} value={String(round)}>
+                      Round {round}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : null}
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
           {(
@@ -486,7 +638,7 @@ export default function AdminCareersApplicationsPage() {
             <button
               key={band}
               type="button"
-              onClick={() => setScoreBand(band)}
+              onClick={() => handleScoreBandChange(band)}
               className={`cursor-pointer rounded-full border px-3 py-1 font-montserrat text-xs font-medium ${
                 scoreBand === band
                   ? "border-[#2555F3] bg-[#eef3ff] text-[#2555F3]"
@@ -497,6 +649,31 @@ export default function AdminCareersApplicationsPage() {
             </button>
           ))}
         </div>
+
+        {scoreBandActive ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(scoreBand === "low" || scoreBand === "mid") && (
+              <Button
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => void openBulkConfirm("reject")}
+                className="cursor-pointer rounded-full bg-[#b42318] font-montserrat text-sm hover:bg-[#912018] disabled:opacity-60"
+              >
+                Reject all
+              </Button>
+            )}
+            {(scoreBand === "mid" || scoreBand === "high") && (
+              <Button
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => void openBulkConfirm("shortlist")}
+                className="cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7] disabled:opacity-60"
+              >
+                Shortlist all
+              </Button>
+            )}
+          </div>
+        ) : null}
 
         {appsLoading && applications.length === 0 ? (
           <p className="mt-6 font-montserrat text-sm text-[#5e5e5e]">Loading...</p>
@@ -892,6 +1069,63 @@ export default function AdminCareersApplicationsPage() {
                     {busyId === hireTarget.id
                       ? "Updating..."
                       : "Mark as hired & compose email"}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {mounted && bulkConfirm && scoreBand !== "all"
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+                <h3 className="font-montserrat text-lg font-semibold text-[#333333]">
+                  {bulkConfirm.action === "reject"
+                    ? "Reject all?"
+                    : "Shortlist all?"}
+                </h3>
+                <p className="mt-2 font-montserrat text-sm text-[#5e5e5e]">
+                  {bulkConfirm.loading
+                    ? "Counting matching applications…"
+                    : bulkConfirm.count !== null
+                      ? bulkConfirmMessage(
+                          bulkConfirm.action,
+                          bulkConfirm.count,
+                          SCORE_BAND_LABELS[scoreBand],
+                        )
+                      : null}
+                </p>
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={bulkBusy}
+                    onClick={() => setBulkConfirm(null)}
+                    className="cursor-pointer rounded-full font-montserrat text-sm"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={
+                      bulkBusy ||
+                      bulkConfirm.loading ||
+                      bulkConfirm.count === 0
+                    }
+                    onClick={() => void handleBulkConfirm()}
+                    className={`cursor-pointer rounded-full font-montserrat text-sm disabled:opacity-60 ${
+                      bulkConfirm.action === "reject"
+                        ? "bg-[#b42318] hover:bg-[#912018]"
+                        : "bg-[#2555F3] hover:bg-[#1e44c7]"
+                    }`}
+                  >
+                    {bulkBusy
+                      ? "Updating..."
+                      : bulkConfirm.action === "reject"
+                        ? "Reject all"
+                        : "Shortlist all"}
                   </Button>
                 </div>
               </div>
