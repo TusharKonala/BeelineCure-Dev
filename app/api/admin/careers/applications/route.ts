@@ -8,6 +8,7 @@ import {
   cursorPageResult,
   parseCursorLimit,
 } from "@/lib/careers-pagination";
+import { MAX_INTERVIEW_ROUNDS } from "@/lib/careers-schemas";
 import { prisma } from "@/lib/db";
 
 const statusValues = new Set<string>(Object.values(ApplicationStatus));
@@ -46,6 +47,8 @@ export async function GET(request: NextRequest) {
       ? Number(interviewRoundRaw)
       : null;
 
+  const activeRoundWhere = { cancelledAt: null };
+
   const where: Prisma.JobApplicationWhereInput = {};
   if (status) where.status = status;
   if (scoreMin !== null && Number.isFinite(scoreMin)) {
@@ -67,10 +70,16 @@ export async function GET(request: NextRequest) {
   if (interviewRound !== null && Number.isInteger(interviewRound) && interviewRound >= 1) {
     where.AND = [
       ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-      { interviewRounds: { some: { roundNumber: interviewRound } } },
+      {
+        interviewRounds: {
+          some: { roundNumber: interviewRound, ...activeRoundWhere },
+        },
+      },
       {
         NOT: {
-          interviewRounds: { some: { roundNumber: { gt: interviewRound } } },
+          interviewRounds: {
+            some: { roundNumber: { gt: interviewRound }, ...activeRoundWhere },
+          },
         },
       },
     ];
@@ -95,10 +104,19 @@ export async function GET(request: NextRequest) {
       aiRecommendation: true,
       createdAt: true,
       jobPosting: { select: { id: true, title: true } },
+      _count: { select: { interviewRounds: true } },
       interviewRounds: {
-        select: { roundNumber: true },
-        orderBy: { roundNumber: "desc" },
-        take: 1,
+        where: activeRoundWhere,
+        select: {
+          id: true,
+          roundNumber: true,
+          scheduledAt: true,
+          timezone: true,
+          confirmedAt: true,
+          attendeeEmail: true,
+          notes: true,
+        },
+        orderBy: { roundNumber: "asc" },
       },
     },
   });
@@ -106,23 +124,44 @@ export async function GET(request: NextRequest) {
   const { items, hasMore, nextCursor } = cursorPageResult(rows, limit);
 
   return NextResponse.json({
-    items: items.map((a) => ({
-      id: a.id,
-      name: a.name,
-      email: a.email,
-      phone: a.phone,
-      coverNote: a.coverNote,
-      resumeText: a.resumeText,
-      resumeUrl: a.resumeUrl,
-      status: a.status,
-      aiScore: a.aiScore,
-      aiSummary: a.aiSummary,
-      aiRecommendation: a.aiRecommendation,
-      createdAt: a.createdAt.toISOString(),
-      jobPostingId: a.jobPosting.id,
-      jobTitle: a.jobPosting.title,
-      latestInterviewRound: a.interviewRounds[0]?.roundNumber ?? null,
-    })),
+    items: items.map((a) => {
+      const activeRounds = a.interviewRounds;
+      const latestInterviewRound =
+        activeRounds.length > 0
+          ? activeRounds[activeRounds.length - 1]!.roundNumber
+          : null;
+      const totalInterviewRoundCount = a._count.interviewRounds;
+
+      return {
+        id: a.id,
+        name: a.name,
+        email: a.email,
+        phone: a.phone,
+        coverNote: a.coverNote,
+        resumeText: a.resumeText,
+        resumeUrl: a.resumeUrl,
+        status: a.status,
+        aiScore: a.aiScore,
+        aiSummary: a.aiSummary,
+        aiRecommendation: a.aiRecommendation,
+        createdAt: a.createdAt.toISOString(),
+        jobPostingId: a.jobPosting.id,
+        jobTitle: a.jobPosting.title,
+        latestInterviewRound,
+        totalInterviewRoundCount,
+        canScheduleInterview:
+          totalInterviewRoundCount < MAX_INTERVIEW_ROUNDS,
+        interviewRounds: activeRounds.map((r) => ({
+          id: r.id,
+          roundNumber: r.roundNumber,
+          scheduledAt: r.scheduledAt.toISOString(),
+          timezone: r.timezone,
+          confirmedAt: r.confirmedAt?.toISOString() ?? null,
+          attendeeEmail: r.attendeeEmail,
+          notes: r.notes,
+        })),
+      };
+    }),
     hasMore,
     nextCursor,
   });
