@@ -69,7 +69,7 @@ export function CareersJobPostingSummary({
       {showApplyButton ? (
         <Button
           asChild
-          className="mt-6 w-full shrink-0 cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7] sm:w-auto"
+          className="mt-6 w-auto shrink-0 self-start cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7]"
         >
           <Link href={`/careers/${posting.id}/apply`}>Apply</Link>
         </Button>
