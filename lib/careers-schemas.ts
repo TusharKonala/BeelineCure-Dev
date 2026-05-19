@@ -60,9 +60,10 @@ export const jobApplicationSchema = z.object({
     .min(50, "Please paste at least 50 characters of your resume")
     .max(5000, "Resume text is too long"),
   resumeUrl: z
-    .union([z.literal(""), z.null(), resumeUrlSchema])
-    .optional()
-    .transform((v) => (v === "" || v === null || v === undefined ? null : v)),
+    .string()
+    .trim()
+    .min(1, "Resume link is required")
+    .pipe(resumeUrlSchema),
   candidateTimezone: z.string().min(1).max(100).optional().nullable(),
 });
 

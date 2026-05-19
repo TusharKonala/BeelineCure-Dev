@@ -86,7 +86,7 @@ export default function ApplyPage() {
           phone: phone!.trim(),
           coverNote: coverNote.trim() || null,
           resumeText: resumeText.trim(),
-          resumeUrl: resumeUrl.trim() || null,
+          resumeUrl: resumeUrl.trim(),
           candidateTimezone,
         }),
       });
@@ -110,7 +110,8 @@ export default function ApplyPage() {
     !phoneInvalid &&
     name.trim().length > 0 &&
     email.trim().length > 0 &&
-    resumeText.trim().length >= 50;
+    resumeText.trim().length >= 50 &&
+    resumeUrl.trim().startsWith("https://");
 
   if (loadingPosting) {
     return (
@@ -127,7 +128,9 @@ export default function ApplyPage() {
       <main className="py-12 md:py-16">
         <Container>
           <div className="max-w-xl rounded-xl border border-dashed border-[#ffd0d0] bg-[#fff6f6] p-8">
-            <h1 className="font-montaga text-2xl text-[#b42318]">Job not found</h1>
+            <h1 className="font-montaga text-2xl text-[#b42318]">
+              Job not found
+            </h1>
             <Link
               href="/careers"
               className="mt-4 inline-block font-montserrat text-sm text-[#2555F3] hover:underline"
@@ -189,7 +192,9 @@ export default function ApplyPage() {
 
             {error ? (
               <div className="mt-6 rounded-xl border border-dashed border-[#ffd0d0] bg-[#fff6f6] p-4">
-                <p className="font-montserrat text-sm text-[#b42318]">{error}</p>
+                <p className="font-montserrat text-sm text-[#b42318]">
+                  {error}
+                </p>
               </div>
             ) : null}
 
@@ -290,19 +295,20 @@ export default function ApplyPage() {
                   htmlFor="resumeUrl"
                   className="mb-1 block font-montserrat text-sm font-medium text-[#333333]"
                 >
-                  Resume link (optional)
+                  Resume link <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="resumeUrl"
                   type="url"
+                  required
                   placeholder="https://..."
                   value={resumeUrl}
                   onChange={(e) => setResumeUrl(e.target.value)}
                   className="w-full rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
                 />
                 <p className="mt-1 font-montserrat text-xs text-[#5e5e5e]">
-                  Optional public link (Google Drive, Dropbox, etc.). Must use
-                  https://
+                  Public link to your resume (Google Drive, Dropbox, etc.). Must
+                  use https://
                 </p>
               </div>
               <Button
