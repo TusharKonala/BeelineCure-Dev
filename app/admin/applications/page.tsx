@@ -126,6 +126,7 @@ export default function AdminCareersApplicationsPage() {
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [scheduleAttendee, setScheduleAttendee] = useState("");
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const scheduleDatetimeRef = useRef<HTMLInputElement>(null);
   const [cancelTarget, setCancelTarget] = useState<{
     app: JobApplication;
     round: ActiveInterviewRound;
@@ -250,6 +251,19 @@ export default function AdminCareersApplicationsPage() {
     setScheduleNotes("");
     setScheduleAttendee("");
     setScheduleError(null);
+  }
+
+  function openScheduleDatetimePicker() {
+    const input = scheduleDatetimeRef.current;
+    if (!input) return;
+    input.focus();
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+      } catch {
+        // Some browsers block showPicker outside a direct user gesture.
+      }
+    }
   }
 
   function openReschedule(app: JobApplication, round: ActiveInterviewRound) {
@@ -712,18 +726,30 @@ export default function AdminCareersApplicationsPage() {
                     <label
                       htmlFor="schedule-datetime"
                       className="mb-1 block cursor-pointer font-montserrat text-sm font-medium text-[#333333]"
+                      onClick={openScheduleDatetimePicker}
                     >
                       Proposed date & time
                     </label>
-                    <input
-                      id="schedule-datetime"
-                      type="datetime-local"
-                      required
-                      min={minDatetimeLocalForTimezone(scheduleTimezone)}
-                      value={scheduleAt}
-                      onChange={(e) => setScheduleAt(e.target.value)}
-                      className="w-full cursor-pointer rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm"
-                    />
+                    <div
+                      className="relative cursor-pointer rounded-xl border border-[#e5e5e5] bg-white focus-within:border-[#2555F3] focus-within:ring-2 focus-within:ring-[#2555F3]/20"
+                      onClick={openScheduleDatetimePicker}
+                      role="presentation"
+                    >
+                      <input
+                        ref={scheduleDatetimeRef}
+                        id="schedule-datetime"
+                        type="datetime-local"
+                        required
+                        min={minDatetimeLocalForTimezone(scheduleTimezone)}
+                        value={scheduleAt}
+                        onChange={(e) => setScheduleAt(e.target.value)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openScheduleDatetimePicker();
+                        }}
+                        className="w-full cursor-pointer rounded-xl border-0 bg-transparent px-3 py-2 pr-10 font-montserrat text-sm outline-none scheme-light [&::-webkit-calendar-picker-indicator]:cursor-pointer [&::-webkit-calendar-picker-indicator]:opacity-100"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="mb-1 block font-montserrat text-sm font-medium text-[#333333]">
