@@ -97,8 +97,10 @@ export async function POST(
     );
   }
 
+  const activeRoundWhere = { cancelledAt: null };
+
   const totalRoundCount = await prisma.interviewRound.count({
-    where: { applicationId },
+    where: { applicationId, ...activeRoundWhere },
   });
   if (totalRoundCount >= MAX_INTERVIEW_ROUNDS) {
     return NextResponse.json(
@@ -109,32 +111,39 @@ export async function POST(
     );
   }
 
-  const confirmationToken = generateConfirmationToken();
-  const confirmationTokenExpiresAt = confirmationTokenExpiresAtFromNow();
-  const timezone = parsed.data.timezone.trim();
-
-  let round;
-  try {
-    round = await prisma.interviewRound.create({
-      data: {
-        applicationId,
-        roundNumber: parsed.data.roundNumber,
-        scheduledAt,
-        timezone,
-        confirmationToken,
-        confirmationTokenExpiresAt,
-        notes: parsed.data.notes?.trim() || null,
-        attendeeEmail: parsed.data.attendeeEmail?.trim() || null,
-        jobDescriptionSnapshot: application.jobPosting.description,
-        scheduledByAdminId: auth.session.user.id,
-      },
-    });
-  } catch {
+  const conflictingRound = await prisma.interviewRound.findFirst({
+    where: {
+      applicationId,
+      roundNumber: parsed.data.roundNumber,
+      ...activeRoundWhere,
+    },
+    select: { id: true },
+  });
+  if (conflictingRound) {
     return NextResponse.json(
       { error: "An interview round with this number already exists." },
       { status: 409 },
     );
   }
+
+  const confirmationToken = generateConfirmationToken();
+  const confirmationTokenExpiresAt = confirmationTokenExpiresAtFromNow();
+  const timezone = parsed.data.timezone.trim();
+
+  const round = await prisma.interviewRound.create({
+    data: {
+      applicationId,
+      roundNumber: parsed.data.roundNumber,
+      scheduledAt,
+      timezone,
+      confirmationToken,
+      confirmationTokenExpiresAt,
+      notes: parsed.data.notes?.trim() || null,
+      attendeeEmail: parsed.data.attendeeEmail?.trim() || null,
+      jobDescriptionSnapshot: application.jobPosting.description,
+      scheduledByAdminId: auth.session.user.id,
+    },
+  });
 
   try {
     await sendInterviewInviteEmail({

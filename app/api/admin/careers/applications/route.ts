@@ -104,7 +104,11 @@ export async function GET(request: NextRequest) {
       aiRecommendation: true,
       createdAt: true,
       jobPosting: { select: { id: true, title: true } },
-      _count: { select: { interviewRounds: true } },
+      _count: {
+        select: {
+          interviewRounds: { where: activeRoundWhere },
+        },
+      },
       interviewRounds: {
         where: activeRoundWhere,
         select: {
