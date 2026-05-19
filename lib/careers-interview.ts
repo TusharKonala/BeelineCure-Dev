@@ -413,6 +413,39 @@ export async function cancelInterviewRound(roundId: string) {
   return { ok: true as const };
 }
 
+export function countActiveFutureInterviewRoundsFromList(
+  rounds: { scheduledAt: string }[],
+  now = new Date(),
+): number {
+  const nowMs = now.getTime();
+  return rounds.filter((r) => new Date(r.scheduledAt).getTime() > nowMs).length;
+}
+
+export async function cancelActiveFutureInterviewRounds(applicationId: string) {
+  const rounds = await prisma.interviewRound.findMany({
+    where: {
+      applicationId,
+      cancelledAt: null,
+      scheduledAt: { gt: new Date() },
+    },
+    select: { id: true },
+    orderBy: { scheduledAt: "asc" },
+  });
+
+  for (const round of rounds) {
+    const result = await cancelInterviewRound(round.id);
+    if ("error" in result && result.error !== "already_cancelled") {
+      throw new Error(
+        result.error === "not_found"
+          ? "Interview round not found while cancelling"
+          : "Failed to cancel interview round",
+      );
+    }
+  }
+
+  return { cancelledCount: rounds.length };
+}
+
 export type RescheduleInterviewInput = {
   scheduledAt: Date;
   timezone: string;
