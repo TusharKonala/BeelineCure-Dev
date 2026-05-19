@@ -1,6 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
-import { UserRole } from "@/generated/prisma/client";
+import { ApplicationStatus, UserRole } from "@/generated/prisma/client";
 import { inngest } from "@/inngest/client";
 import { authOptions } from "@/lib/auth";
 import { jobApplicationSchema } from "@/lib/careers-schemas";
@@ -50,6 +50,22 @@ export async function POST(
   }
 
   const { coverNote, resumeUrl, candidateTimezone, ...rest } = parsed.data;
+
+  const existing = await prisma.jobApplication.findFirst({
+    where: {
+      jobPostingId: id,
+      email: { equals: rest.email.trim(), mode: "insensitive" },
+      status: { not: ApplicationStatus.REJECTED },
+    },
+    select: { id: true },
+  });
+  if (existing) {
+    return NextResponse.json(
+      { error: "You have already applied for this position." },
+      { status: 409 },
+    );
+  }
+
   const application = await prisma.jobApplication.create({
     data: {
       jobPostingId: id,
