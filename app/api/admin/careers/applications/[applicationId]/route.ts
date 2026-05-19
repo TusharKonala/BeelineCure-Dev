@@ -16,15 +16,15 @@ const patchSchema = z.object({
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ id: string }> },
+  context: { params: Promise<{ applicationId: string }> },
 ) {
   const auth = await requireAdminSession();
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const { id } = await context.params;
-  if (!id) {
+  const { applicationId } = await context.params;
+  if (!applicationId) {
     return NextResponse.json({ error: "Invalid application id" }, { status: 400 });
   }
 
@@ -44,7 +44,7 @@ export async function PATCH(
   }
 
   const existing = await prisma.jobApplication.findUnique({
-    where: { id },
+    where: { id: applicationId },
     select: {
       id: true,
       status: true,
@@ -68,7 +68,7 @@ export async function PATCH(
   }
 
   const updated = await prisma.jobApplication.update({
-    where: { id },
+    where: { id: applicationId },
     data: { status: parsed.data.status },
     select: {
       id: true,

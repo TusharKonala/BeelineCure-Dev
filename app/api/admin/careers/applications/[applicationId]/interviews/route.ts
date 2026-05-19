@@ -14,7 +14,7 @@ import { prisma } from "@/lib/db";
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ id: string }> },
+  context: { params: Promise<{ applicationId: string }> },
 ) {
   const auth = await requireAdminSession();
   if ("error" in auth) {
@@ -35,8 +35,8 @@ export async function POST(
     );
   }
 
-  const { id } = await context.params;
-  if (!id) {
+  const { applicationId } = await context.params;
+  if (!applicationId) {
     return NextResponse.json({ error: "Invalid application id" }, { status: 400 });
   }
 
@@ -56,7 +56,7 @@ export async function POST(
   }
 
   const application = await prisma.jobApplication.findUnique({
-    where: { id },
+    where: { id: applicationId },
     select: {
       id: true,
       status: true,
@@ -98,7 +98,7 @@ export async function POST(
   }
 
   const totalRoundCount = await prisma.interviewRound.count({
-    where: { applicationId: id },
+    where: { applicationId },
   });
   if (totalRoundCount >= MAX_INTERVIEW_ROUNDS) {
     return NextResponse.json(
@@ -117,7 +117,7 @@ export async function POST(
   try {
     round = await prisma.interviewRound.create({
       data: {
-        applicationId: id,
+        applicationId,
         roundNumber: parsed.data.roundNumber,
         scheduledAt,
         timezone,
