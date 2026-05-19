@@ -9,10 +9,17 @@ import {
 import { prisma } from "@/lib/db";
 
 export async function GET(request: NextRequest) {
-  const { limit, cursor } = parseCursorLimit(request.nextUrl.searchParams);
+  const params = request.nextUrl.searchParams;
+  const { limit, cursor } = parseCursorLimit(params);
+  const search = params.get("search")?.trim();
 
   const rows = await prisma.jobPosting.findMany({
-    where: { isActive: true },
+    where: {
+      isActive: true,
+      ...(search
+        ? { title: { contains: search, mode: "insensitive" as const } }
+        : {}),
+    },
     take: limit + 1,
     ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],

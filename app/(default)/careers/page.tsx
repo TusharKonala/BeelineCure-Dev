@@ -14,7 +14,16 @@ export default function CareersPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setDebouncedSearch(searchInput.trim());
+    }, 500);
+    return () => window.clearTimeout(handle);
+  }, [searchInput]);
 
   const loadPostings = useCallback(async (nextCursor: string | null, append: boolean) => {
     const requestId = ++requestIdRef.current;
@@ -23,6 +32,7 @@ export default function CareersPage() {
     try {
       const params = new URLSearchParams({ limit: "6" });
       if (nextCursor) params.set("cursor", nextCursor);
+      if (debouncedSearch) params.set("search", debouncedSearch);
       const res = await fetch(`/api/careers?${params}`);
       const data = await res.json();
       if (requestIdRef.current !== requestId) return;
@@ -41,7 +51,7 @@ export default function CareersPage() {
     } finally {
       if (requestIdRef.current === requestId) setLoading(false);
     }
-  }, []);
+  }, [debouncedSearch]);
 
   useEffect(() => {
     void loadPostings(null, false);
@@ -66,6 +76,20 @@ export default function CareersPage() {
           <p className="mt-3 font-montserrat text-base text-[#5e5e5e]">
             Join our team and help make healthcare more accessible.
           </p>
+        </div>
+
+        <div className="mt-8">
+          <label className="sr-only" htmlFor="careers-search">
+            Search job postings
+          </label>
+          <input
+            id="careers-search"
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by job title..."
+            className="w-full max-w-md rounded-xl border border-[#e5e5e5] bg-white px-3 py-2 font-montserrat text-sm text-[#333333] outline-none focus:border-[#2555F3] focus:ring-2 focus:ring-[#2555F3]/20"
+          />
         </div>
 
         {error ? (
