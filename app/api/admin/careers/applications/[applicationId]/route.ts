@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminSession } from "@/lib/careers-admin";
 import { sendApplicationStatusChangeEmail } from "@/lib/careers-application-status-email";
+import { cancelActiveFutureInterviewRounds } from "@/lib/careers-interview";
 import { prisma } from "@/lib/db";
 
 const patchSchema = z.object({
@@ -12,6 +13,7 @@ const patchSchema = z.object({
     ApplicationStatus.REJECTED,
     ApplicationStatus.HIRED,
   ]),
+  cancelActiveInterviews: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -65,6 +67,48 @@ export async function PATCH(
       { error: "Only shortlisted applications can be marked as hired." },
       { status: 400 },
     );
+  }
+
+  if (parsed.data.status === ApplicationStatus.REJECTED) {
+    const activeFutureCount = await prisma.interviewRound.count({
+      where: {
+        applicationId,
+        cancelledAt: null,
+        scheduledAt: { gt: new Date() },
+      },
+    });
+
+    if (activeFutureCount > 0 && parsed.data.cancelActiveInterviews !== true) {
+      return NextResponse.json(
+        {
+          error:
+            "This candidate has active interviews scheduled. Confirm to cancel them and reject.",
+          activeInterviewCount: activeFutureCount,
+          requiresInterviewCancellation: true,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (parsed.data.cancelActiveInterviews === true) {
+      try {
+        await cancelActiveFutureInterviewRounds(applicationId);
+      } catch (err) {
+        console.error(
+          "[careers-application-status] Failed to cancel interviews before reject:",
+          err,
+        );
+        return NextResponse.json(
+          {
+            error:
+              err instanceof Error
+                ? err.message
+                : "Failed to cancel scheduled interviews",
+          },
+          { status: 500 },
+        );
+      }
+    }
   }
 
   const updated = await prisma.jobApplication.update({
