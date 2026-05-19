@@ -5,7 +5,17 @@ import { createPortal } from "react-dom";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Container } from "@/components/layout/Container";
 import { Button } from "@/components/ui/button";
-import { applicationStatusValues } from "@/lib/careers-schemas";
+import {
+  applicationStatusDropdownValues,
+  applicationStatusValues,
+  MAX_INTERVIEW_ROUNDS,
+} from "@/lib/careers-schemas";
+import {
+  buildGmailComposeUrl,
+  buildOfferEmailBody,
+  buildOfferEmailSubject,
+  hasCompletedInterviewRound,
+} from "@/lib/careers-hire-compose";
 import {
   aiScoreBadgeClass,
   formatCreatedDate,
@@ -17,10 +27,22 @@ import {
 } from "@/lib/admin-careers-ui";
 import {
   defaultInterviewTimezone,
+  formatDatetimeLocalInTimezone,
+  formatInterviewTime,
   INTERVIEW_TIMEZONE_OPTIONS,
   minDatetimeLocalForTimezone,
   parseDatetimeLocalInTimezone,
 } from "@/lib/careers-interview-time";
+
+type ActiveInterviewRound = {
+  id: string;
+  roundNumber: number;
+  scheduledAt: string;
+  timezone: string;
+  confirmedAt: string | null;
+  attendeeEmail: string | null;
+  notes: string | null;
+};
 
 type JobApplication = {
   id: string;
@@ -38,9 +60,37 @@ type JobApplication = {
   jobPostingId: string;
   jobTitle: string;
   latestInterviewRound: number | null;
+  totalInterviewRoundCount?: number;
+  canScheduleInterview: boolean;
+  interviewRounds: ActiveInterviewRound[];
 };
 
-type InterviewRoundFilter = "ALL" | "1" | "2" | "3" | "4" | "5";
+type InterviewRoundFilter = "ALL" | "1" | "2" | "3" | "4";
+
+type ScheduleMode = "create" | "reschedule";
+
+type ScheduleFormBaseline = {
+  scheduledAt: string;
+  timezone: string;
+  notes: string;
+  attendeeEmail: string;
+};
+
+function scheduleFormsEqual(
+  a: ScheduleFormBaseline,
+  b: ScheduleFormBaseline,
+): boolean {
+  return (
+    a.scheduledAt === b.scheduledAt &&
+    a.timezone === b.timezone &&
+    a.notes === b.notes &&
+    a.attendeeEmail === b.attendeeEmail
+  );
+}
+
+function roundStatusLabel(round: ActiveInterviewRound): string {
+  return round.confirmedAt ? "Confirmed" : "Pending";
+}
 
 export default function AdminCareersApplicationsPage() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -63,6 +113,11 @@ export default function AdminCareersApplicationsPage() {
   const [scheduleTarget, setScheduleTarget] = useState<JobApplication | null>(
     null,
   );
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode>("create");
+  const [rescheduleRound, setRescheduleRound] =
+    useState<ActiveInterviewRound | null>(null);
+  const [scheduleBaseline, setScheduleBaseline] =
+    useState<ScheduleFormBaseline | null>(null);
   const [scheduleRound, setScheduleRound] = useState("1");
   const [scheduleAt, setScheduleAt] = useState("");
   const [scheduleTimezone, setScheduleTimezone] = useState(() =>
@@ -71,6 +126,11 @@ export default function AdminCareersApplicationsPage() {
   const [scheduleNotes, setScheduleNotes] = useState("");
   const [scheduleAttendee, setScheduleAttendee] = useState("");
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<{
+    app: JobApplication;
+    round: ActiveInterviewRound;
+  } | null>(null);
+  const [hireTarget, setHireTarget] = useState<JobApplication | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -101,7 +161,17 @@ export default function AdminCareersApplicationsPage() {
         const data = await res.json();
         if (appsRequestIdRef.current !== requestId) return;
         if (!res.ok) throw new Error(data.error ?? "Failed to load applications");
-        const next = Array.isArray(data.items) ? data.items : [];
+        const next: JobApplication[] = (
+          Array.isArray(data.items) ? data.items : []
+        ).map((item: JobApplication) => ({
+          ...item,
+          interviewRounds: Array.isArray(item.interviewRounds)
+            ? item.interviewRounds
+            : [],
+          canScheduleInterview:
+            item.canScheduleInterview ??
+            (item.totalInterviewRoundCount ?? 0) < MAX_INTERVIEW_ROUNDS,
+        }));
         setApplications((cur) => (append ? [...cur, ...next] : next));
         setAppsHasMore(Boolean(data.hasMore));
         setAppsCursor(data.nextCursor ?? null);
@@ -154,41 +224,191 @@ export default function AdminCareersApplicationsPage() {
     }
   }
 
+  function closeScheduleModal() {
+    setScheduleTarget(null);
+    setScheduleMode("create");
+    setRescheduleRound(null);
+    setScheduleBaseline(null);
+    setScheduleRound("1");
+    setScheduleAt("");
+    setScheduleTimezone(defaultInterviewTimezone());
+    setScheduleNotes("");
+    setScheduleAttendee("");
+    setScheduleError(null);
+  }
+
+  function openScheduleCreate(app: JobApplication) {
+    setScheduleTarget(app);
+    setScheduleMode("create");
+    setRescheduleRound(null);
+    setScheduleBaseline(null);
+    const nextRound =
+      app.latestInterviewRound !== null ? app.latestInterviewRound + 1 : 1;
+    setScheduleRound(String(Math.min(nextRound, MAX_INTERVIEW_ROUNDS)));
+    setScheduleAt("");
+    setScheduleTimezone(defaultInterviewTimezone());
+    setScheduleNotes("");
+    setScheduleAttendee("");
+    setScheduleError(null);
+  }
+
+  function openReschedule(app: JobApplication, round: ActiveInterviewRound) {
+    const at = formatDatetimeLocalInTimezone(
+      new Date(round.scheduledAt),
+      round.timezone,
+    );
+    const notes = round.notes ?? "";
+    const attendee = round.attendeeEmail ?? "";
+    const baseline: ScheduleFormBaseline = {
+      scheduledAt: at,
+      timezone: round.timezone,
+      notes,
+      attendeeEmail: attendee,
+    };
+    setScheduleTarget(app);
+    setScheduleMode("reschedule");
+    setRescheduleRound(round);
+    setScheduleBaseline(baseline);
+    setScheduleAt(at);
+    setScheduleTimezone(round.timezone);
+    setScheduleNotes(notes);
+    setScheduleAttendee(attendee);
+    setScheduleError(null);
+  }
+
+  const scheduleFormCurrent: ScheduleFormBaseline = {
+    scheduledAt: scheduleAt,
+    timezone: scheduleTimezone,
+    notes: scheduleNotes,
+    attendeeEmail: scheduleAttendee,
+  };
+
+  const scheduleUnchanged =
+    scheduleMode === "reschedule" &&
+    scheduleBaseline !== null &&
+    scheduleFormsEqual(scheduleFormCurrent, scheduleBaseline);
+
   async function handleScheduleInterview(e: React.FormEvent) {
     e.preventDefault();
     if (!scheduleTarget) return;
+    if (scheduleUnchanged) return;
     setBusyId(scheduleTarget.id);
     setScheduleError(null);
     try {
-      const scheduledAt = new Date(scheduleAt);
+      const scheduledAt = parseDatetimeLocalInTimezone(
+        scheduleAt,
+        scheduleTimezone,
+      );
       if (Number.isNaN(scheduledAt.getTime())) {
         throw new Error("Invalid date and time");
       }
-      const res = await fetch(
-        `/api/admin/careers/applications/${scheduleTarget.id}/interviews`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            roundNumber: Number(scheduleRound),
-            scheduledAt: scheduledAt.toISOString(),
-            notes: scheduleNotes.trim() || null,
-            attendeeEmail: scheduleAttendee.trim() || null,
-          }),
-        },
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to schedule interview");
-      setScheduleTarget(null);
-      setScheduleRound("1");
-      setScheduleAt("");
-      setScheduleTimezone(defaultInterviewTimezone());
-      setScheduleNotes("");
-      setScheduleAttendee("");
+      const payload = {
+        scheduledAt: scheduledAt.toISOString(),
+        timezone: scheduleTimezone,
+        notes: scheduleNotes.trim() || null,
+        attendeeEmail: scheduleAttendee.trim() || null,
+      };
+
+      if (scheduleMode === "reschedule" && rescheduleRound) {
+        const res = await fetch(
+          `/api/admin/careers/applications/${scheduleTarget.id}/interviews/${rescheduleRound.id}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to reschedule interview");
+        }
+      } else {
+        const res = await fetch(
+          `/api/admin/careers/applications/${scheduleTarget.id}/interviews`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...payload,
+              roundNumber: Number(scheduleRound),
+            }),
+          },
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to schedule interview");
+        }
+      }
+
+      closeScheduleModal();
       void loadApplications(null, false);
     } catch (err) {
       setScheduleError(
-        err instanceof Error ? err.message : "Failed to schedule interview",
+        err instanceof Error ? err.message : "Failed to save interview",
+      );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleMarkAsHired() {
+    if (!hireTarget) return;
+    const app = hireTarget;
+    setBusyId(app.id);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/careers/applications/${app.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "HIRED" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to mark as hired");
+      }
+      setApplications((cur) =>
+        cur.map((a) =>
+          a.id === app.id
+            ? { ...a, status: "HIRED" as ApplicationStatus, canScheduleInterview: false }
+            : a,
+        ),
+      );
+      setHireTarget(null);
+      const composeUrl = buildGmailComposeUrl({
+        to: app.email,
+        subject: buildOfferEmailSubject(app.jobTitle),
+        body: buildOfferEmailBody({
+          candidateName: app.name,
+          jobTitle: app.jobTitle,
+        }),
+      });
+      window.open(composeUrl, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to mark as hired");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleCancelInterview() {
+    if (!cancelTarget) return;
+    const { app, round } = cancelTarget;
+    setBusyId(app.id);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/careers/applications/${app.id}/interviews/${round.id}/cancel`,
+        { method: "POST" },
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Failed to cancel interview");
+      }
+      setCancelTarget(null);
+      void loadApplications(null, false);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to cancel interview",
       );
     } finally {
       setBusyId(null);
@@ -295,9 +515,11 @@ export default function AdminCareersApplicationsPage() {
                     <span className={statusBadgeClass(app.status)}>
                       {app.status}
                     </span>
-                    {app.latestInterviewRound !== null ? (
+                    {app.interviewRounds.length > 0 ? (
                       <span className="inline-flex items-center rounded-full border border-[#d7e4ff] bg-[#eef3ff] px-2.5 py-1 font-montserrat text-xs font-medium text-[#2555F3]">
-                        Round {app.latestInterviewRound} scheduled
+                        {app.interviewRounds.length === 1
+                          ? `Round ${app.interviewRounds[0]!.roundNumber} · ${roundStatusLabel(app.interviewRounds[0]!)}`
+                          : `${app.interviewRounds.length} active interviews`}
                       </span>
                     ) : null}
                   </div>
@@ -330,35 +552,85 @@ export default function AdminCareersApplicationsPage() {
                 <p className="mt-2 font-montserrat text-xs text-[#5e5e5e]">
                   Applied {formatCreatedDate(app.createdAt)}
                 </p>
+                {app.interviewRounds.length > 0 ? (
+                  <ul className="mt-4 space-y-2 border-t border-[#e5e5e5] pt-4">
+                    {app.interviewRounds.map((round) => (
+                      <li
+                        key={round.id}
+                        className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[#fafafa] px-3 py-2"
+                      >
+                        <div>
+                          <p className="font-montserrat text-xs font-medium text-[#333333]">
+                            Round {round.roundNumber} · {roundStatusLabel(round)}
+                          </p>
+                          <p className="font-montserrat text-xs text-[#5e5e5e]">
+                            {formatInterviewTime(
+                              new Date(round.scheduledAt),
+                              round.timezone,
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            disabled={busyId === app.id}
+                            onClick={() => openReschedule(app, round)}
+                            className="cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-2.5 py-1 font-montserrat text-xs font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:opacity-60"
+                          >
+                            Reschedule
+                          </button>
+                          <button
+                            type="button"
+                            disabled={busyId === app.id}
+                            onClick={() => setCancelTarget({ app, round })}
+                            className="cursor-pointer rounded-lg border border-[#ffd0d0] bg-[#fff6f6] px-2.5 py-1 font-montserrat text-xs font-medium text-[#b42318] hover:bg-[#ffe8e8] disabled:opacity-60"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <select
                     value={app.status}
-                    disabled={busyId === app.id}
+                    disabled={busyId === app.id || app.status === "HIRED"}
                     onChange={(e) =>
                       void handleStatusChange(
                         app,
                         e.target.value as ApplicationStatus,
                       )
                     }
-                    className={`${SELECT_CHEVRON} cursor-pointer rounded-lg border border-[#e5e5e5] bg-white py-1.5 pl-3 pr-9 font-montserrat text-xs text-[#333333]`}
+                    className={`${SELECT_CHEVRON} cursor-pointer rounded-lg border border-[#e5e5e5] bg-white py-1.5 pl-3 pr-9 font-montserrat text-xs text-[#333333] disabled:cursor-not-allowed disabled:opacity-70`}
                   >
-                    {applicationStatusValues.map((s) => (
+                    {app.status === "HIRED" ? (
+                      <option value="HIRED">HIRED</option>
+                    ) : null}
+                    {applicationStatusDropdownValues.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
                     ))}
                   </select>
+                  {app.status === "SHORTLISTED" && app.canScheduleInterview ? (
+                    <button
+                      type="button"
+                      disabled={busyId === app.id}
+                      onClick={() => openScheduleCreate(app)}
+                      className="cursor-pointer rounded-lg border border-[#2555F3] bg-[#eef3ff] px-3 py-1.5 font-montserrat text-xs font-medium text-[#2555F3] hover:bg-[#d7e4ff] disabled:opacity-60"
+                    >
+                      Schedule interview
+                    </button>
+                  ) : null}
                   {app.status === "SHORTLISTED" ? (
                     <button
                       type="button"
                       disabled={busyId === app.id}
-                      onClick={() => {
-                        setScheduleTarget(app);
-                        setScheduleError(null);
-                      }}
-                      className="cursor-pointer rounded-lg border border-[#2555F3] bg-[#eef3ff] px-3 py-1.5 font-montserrat text-xs font-medium text-[#2555F3] hover:bg-[#d7e4ff] disabled:opacity-60"
+                      onClick={() => setHireTarget(app)}
+                      className="cursor-pointer rounded-lg border border-[#d7f2d9] bg-[#effcf0] px-3 py-1.5 font-montserrat text-xs font-medium text-[#1f7a36] hover:bg-[#d7f2d9] disabled:opacity-60"
                     >
-                      Schedule interview
+                      Mark as Hired
                     </button>
                   ) : null}
                 </div>
@@ -384,25 +656,33 @@ export default function AdminCareersApplicationsPage() {
                 className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg"
               >
                 <h3 className="font-montserrat text-lg font-semibold text-[#333333]">
-                  Schedule interview
+                  {scheduleMode === "reschedule"
+                    ? "Reschedule interview"
+                    : "Schedule interview"}
                 </h3>
                 <p className="mt-1 font-montserrat text-sm text-[#5e5e5e]">
                   {scheduleTarget.name} — {scheduleTarget.jobTitle}
+                  {scheduleMode === "reschedule" && rescheduleRound
+                    ? ` · Round ${rescheduleRound.roundNumber}`
+                    : ""}
                 </p>
                 <div className="mt-4 space-y-4">
-                  <div>
-                    <label className="mb-1 block font-montserrat text-sm font-medium text-[#333333]">
-                      Round number
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      required
-                      value={scheduleRound}
-                      onChange={(e) => setScheduleRound(e.target.value)}
-                      className="w-full rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm"
-                    />
-                  </div>
+                  {scheduleMode === "create" ? (
+                    <div>
+                      <label className="mb-1 block font-montserrat text-sm font-medium text-[#333333]">
+                        Round number
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={MAX_INTERVIEW_ROUNDS}
+                        required
+                        value={scheduleRound}
+                        onChange={(e) => setScheduleRound(e.target.value)}
+                        className="w-full rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm"
+                      />
+                    </div>
+                  ) : null}
                   <div>
                     <label
                       htmlFor="schedule-timezone"
@@ -483,20 +763,112 @@ export default function AdminCareersApplicationsPage() {
                     type="button"
                     variant="outline"
                     disabled={busyId === scheduleTarget.id}
-                    onClick={() => setScheduleTarget(null)}
+                    onClick={closeScheduleModal}
+                    className="cursor-pointer rounded-full font-montserrat text-sm"
+                  >
+                    Close
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={
+                      busyId === scheduleTarget.id || scheduleUnchanged
+                    }
+                    className="cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7] disabled:opacity-60"
+                  >
+                    {busyId === scheduleTarget.id
+                      ? "Saving..."
+                      : scheduleMode === "reschedule"
+                        ? "Save changes"
+                        : "Send invite"}
+                  </Button>
+                </div>
+              </form>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {mounted && cancelTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+                <h3 className="font-montserrat text-lg font-semibold text-[#333333]">
+                  Cancel interview?
+                </h3>
+                <p className="mt-2 font-montserrat text-sm text-[#5e5e5e]">
+                  Round {cancelTarget.round.roundNumber} for{" "}
+                  {cancelTarget.app.name} will be cancelled. The candidate
+                  {cancelTarget.round.confirmedAt ? " and interviewer" : ""}{" "}
+                  will be notified by email.
+                </p>
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busyId === cancelTarget.app.id}
+                    onClick={() => setCancelTarget(null)}
+                    className="cursor-pointer rounded-full font-montserrat text-sm"
+                  >
+                    Keep interview
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={busyId === cancelTarget.app.id}
+                    onClick={() => void handleCancelInterview()}
+                    className="cursor-pointer rounded-full bg-[#b42318] font-montserrat text-sm hover:bg-[#912018]"
+                  >
+                    {busyId === cancelTarget.app.id
+                      ? "Cancelling..."
+                      : "Cancel interview"}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {mounted && hireTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+                <h3 className="font-montserrat text-lg font-semibold text-[#333333]">
+                  Mark as hired?
+                </h3>
+                <p className="mt-2 font-montserrat text-sm text-[#5e5e5e]">
+                  {hireTarget.name} will be marked as hired and Gmail will open
+                  with a pre-filled offer email you can review and send.
+                </p>
+                {!hasCompletedInterviewRound(hireTarget.interviewRounds) ? (
+                  <div className="mt-4 rounded-lg border border-[#ffe7b8] bg-[#fff8eb] px-3 py-2">
+                    <p className="font-montserrat text-sm text-[#9a6700]">
+                      No completed interview found for this candidate. You can
+                      still proceed.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busyId === hireTarget.id}
+                    onClick={() => setHireTarget(null)}
                     className="cursor-pointer rounded-full font-montserrat text-sm"
                   >
                     Cancel
                   </Button>
                   <Button
-                    type="submit"
-                    disabled={busyId === scheduleTarget.id}
-                    className="cursor-pointer rounded-full bg-[#2555F3] font-montserrat text-sm hover:bg-[#1e44c7]"
+                    type="button"
+                    disabled={busyId === hireTarget.id}
+                    onClick={() => void handleMarkAsHired()}
+                    className="cursor-pointer rounded-full bg-[#1f7a36] font-montserrat text-sm hover:bg-[#18632c]"
                   >
-                    {busyId === scheduleTarget.id ? "Sending..." : "Send invite"}
+                    {busyId === hireTarget.id
+                      ? "Updating..."
+                      : "Mark as hired & compose email"}
                   </Button>
                 </div>
-              </form>
+              </div>
             </div>,
             document.body,
           )
