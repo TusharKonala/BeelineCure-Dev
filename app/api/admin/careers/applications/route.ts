@@ -1,17 +1,15 @@
-import {
-  ApplicationStatus,
-  type Prisma,
-} from "@/generated/prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminSession } from "@/lib/careers-admin";
+import {
+  buildJobApplicationWhereInput,
+  parseApplicationsListParams,
+} from "@/lib/careers-applications-query";
 import {
   cursorPageResult,
   parseCursorLimit,
 } from "@/lib/careers-pagination";
 import { MAX_INTERVIEW_ROUNDS } from "@/lib/careers-schemas";
 import { prisma } from "@/lib/db";
-
-const statusValues = new Set<string>(Object.values(ApplicationStatus));
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdminSession();
@@ -21,69 +19,9 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const { limit, cursor } = parseCursorLimit(params);
-
-  const rawStatus = params.get("status")?.trim();
-  const status =
-    rawStatus && statusValues.has(rawStatus)
-      ? (rawStatus as ApplicationStatus)
-      : null;
-
-  const scoreMinRaw = params.get("scoreMin");
-  const scoreMaxRaw = params.get("scoreMax");
-  const scoreMin =
-    scoreMinRaw !== null && scoreMinRaw !== ""
-      ? Number(scoreMinRaw)
-      : null;
-  const scoreMax =
-    scoreMaxRaw !== null && scoreMaxRaw !== ""
-      ? Number(scoreMaxRaw)
-      : null;
-
-  const interviewRoundRaw = params.get("interviewRound")?.trim();
-  const interviewRound =
-    interviewRoundRaw !== undefined &&
-    interviewRoundRaw !== "" &&
-    interviewRoundRaw !== "ALL"
-      ? Number(interviewRoundRaw)
-      : null;
-
+  const listParams = parseApplicationsListParams(params);
+  const where = buildJobApplicationWhereInput(listParams);
   const activeRoundWhere = { cancelledAt: null };
-
-  const where: Prisma.JobApplicationWhereInput = {};
-  if (status) where.status = status;
-  if (scoreMin !== null && Number.isFinite(scoreMin)) {
-    where.aiScore = { ...(where.aiScore as Prisma.IntFilter), gte: scoreMin };
-  }
-  if (scoreMax !== null && Number.isFinite(scoreMax)) {
-    where.aiScore = { ...(where.aiScore as Prisma.IntFilter), lte: scoreMax };
-  }
-  if (
-    (scoreMin !== null && Number.isFinite(scoreMin)) ||
-    (scoreMax !== null && Number.isFinite(scoreMax))
-  ) {
-    where.aiScore = {
-      ...(typeof where.aiScore === "object" ? where.aiScore : {}),
-      not: null,
-    };
-  }
-
-  if (interviewRound !== null && Number.isInteger(interviewRound) && interviewRound >= 1) {
-    where.AND = [
-      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-      {
-        interviewRounds: {
-          some: { roundNumber: interviewRound, ...activeRoundWhere },
-        },
-      },
-      {
-        NOT: {
-          interviewRounds: {
-            some: { roundNumber: { gt: interviewRound }, ...activeRoundWhere },
-          },
-        },
-      },
-    ];
-  }
 
   const rows = await prisma.jobApplication.findMany({
     where,
