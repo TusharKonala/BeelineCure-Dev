@@ -92,6 +92,13 @@ function roundStatusLabel(round: ActiveInterviewRound): string {
   return round.confirmedAt ? "Confirmed" : "Pending";
 }
 
+function activeFutureInterviewRounds(app: JobApplication): ActiveInterviewRound[] {
+  const now = Date.now();
+  return app.interviewRounds.filter(
+    (r) => new Date(r.scheduledAt).getTime() > now,
+  );
+}
+
 type BulkAction = "reject" | "shortlist";
 
 type BulkConfirmState = {
@@ -156,6 +163,10 @@ export default function AdminCareersApplicationsPage() {
     round: ActiveInterviewRound;
   } | null>(null);
   const [hireTarget, setHireTarget] = useState<JobApplication | null>(null);
+  const [rejectConfirmTarget, setRejectConfirmTarget] = useState<{
+    app: JobApplication;
+    count: number;
+  } | null>(null);
   const [bulkConfirm, setBulkConfirm] = useState<BulkConfirmState | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
@@ -248,14 +259,20 @@ export default function AdminCareersApplicationsPage() {
   async function handleStatusChange(
     app: JobApplication,
     status: ApplicationStatus,
-  ) {
+    options?: { cancelActiveInterviews?: boolean },
+  ): Promise<boolean> {
     setBusyId(app.id);
     setError(null);
     try {
       const res = await fetch(`/api/admin/careers/applications/${app.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          ...(options?.cancelActiveInterviews
+            ? { cancelActiveInterviews: true }
+            : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to update status");
@@ -265,11 +282,25 @@ export default function AdminCareersApplicationsPage() {
         }
         return cur.map((a) => (a.id === app.id ? { ...a, status } : a));
       });
+      if (options?.cancelActiveInterviews) {
+        void loadApplications(null, false);
+      }
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status");
+      return false;
     } finally {
       setBusyId(null);
     }
+  }
+
+  async function handleRejectConfirm() {
+    if (!rejectConfirmTarget) return;
+    const { app } = rejectConfirmTarget;
+    const ok = await handleStatusChange(app, "REJECTED", {
+      cancelActiveInterviews: true,
+    });
+    if (ok) setRejectConfirmTarget(null);
   }
 
   function closeScheduleModal() {
@@ -787,12 +818,20 @@ export default function AdminCareersApplicationsPage() {
                   <select
                     value={app.status}
                     disabled={busyId === app.id || app.status === "HIRED"}
-                    onChange={(e) =>
-                      void handleStatusChange(
-                        app,
-                        e.target.value as ApplicationStatus,
-                      )
-                    }
+                    onChange={(e) => {
+                      const newStatus = e.target.value as ApplicationStatus;
+                      if (newStatus === "REJECTED") {
+                        const futureRounds = activeFutureInterviewRounds(app);
+                        if (futureRounds.length > 0) {
+                          setRejectConfirmTarget({
+                            app,
+                            count: futureRounds.length,
+                          });
+                          return;
+                        }
+                      }
+                      void handleStatusChange(app, newStatus);
+                    }}
                     className={`${SELECT_CHEVRON} cursor-pointer rounded-lg border border-[#e5e5e5] bg-white py-1.5 pl-3 pr-9 font-montserrat text-xs text-[#333333] disabled:cursor-not-allowed disabled:opacity-70`}
                   >
                     {app.status === "HIRED" ? (
@@ -986,6 +1025,45 @@ export default function AdminCareersApplicationsPage() {
                   </Button>
                 </div>
               </form>
+            </div>,
+            document.body,
+          )
+        : null}
+
+      {mounted && rejectConfirmTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+                <h3 className="font-montserrat text-lg font-semibold text-[#333333]">
+                  Reject application?
+                </h3>
+                <p className="mt-2 font-montserrat text-sm text-[#5e5e5e]">
+                  This candidate has {rejectConfirmTarget.count} active
+                  interview{rejectConfirmTarget.count === 1 ? "" : "s"}{" "}
+                  scheduled. They will be cancelled automatically.
+                </p>
+                <div className="mt-6 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busyId === rejectConfirmTarget.app.id}
+                    onClick={() => setRejectConfirmTarget(null)}
+                    className="cursor-pointer rounded-full font-montserrat text-sm"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={busyId === rejectConfirmTarget.app.id}
+                    onClick={() => void handleRejectConfirm()}
+                    className="cursor-pointer rounded-full bg-[#b42318] font-montserrat text-sm hover:bg-[#912018]"
+                  >
+                    {busyId === rejectConfirmTarget.app.id
+                      ? "Rejecting..."
+                      : "Reject application"}
+                  </Button>
+                </div>
+              </div>
             </div>,
             document.body,
           )
