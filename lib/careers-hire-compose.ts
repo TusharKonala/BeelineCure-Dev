@@ -1,0 +1,57 @@
+export type InterviewRoundForHireCheck = {
+  confirmedAt: string | null;
+  scheduledAt: string;
+};
+
+export function hasCompletedInterviewRound(
+  rounds: InterviewRoundForHireCheck[],
+): boolean {
+  const now = Date.now();
+  return rounds.some(
+    (r) =>
+      r.confirmedAt !== null &&
+      new Date(r.scheduledAt).getTime() <= now,
+  );
+}
+
+export function buildOfferEmailSubject(jobTitle: string): string {
+  return `Job offer — ${jobTitle} at Clinivo`;
+}
+
+export function buildOfferEmailBody(params: {
+  candidateName: string;
+  jobTitle: string;
+}): string {
+  return `Dear ${params.candidateName},
+
+We are pleased to offer you the position of ${params.jobTitle} at Clinivo.
+
+Please find the key details below:
+
+Role: ${params.jobTitle}
+Start date: [Start Date]
+Compensation: [Salary]
+
+We were impressed with your interviews and believe you would be a great addition to our team. Please review this offer and let us know if you have any questions.
+
+We look forward to hearing from you.
+
+Best regards,
+[Your Name]
+Clinivo`;
+}
+
+export function buildGmailComposeUrl(params: {
+  to: string;
+  subject: string;
+  body: string;
+}): string {
+  const search = new URLSearchParams({
+    view: "cm",
+    fs: "1",
+    to: params.to,
+    su: params.subject,
+    body: params.body,
+  });
+  return `https://mail.google.com/mail/?${search.toString()}`;
+}
