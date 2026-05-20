@@ -1,6 +1,9 @@
 import { serve } from "inngest/next";
 import { inngest } from "@/inngest/client";
 import {
+  chatPushAfter2m,
+  doctorUnreadChatDigest,
+  lockChatAfter48h,
   processDoctorOverdueAppointments,
   screenCareersApplication,
   sendAppointmentReminder,
@@ -24,5 +27,8 @@ export const { GET, POST, PUT } = serve({
     sendInterviewReminder24h,
     sendInterviewReminder30m,
     screenCareersApplication,
+    lockChatAfter48h,
+    chatPushAfter2m,
+    doctorUnreadChatDigest,
   ],
 });
