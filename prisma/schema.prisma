@@ -89,6 +89,11 @@ enum RefundStatus {
   FAILED
 }
 
+enum ChatSenderRole {
+  PATIENT
+  DOCTOR
+}
+
 model User {
   id        String   @id @default(cuid())
   name      String?
@@ -132,6 +137,12 @@ model User {
   doctor        Doctor?
   notifications Notification[]
   patientReviews Review[] @relation("PatientReviews")
+  pushSubscriptions PushSubscription[]
+  chatReadStates    ChatReadState[]
+  /// Set when the user installs the PWA to the home screen (hides install banner).
+  pwaInstalledAt DateTime?
+  /// Set when the user dismisses the mobile install banner without installing.
+  pwaDismissedAt DateTime?
 }
 
 model HealthProfile {
@@ -299,8 +310,65 @@ model Appointment {
   /// Calendar event id for patch/delete on reschedule or cancel.
   googleCalendarEventId   String?
   createdAt        DateTime          @default(now())
+  chatConversation ChatConversation?
 
   @@index([status, date, time])
+}
+
+model ChatConversation {
+  id                    String    @id @default(cuid())
+  appointmentId         String    @unique
+  appointment           Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  twilioConversationSid String?   @unique
+  doctorUserId          String
+  patientUserId         String?
+  completedAt           DateTime
+  lockedAt              DateTime?
+  createdAt             DateTime  @default(now())
+
+  messages   ChatMessage[]
+  readStates ChatReadState[]
+
+  @@index([doctorUserId])
+  @@index([patientUserId])
+}
+
+model ChatMessage {
+  id               String         @id @default(cuid())
+  conversationId   String
+  conversation     ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  twilioMessageSid String         @unique
+  senderUserId     String
+  senderRole       ChatSenderRole
+  body             String         @db.Text
+  createdAt        DateTime       @default(now())
+
+  @@index([conversationId, createdAt(sort: Desc)])
+  @@index([senderUserId])
+}
+
+model ChatReadState {
+  conversationId String
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime
+
+  @@id([conversationId, userId])
+}
+
+model PushSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Prescription {
