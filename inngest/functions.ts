@@ -925,6 +925,226 @@ export const sendInterviewReminder24h = inngest.createFunction(
   },
 );
 
+export const lockChatAfter48h = inngest.createFunction(
+  {
+    id: "lock-chat-after-48h",
+    retries: 2,
+    triggers: [{ event: "chat/lock.scheduled" }],
+  },
+  async ({ event }) => {
+    const { conversationId } = event.data as { conversationId: string };
+    const { lockConversation } = await import("@/lib/chat");
+    await lockConversation(conversationId);
+    return { locked: true, conversationId };
+  },
+);
+
+export const chatPushAfter2m = inngest.createFunction(
+  {
+    id: "chat-push-after-2m",
+    retries: 2,
+    triggers: [{ event: "chat/message.sent" }],
+  },
+  async ({ event }) => {
+    const { messageId } = event.data as { messageId: string };
+    const message = await prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        body: true,
+        senderUserId: true,
+        senderRole: true,
+        createdAt: true,
+        conversation: {
+          select: {
+            id: true,
+            appointmentId: true,
+            doctorUserId: true,
+            patientUserId: true,
+            appointment: {
+              select: {
+                patientName: true,
+                doctor: { select: { name: true, user: { select: { name: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!message) return { skipped: true, reason: "not_found" };
+
+    const recipientUserId =
+      message.senderRole === "DOCTOR"
+        ? message.conversation.patientUserId
+        : message.conversation.doctorUserId;
+
+    if (!recipientUserId) {
+      return { skipped: true, reason: "no_recipient" };
+    }
+
+    const readState = await prisma.chatReadState.findUnique({
+      where: {
+        conversationId_userId: {
+          conversationId: message.conversation.id,
+          userId: recipientUserId,
+        },
+      },
+      select: { lastReadAt: true },
+    });
+
+    if (readState && readState.lastReadAt >= message.createdAt) {
+      return { skipped: true, reason: "already_read" };
+    }
+
+    const { UserRole, ChatSenderRole } = await import("@/generated/prisma/client");
+    const recipientRole =
+      message.senderRole === ChatSenderRole.DOCTOR
+        ? UserRole.PATIENT
+        : UserRole.DOCTOR;
+
+    const senderName =
+      message.senderRole === ChatSenderRole.PATIENT
+        ? message.conversation.appointment.patientName
+        : message.conversation.appointment.doctor.user?.name?.trim() ||
+          message.conversation.appointment.doctor.name;
+
+    const { chatThreadUrlForRole } = await import("@/lib/chat");
+    const { sendPushToUser } = await import("@/lib/web-push");
+
+    const url = chatThreadUrlForRole(
+      recipientRole,
+      message.conversation.appointmentId,
+    );
+
+    const result = await sendPushToUser(recipientUserId, {
+      title: `New message from ${senderName}`,
+      body:
+        message.body.length > 120
+          ? `${message.body.slice(0, 117).trim()}…`
+          : message.body,
+      url,
+    });
+
+    return { sent: result.sent, messageId, recipientUserId };
+  },
+);
+
+export const doctorUnreadChatDigest = inngest.createFunction(
+  {
+    id: "doctor-unread-chat-digest",
+    retries: 1,
+    triggers: [{ cron: "0 8,20 * * *" }],
+  },
+  async () => {
+    const { DoctorUnreadChatDigestEmailTemplate } = await import(
+      "@/components/doctor-unread-chat-digest-email-template"
+    );
+    const { resolveAppOrigin } = await import("@/lib/chat");
+    const { ChatSenderRole } = await import("@/generated/prisma/client");
+
+    const origin = resolveAppOrigin();
+    const chatUrl = `${origin}/doctor/chat`;
+
+    const doctors = await prisma.doctor.findMany({
+      where: { userId: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        userId: true,
+        user: { select: { email: true, name: true } },
+      },
+    });
+
+    let emailsSent = 0;
+
+    for (const doctor of doctors) {
+      const doctorUserId = doctor.userId;
+      const doctorEmail = doctor.user?.email?.trim();
+      if (!doctorUserId || !doctorEmail) continue;
+
+      const conversations = await prisma.chatConversation.findMany({
+        where: {
+          doctorUserId,
+          messages: { some: { senderRole: ChatSenderRole.PATIENT } },
+        },
+        select: { id: true },
+      });
+
+      if (conversations.length === 0) continue;
+
+      const readStates = await prisma.chatReadState.findMany({
+        where: { userId: doctorUserId },
+        select: { conversationId: true, lastReadAt: true },
+      });
+      const readMap = new Map(
+        readStates.map((r) => [r.conversationId, r.lastReadAt]),
+      );
+
+      const unreadByPatient = new Map<string, number>();
+
+      for (const conv of conversations) {
+        const lastPatientMsg = await prisma.chatMessage.findFirst({
+          where: {
+            conversationId: conv.id,
+            senderRole: ChatSenderRole.PATIENT,
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            createdAt: true,
+            conversation: {
+              select: {
+                appointment: { select: { patientName: true } },
+              },
+            },
+          },
+        });
+        if (!lastPatientMsg) continue;
+
+        const lastRead = readMap.get(conv.id) ?? new Date(0);
+        if (lastPatientMsg.createdAt <= lastRead) continue;
+
+        const patientName =
+          lastPatientMsg.conversation.appointment.patientName;
+        unreadByPatient.set(
+          patientName,
+          (unreadByPatient.get(patientName) ?? 0) + 1,
+        );
+      }
+
+      if (unreadByPatient.size === 0) continue;
+
+      const allNames = [...unreadByPatient.keys()];
+      const shown = allNames.slice(0, 5);
+      const moreCount = Math.max(0, allNames.length - 5);
+
+      const doctorDisplayName =
+        doctor.user?.name?.trim() || doctor.name;
+
+      const { error } = await resend.emails.send({
+        from: "Clinic Appointments <onboarding@resend.dev>",
+        to: doctorEmail,
+        subject: `Unread messages from ${shown.length === 1 ? shown[0] : `${shown.length} patients`}`,
+        react: DoctorUnreadChatDigestEmailTemplate({
+          doctorName: doctorDisplayName,
+          patientNames: shown,
+          moreCount,
+          chatUrl,
+        }),
+      });
+
+      if (error) {
+        console.error("[doctor-chat-digest] Email failed:", error);
+        continue;
+      }
+
+      emailsSent += 1;
+    }
+
+    return { emailsSent, doctorsChecked: doctors.length };
+  },
+);
+
 export const sendInterviewReminder30m = inngest.createFunction(
   {
     id: "send-interview-reminder-30m",
