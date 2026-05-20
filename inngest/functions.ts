@@ -778,6 +778,7 @@ export const screenCareersApplication = inngest.createFunction(
   {
     id: "screen-careers-application",
     retries: 2,
+    concurrency: { limit: 1 },
     triggers: [{ event: "careers/application.submitted" }],
   },
   async ({ event }) => {
