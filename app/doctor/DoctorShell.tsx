@@ -9,12 +9,14 @@ import {
   CalendarDays,
   LayoutDashboard,
   Menu,
+  MessageCircle,
   Pill,
   Users,
   CalendarClock,
   Settings,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
+import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
 import { DOCTOR_UNREAD_COUNT_EVENT } from "@/components/doctor/DoctorNotificationToaster";
 
 type DoctorNavItem = {
@@ -40,6 +42,7 @@ const navItems: DoctorNavItem[] = [
     label: "Prescriptions",
     icon: Pill,
   },
+  { href: "/doctor/chat", label: "Chat", icon: MessageCircle },
   { href: "/doctor/patients", label: "Patients", icon: Users },
   { href: "/doctor/settings", label: "Settings", icon: Settings },
   {
@@ -64,6 +67,7 @@ export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [doctorDisplayName, setDoctorDisplayName] = useState(
     session?.user?.name?.trim() || "Doctor",
   );
@@ -229,6 +233,11 @@ export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
                           : unreadNotificationCount}
                       </span>
                     )}
+                  {item.href === "/doctor/chat" && unreadChatCount > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -298,6 +307,11 @@ export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
                             : unreadNotificationCount}
                         </span>
                       )}
+                    {item.href === "/doctor/chat" && unreadChatCount > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                        {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
