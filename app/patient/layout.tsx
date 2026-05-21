@@ -9,9 +9,11 @@ import {
   CalendarDays,
   HeartPulse,
   LayoutDashboard,
+  MessageCircle,
   Settings,
   Menu,
 } from "lucide-react";
+import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
 import { Container } from "@/components/layout/Container";
 import { PATIENT_UNREAD_COUNT_EVENT } from "@/components/patient/PatientNotificationToaster";
 
@@ -27,6 +29,11 @@ const navItems: PatientNavItem[] = [
     href: "/patient/appointments",
     label: "Appointments",
     icon: CalendarDays,
+  },
+  {
+    href: "/patient/chat",
+    label: "Chat",
+    icon: MessageCircle,
   },
   {
     href: "/patient/health-profile",
@@ -54,6 +61,7 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const patientName = session?.user?.name?.trim() || "Patient";
   const initials =
     patientName
@@ -92,7 +100,33 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    function handleUnreadCountSync(event: Event) {
+    let cancelled = false;
+
+    async function loadUnreadChatCount() {
+      try {
+        const res = await fetch("/api/chat/unread-counts", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { total?: unknown };
+        const nextCount =
+          typeof data.total === "number" && Number.isFinite(data.total)
+            ? Math.max(0, Math.floor(data.total))
+            : 0;
+        if (!cancelled) setUnreadChatCount(nextCount);
+      } catch {
+        // best-effort
+      }
+    }
+
+    void loadUnreadChatCount();
+    const interval = setInterval(() => void loadUnreadChatCount(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
+    function handleNotificationUnread(event: Event) {
       const customEvent = event as CustomEvent<number>;
       const nextCount =
         typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
@@ -101,14 +135,31 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
       setUnreadNotificationCount(nextCount);
     }
 
+    function handleChatUnread(event: Event) {
+      const customEvent = event as CustomEvent<number>;
+      const nextCount =
+        typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
+          ? Math.max(0, Math.floor(customEvent.detail))
+          : 0;
+      setUnreadChatCount(nextCount);
+    }
+
     window.addEventListener(
       PATIENT_UNREAD_COUNT_EVENT,
-      handleUnreadCountSync as EventListener,
+      handleNotificationUnread as EventListener,
+    );
+    window.addEventListener(
+      CHAT_UNREAD_COUNT_EVENT,
+      handleChatUnread as EventListener,
     );
     return () => {
       window.removeEventListener(
         PATIENT_UNREAD_COUNT_EVENT,
-        handleUnreadCountSync as EventListener,
+        handleNotificationUnread as EventListener,
+      );
+      window.removeEventListener(
+        CHAT_UNREAD_COUNT_EVENT,
+        handleChatUnread as EventListener,
       );
     };
   }, []);
@@ -144,6 +195,11 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
                           : unreadNotificationCount}
                       </span>
                     )}
+                  {item.href === "/patient/chat" && unreadChatCount > 0 && (
+                    <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                      {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -213,6 +269,11 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
                             : unreadNotificationCount}
                         </span>
                       )}
+                    {item.href === "/patient/chat" && unreadChatCount > 0 && (
+                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                        {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}
