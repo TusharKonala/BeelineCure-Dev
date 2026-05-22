@@ -1,8 +1,4 @@
-import {
-  AppointmentStatus,
-  ChatSenderRole,
-  UserRole,
-} from "@/generated/prisma/client";
+import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
 import { inngest } from "@/inngest/client";
 import {
@@ -16,6 +12,7 @@ import {
 } from "@/lib/twilio";
 
 const CHAT_LOCK_MS = 48 * 60 * 60 * 1000;
+const PUSH_DELAY_MS = 5 * 60 * 1000;
 
 export function resolveAppOrigin(): string {
   return (
@@ -203,93 +200,37 @@ export async function ensureChatConversationForAppointment(
   return { status: "created", conversationId: row.id };
 }
 
-/**
- * Ensures conversations exist for all completed appointments for a patient user.
- */
-export async function lazyEnsureForPatient(userId: string, email: string) {
-  const completedAppointments = await prisma.appointment.findMany({
-    where: {
-      email,
-      status: AppointmentStatus.COMPLETED,
-      chatConversation: null,
-    },
-    select: { id: true },
-  });
-
-  for (const apt of completedAppointments) {
-    try {
-      await ensureChatConversationForAppointment(apt.id);
-    } catch (err) {
-      console.error(`[chat] lazyEnsure failed for ${apt.id}:`, err);
-    }
-  }
-
-  const pendingRows = await prisma.chatConversation.findMany({
-    where: {
-      patientUserId: null,
-      appointment: { email },
-    },
-    select: { appointmentId: true },
-  });
-
-  for (const row of pendingRows) {
-    try {
-      await ensureChatConversationForAppointment(row.appointmentId);
-    } catch (err) {
-      console.error(`[chat] lazyEnsure pending failed:`, err);
-    }
-  }
-
-  await prisma.chatConversation.updateMany({
-    where: {
-      patientUserId: null,
-      appointment: { email },
-    },
-    data: { patientUserId: userId },
-  });
-}
+type UnreadCountRow = { conversationId: string; count: bigint };
 
 export async function getUnreadCountsForUser(userId: string) {
-  const readStates = await prisma.chatReadState.findMany({
-    where: { userId },
-    select: { conversationId: true, lastReadAt: true },
-  });
-  const readMap = new Map(
-    readStates.map((r) => [r.conversationId, r.lastReadAt]),
-  );
-
-  const conversations = await prisma.chatConversation.findMany({
-    where: {
-      OR: [{ doctorUserId: userId }, { patientUserId: userId }],
-    },
-    select: { id: true },
-  });
-
-  const conversationIds = conversations.map((c) => c.id);
-  if (conversationIds.length === 0) {
-    return { total: 0, byConversationId: {} as Record<string, number> };
-  }
-
-  const messages = await prisma.chatMessage.findMany({
-    where: {
-      conversationId: { in: conversationIds },
-      senderUserId: { not: userId },
-    },
-    select: { conversationId: true, createdAt: true },
-    orderBy: { createdAt: "desc" },
-  });
+  const rows = await prisma.$queryRaw<UnreadCountRow[]>`
+    SELECT m."conversationId", COUNT(*)::bigint AS count
+    FROM "ChatMessage" m
+    INNER JOIN "ChatConversation" c ON c.id = m."conversationId"
+    LEFT JOIN "ChatReadState" rs
+      ON rs."conversationId" = m."conversationId" AND rs."userId" = ${userId}
+    WHERE (c."doctorUserId" = ${userId} OR c."patientUserId" = ${userId})
+      AND m."senderUserId" != ${userId}
+      AND m."createdAt" > COALESCE(rs."lastReadAt", TIMESTAMP '1970-01-01')
+    GROUP BY m."conversationId"
+  `;
 
   const byConversationId: Record<string, number> = {};
-  for (const msg of messages) {
-    const lastRead = readMap.get(msg.conversationId) ?? new Date(0);
-    if (msg.createdAt > lastRead) {
-      byConversationId[msg.conversationId] =
-        (byConversationId[msg.conversationId] ?? 0) + 1;
-    }
+  for (const row of rows) {
+    byConversationId[row.conversationId] = Number(row.count);
   }
 
   const total = Object.values(byConversationId).reduce((a, b) => a + b, 0);
   return { total, byConversationId };
+}
+
+/** Enqueue idempotent background provisioning for a completed appointment. */
+export async function enqueueChatConversationEnsure(appointmentId: string) {
+  await inngest.send({
+    id: `chat-ensure-${appointmentId}`,
+    name: "chat/conversation.ensure",
+    data: { appointmentId },
+  });
 }
 
 export async function markRead(conversationId: string, userId: string) {
@@ -432,9 +373,10 @@ export async function sendChatMessage(params: {
   if (recipientUserId) {
     try {
       await inngest.send({
+        id: `push-${params.conversationId}`,
         name: "chat/message.sent",
         data: { messageId: message.id },
-        ts: Date.now() + 2 * 60 * 1000,
+        ts: Date.now() + PUSH_DELAY_MS,
       });
     } catch (err) {
       console.error("[chat] Failed to schedule push:", err);

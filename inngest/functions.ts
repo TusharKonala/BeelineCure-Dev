@@ -925,6 +925,19 @@ export const sendInterviewReminder24h = inngest.createFunction(
   },
 );
 
+export const ensureChatConversationJob = inngest.createFunction(
+  {
+    id: "ensure-chat-conversation",
+    retries: 2,
+    triggers: [{ event: "chat/conversation.ensure" }],
+  },
+  async ({ event }) => {
+    const { appointmentId } = event.data as { appointmentId: string };
+    const { ensureChatConversationForAppointment } = await import("@/lib/chat");
+    return ensureChatConversationForAppointment(appointmentId);
+  },
+);
+
 export const lockChatAfter48h = inngest.createFunction(
   {
     id: "lock-chat-after-48h",
@@ -939,9 +952,9 @@ export const lockChatAfter48h = inngest.createFunction(
   },
 );
 
-export const chatPushAfter2m = inngest.createFunction(
+export const chatPushAfter5m = inngest.createFunction(
   {
-    id: "chat-push-after-2m",
+    id: "chat-push-after-5m",
     retries: 2,
     triggers: [{ event: "chat/message.sent" }],
   },
