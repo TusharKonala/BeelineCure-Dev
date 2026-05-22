@@ -12,7 +12,7 @@ import { prisma } from "@/lib/db";
 import { inngest } from "@/inngest/client";
 import { createAppointmentNotificationForEmail } from "@/lib/notifications";
 import { formatDoctorDisplayName } from "@/lib/doctor-name";
-import { ensureChatConversationForAppointment } from "@/lib/chat";
+import { enqueueChatConversationEnsure } from "@/lib/chat";
 import { prescriptionReminderTsFromSavedAt } from "@/lib/reminder-time";
 import {
   isKnownLocalMedicine,
@@ -255,9 +255,9 @@ export async function PUT(
   });
 
   try {
-    await ensureChatConversationForAppointment(appointment.id);
+    await enqueueChatConversationEnsure(appointment.id);
   } catch (err) {
-    console.error("[doctor-prescription] Failed to ensure chat conversation:", err);
+    console.error("[doctor-prescription] Failed to enqueue chat conversation:", err);
   }
 
   const courseDays = Math.max(...medicines.map((medicine) => medicine.durationDays));
