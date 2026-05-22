@@ -3,6 +3,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import Pusher from "pusher-js";
 import { Loader2, Send } from "lucide-react";
 
 export const CHAT_UNREAD_COUNT_EVENT = "chat:unread-count";
@@ -35,7 +36,7 @@ export function ChatThreadView({
   backHref,
   backLabel = "Back to chat",
 }: ChatThreadViewProps) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const [thread, setThread] = useState<ThreadMeta | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -116,17 +117,56 @@ export function ChatThreadView({
   }, [status, loadThread, loadMessages]);
 
   useEffect(() => {
-    if (!thread?.isReady || !conversationIdRef.current) return;
-    if (thread?.isReadOnly) return;
+    const conversationId = thread?.id;
+    const userId = session?.user?.id;
+    if (!thread?.isReady || !conversationId || !userId) return;
 
-    const poll = () => {
-      if (document.visibilityState !== "visible") return;
-      void loadMessages(conversationIdRef.current!);
+    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+    if (!key || !cluster) return;
+
+    const pusher = new Pusher(key, { cluster });
+    const channel = pusher.subscribe(`conversation-${conversationId}`);
+
+    const onNewMessage = (payload: {
+      id: string;
+      body: string;
+      senderUserId: string;
+      senderRole: string;
+      createdAt: string;
+    }) => {
+      const isOwn = payload.senderUserId === userId;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === payload.id)) return prev;
+        return [
+          ...prev,
+          {
+            id: payload.id,
+            body: payload.body,
+            senderUserId: payload.senderUserId,
+            senderRole: payload.senderRole,
+            isOwn,
+            createdAt: payload.createdAt,
+          },
+        ];
+      });
+
+      if (!isOwn && document.visibilityState === "visible") {
+        void fetch(
+          `/api/chat/threads/${encodeURIComponent(conversationId)}/read`,
+          { method: "POST" },
+        ).then(() => syncUnreadBadge());
+      }
     };
 
-    const interval = setInterval(poll, 4000);
-    return () => clearInterval(interval);
-  }, [thread?.isReady, thread?.isReadOnly, loadMessages]);
+    channel.bind("new-message", onNewMessage);
+
+    return () => {
+      channel.unbind("new-message", onNewMessage);
+      pusher.unsubscribe(`conversation-${conversationId}`);
+      pusher.disconnect();
+    };
+  }, [thread?.isReady, thread?.id, session?.user?.id, syncUnreadBadge]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
