@@ -8,6 +8,7 @@ import {
   sendChatMessage,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
+import { triggerNewChatMessage } from "@/lib/pusher-server";
 import { twilioUserIdentity } from "@/lib/twilio";
 
 export async function GET(
@@ -100,6 +101,18 @@ export async function POST(
       senderRole,
       body: text,
     });
+
+    try {
+      await triggerNewChatMessage(id, {
+        id: message.id,
+        body: message.body,
+        senderUserId: message.senderUserId,
+        senderRole: message.senderRole,
+        createdAt: message.createdAt.toISOString(),
+      });
+    } catch (err) {
+      console.error("[chat/messages] Pusher trigger failed:", err);
+    }
 
     return NextResponse.json({
       message: {
