@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { X } from "lucide-react";
@@ -17,6 +17,8 @@ export function PwaInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [installing, setInstalling] = useState(false);
+  const [isIos, setIsIos] = useState(false);
+  const dismissedPermanentlyRef = useRef(false);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -32,6 +34,9 @@ export function PwaInstallBanner() {
 
     if (!isMobile || isStandalone) return;
 
+    const ua = navigator.userAgent;
+    setIsIos(/iPhone|iPad|iPod/i.test(ua));
+
     let cancelled = false;
 
     async function checkBanner() {
@@ -39,8 +44,13 @@ export function PwaInstallBanner() {
         const res = await fetch("/api/pwa/dismiss", { cache: "no-store" });
         if (!res.ok) return;
         const data = (await res.json()) as { showBanner?: boolean };
-        if (!cancelled && data.showBanner) {
+        if (cancelled) return;
+        if (data.showBanner) {
+          dismissedPermanentlyRef.current = false;
           setVisible(true);
+        } else {
+          dismissedPermanentlyRef.current = true;
+          setVisible(false);
         }
       } catch {
         // best-effort
@@ -50,6 +60,7 @@ export function PwaInstallBanner() {
     void checkBanner();
 
     function onBeforeInstall(e: Event) {
+      if (dismissedPermanentlyRef.current) return;
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       setVisible(true);
@@ -57,6 +68,8 @@ export function PwaInstallBanner() {
 
     function onInstalled() {
       setVisible(false);
+      dismissedPermanentlyRef.current = true;
+      setDeferredPrompt(null);
       void fetch("/api/pwa/dismiss", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -74,6 +87,28 @@ export function PwaInstallBanner() {
     };
   }, [status, pathname]);
 
+  async function persistDismiss(reason: "dismissed" | "installed") {
+    const res = await fetch("/api/pwa/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    if (!res.ok) {
+      throw new Error("Failed to save dismiss state");
+    }
+    dismissedPermanentlyRef.current = true;
+  }
+
+  async function handleDismiss() {
+    try {
+      await persistDismiss("dismissed");
+      setVisible(false);
+      setDeferredPrompt(null);
+    } catch {
+      // Keep banner visible if persistence failed
+    }
+  }
+
   async function handleInstall() {
     if (!deferredPrompt) return;
     setInstalling(true);
@@ -82,25 +117,17 @@ export function PwaInstallBanner() {
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === "accepted") {
         setVisible(false);
-        await fetch("/api/pwa/dismiss", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: "installed" }),
-        });
+        try {
+          await persistDismiss("installed");
+        } catch {
+          // appinstalled handler will retry
+        }
+      } else {
+        await handleDismiss();
       }
     } finally {
       setInstalling(false);
-      setDeferredPrompt(null);
     }
-  }
-
-  async function handleDismiss() {
-    setVisible(false);
-    await fetch("/api/pwa/dismiss", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "dismissed" }),
-    });
   }
 
   if (!visible) return null;
@@ -111,11 +138,28 @@ export function PwaInstallBanner() {
       aria-label="Install app"
       className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#e5e5e5] bg-white/95 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] backdrop-blur-sm"
     >
-      <div className="mx-auto flex max-w-lg items-center gap-3">
-        <p className="flex-1 font-montserrat text-xs leading-snug text-[#5E5E5E]">
-          <span className="font-semibold text-[#333333]">Add to Home Screen</span>{" "}
-          for reliable notifications, even when the browser is closed.
-        </p>
+      <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="font-montserrat text-xs leading-snug text-[#5E5E5E]">
+            <span className="font-semibold text-[#333333]">Add to Home Screen</span>{" "}
+            for reliable notifications, even when the browser is closed.
+          </p>
+          {isIos && (
+            <p className="mt-1 font-montserrat text-[11px] leading-snug text-[#9A9A9A]">
+              <span className="font-semibold text-[#5E5E5E]">On iPhone:</span> Add
+              Clinivo to your Home Screen to receive notifications when the app is
+              closed. Notifications are not available in Safari alone.
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void handleDismiss()}
+          className="shrink-0 rounded-lg border border-[#e5e5e5] px-3 py-1.5 font-montserrat text-xs font-medium text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5]"
+        >
+          Not now
+        </button>
         <button
           type="button"
           onClick={() => void handleInstall()}
@@ -132,6 +176,7 @@ export function PwaInstallBanner() {
         >
           <X className="size-4" />
         </button>
+        </div>
       </div>
     </div>
   );
