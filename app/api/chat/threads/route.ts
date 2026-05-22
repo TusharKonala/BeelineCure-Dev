@@ -1,19 +1,27 @@
 import { getServerSession } from "next-auth/next";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import {
   AppointmentStatus,
   ChatSenderRole,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
-import {
-  getUnreadCountsForUser,
-  isChatLocked,
-  lazyEnsureForPatient,
-} from "@/lib/chat";
+import { getUnreadCountsForUser, isChatLocked } from "@/lib/chat";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+function parseLimit(raw: string | null): number {
+  const n = Number(raw ?? "5");
+  if (!Number.isFinite(n)) return 5;
+  return Math.min(20, Math.max(1, Math.floor(n)));
+}
+
+function parseCursor(raw: string | null): Date | null {
+  if (!raw?.trim()) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
   const role = session?.user?.role;
@@ -23,9 +31,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (role === UserRole.PATIENT && email) {
-    await lazyEnsureForPatient(userId, email);
-  }
+  const limit = parseLimit(request.nextUrl.searchParams.get("limit"));
+  const cursor = parseCursor(request.nextUrl.searchParams.get("cursor"));
 
   const unread = await getUnreadCountsForUser(userId);
 
@@ -34,12 +41,13 @@ export async function GET() {
       where: {
         email,
         status: AppointmentStatus.COMPLETED,
+        ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
-      orderBy: [{ date: "desc" }, { time: "desc" }],
+      orderBy: { createdAt: "desc" },
+      take: limit + 1,
       select: {
         id: true,
-        date: true,
-        time: true,
+        createdAt: true,
         doctor: {
           select: {
             id: true,
@@ -64,7 +72,12 @@ export async function GET() {
       },
     });
 
-    const threads = completedAppointments.map((apt) => {
+    const hasMore = completedAppointments.length > limit;
+    const page = hasMore
+      ? completedAppointments.slice(0, limit)
+      : completedAppointments;
+
+    const threads = page.map((apt) => {
       const conv = apt.chatConversation;
       const convId = conv?.id ?? `pending-${apt.id}`;
       return {
@@ -83,7 +96,11 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({ threads });
+    const nextCursor = hasMore
+      ? page[page.length - 1]!.createdAt.toISOString()
+      : null;
+
+    return NextResponse.json({ threads, nextCursor });
   }
 
   if (role === UserRole.DOCTOR) {
@@ -91,11 +108,14 @@ export async function GET() {
       where: {
         doctorUserId: userId,
         messages: { some: { senderRole: ChatSenderRole.PATIENT } },
+        ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
       orderBy: { createdAt: "desc" },
+      take: limit + 1,
       select: {
         id: true,
         appointmentId: true,
+        createdAt: true,
         completedAt: true,
         lockedAt: true,
         twilioConversationSid: true,
@@ -114,7 +134,10 @@ export async function GET() {
       },
     });
 
-    const threads = conversations.map((c) => ({
+    const hasMore = conversations.length > limit;
+    const page = hasMore ? conversations.slice(0, limit) : conversations;
+
+    const threads = page.map((c) => ({
       id: c.id,
       appointmentId: c.appointmentId,
       peerName: c.appointment.patientName,
@@ -127,7 +150,11 @@ export async function GET() {
       isReady: Boolean(c.twilioConversationSid),
     }));
 
-    return NextResponse.json({ threads });
+    const nextCursor = hasMore
+      ? page[page.length - 1]!.createdAt.toISOString()
+      : null;
+
+    return NextResponse.json({ threads, nextCursor });
   }
 
   return NextResponse.json({ error: "Forbidden" }, { status: 403 });

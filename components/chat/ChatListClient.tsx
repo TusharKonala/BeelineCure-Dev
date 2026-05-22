@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Loader2, MessageCircle } from "lucide-react";
 import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
 
@@ -24,37 +25,99 @@ type ChatListClientProps = {
   basePath: "/patient/chat" | "/doctor/chat";
 };
 
+const PAGE_SIZE = 5;
+
 export function ChatListClient({ basePath }: ChatListClientProps) {
   const { status } = useSession();
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  const loadThreads = useCallback(async () => {
-    try {
-      const res = await fetch("/api/chat/threads", { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { threads?: ChatThread[] };
-      const list = Array.isArray(data.threads) ? data.threads : [];
-      setThreads(list);
-      const total = list.reduce((sum, t) => sum + (t.unreadCount ?? 0), 0);
-      window.dispatchEvent(
-        new CustomEvent<number>(CHAT_UNREAD_COUNT_EVENT, {
-          detail: total,
-        }),
-      );
-    } catch {
-      // best-effort
-    } finally {
-      setLoading(false);
-    }
+  const syncUnreadBadge = useCallback((list: ChatThread[]) => {
+    const total = list.reduce((sum, t) => sum + (t.unreadCount ?? 0), 0);
+    window.dispatchEvent(
+      new CustomEvent<number>(CHAT_UNREAD_COUNT_EVENT, {
+        detail: total,
+      }),
+    );
   }, []);
+
+  const fetchThreads = useCallback(
+    async (cursor: string | null, append: boolean) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (cursor) params.set("cursor", cursor);
+
+      const res = await fetch(`/api/chat/threads?${params}`, { cache: "no-store" });
+      if (!res.ok) return null;
+
+      const data = (await res.json()) as {
+        threads?: ChatThread[];
+        nextCursor?: string | null;
+      };
+      const list = Array.isArray(data.threads) ? data.threads : [];
+      const next = data.nextCursor ?? null;
+
+      if (append) {
+        setThreads((prev) => {
+          const seen = new Set(prev.map((t) => t.appointmentId));
+          const merged = [
+            ...prev,
+            ...list.filter((t) => !seen.has(t.appointmentId)),
+          ];
+          syncUnreadBadge(merged);
+          return merged;
+        });
+      } else {
+        setThreads(list);
+        syncUnreadBadge(list);
+      }
+
+      setNextCursor(next);
+      setHasMore(Boolean(next));
+      return list;
+    },
+    [syncUnreadBadge],
+  );
 
   useEffect(() => {
     if (status !== "authenticated") return;
-    void loadThreads();
-    const interval = setInterval(() => void loadThreads(), 30_000);
-    return () => clearInterval(interval);
-  }, [status, loadThreads]);
+    let cancelled = false;
+
+    async function init() {
+      setLoading(true);
+      try {
+        await fetchThreads(null, false);
+      } catch {
+        // best-effort
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void init();
+    return () => {
+      cancelled = true;
+    };
+  }, [status, fetchThreads]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      await fetchThreads(nextCursor, true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, nextCursor, loadingMore, fetchThreads]);
+
+  const [infiniteRef] = useInfiniteScroll({
+    loading: loadingMore,
+    hasNextPage: hasMore,
+    onLoadMore: loadMore,
+    disabled: loading || !hasMore,
+  });
 
   if (loading) {
     return (
@@ -135,6 +198,13 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
           </Link>
         </li>
       ))}
+      {hasMore && (
+        <li ref={infiniteRef} className="flex justify-center py-4">
+          {loadingMore && (
+            <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
+          )}
+        </li>
+      )}
     </ul>
   );
 }
