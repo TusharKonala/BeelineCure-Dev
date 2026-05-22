@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Pusher from "pusher-js";
 import { Loader2, Send } from "lucide-react";
+import { formatMessageTime } from "@/components/chat/format-chat-time";
+import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
 
 export const CHAT_UNREAD_COUNT_EVENT = "chat:unread-count";
 
@@ -29,12 +31,14 @@ type ChatThreadViewProps = {
   appointmentId: string;
   backHref: string;
   backLabel?: string;
+  className?: string;
 };
 
 export function ChatThreadView({
   appointmentId,
   backHref,
   backLabel = "Back to chat",
+  className = "",
 }: ChatThreadViewProps) {
   const { data: session, status } = useSession();
   const [thread, setThread] = useState<ThreadMeta | null>(null);
@@ -51,11 +55,9 @@ export function ChatThreadView({
       const res = await fetch("/api/chat/unread-counts", { cache: "no-store" });
       if (!res.ok) return;
       const data = (await res.json()) as { total?: number };
-      window.dispatchEvent(
-        new CustomEvent<number>(CHAT_UNREAD_COUNT_EVENT, {
-          detail: typeof data.total === "number" ? data.total : 0,
-        }),
-      );
+      if (typeof data.total === "number") {
+        syncGlobalUnreadBadge(data.total);
+      }
     } catch {
       // best-effort
     }
@@ -136,6 +138,8 @@ export function ChatThreadView({
       createdAt: string;
     }) => {
       const isOwn = payload.senderUserId === userId;
+      if (isOwn) return;
+
       setMessages((prev) => {
         if (prev.some((m) => m.id === payload.id)) return prev;
         return [
@@ -195,7 +199,11 @@ export function ChatThreadView({
       }
       const data = (await res.json()) as { message?: ChatMessage };
       if (data.message) {
-        setMessages((prev) => [...prev, data.message!]);
+        setMessages((prev) =>
+          prev.some((m) => m.id === data.message!.id)
+            ? prev
+            : [...prev, data.message!],
+        );
       }
       setDraft("");
       void syncUnreadBadge();
@@ -228,8 +236,10 @@ export function ChatThreadView({
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col rounded-xl border border-[#e5e5e5] bg-white shadow-sm">
-      <div className="flex items-center gap-3 border-b border-[#e5e5e5] px-4 py-3">
+    <div
+      className={`flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-sm ${className}`}
+    >
+      <div className="flex shrink-0 items-center gap-3 border-b border-[#e5e5e5] px-4 py-3">
         <Link
           href={backHref}
           className="font-montserrat text-sm font-medium text-[#2555F3] hover:text-[#1e44c7]"
@@ -244,7 +254,7 @@ export function ChatThreadView({
       {thread?.isReadOnly && (
         <div
           role="status"
-          className="border-b border-[#e5e5e5] bg-[#f5f8ff] px-4 py-2 font-montserrat text-xs text-[#5E5E5E]"
+          className="shrink-0 border-b border-[#e5e5e5] bg-[#f5f8ff] px-4 py-2 font-montserrat text-xs text-[#5E5E5E]"
         >
           This chat is read-only — 48 hours have passed since your appointment
           was completed.
@@ -252,12 +262,12 @@ export function ChatThreadView({
       )}
 
       {!thread?.isReady && (
-        <div className="border-b border-[#e5e5e5] bg-[#fff9e6] px-4 py-2 font-montserrat text-xs text-[#5E5E5E]">
+        <div className="shrink-0 border-b border-[#e5e5e5] bg-[#fff9e6] px-4 py-2 font-montserrat text-xs text-[#5E5E5E]">
           Chat is being set up. Please refresh in a moment.
         </div>
       )}
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 && thread?.isReady && (
           <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
             No messages yet. Say hello to start the conversation.
@@ -276,6 +286,13 @@ export function ChatThreadView({
               }`}
             >
               <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
+              <p
+                className={`mt-1 text-[10px] ${
+                  m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
+                }`}
+              >
+                {formatMessageTime(m.createdAt)}
+              </p>
             </div>
           </div>
         ))}
@@ -283,14 +300,14 @@ export function ChatThreadView({
       </div>
 
       {error && (
-        <p className="px-4 pb-2 font-montserrat text-xs text-[#b42318]">
+        <p className="shrink-0 px-4 pb-2 font-montserrat text-xs text-[#b42318]">
           {error}
         </p>
       )}
 
       <form
         onSubmit={handleSend}
-        className="flex gap-2 border-t border-[#e5e5e5] p-4"
+        className="flex shrink-0 gap-2 border-t border-[#e5e5e5] p-4"
       >
         <input
           type="text"

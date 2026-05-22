@@ -16,6 +16,7 @@ import {
   Settings,
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
+import { ChatInboxRealtime } from "@/components/chat/ChatInboxRealtime";
 import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
 import { DOCTOR_UNREAD_COUNT_EVENT } from "@/components/doctor/DoctorNotificationToaster";
 
@@ -181,7 +182,31 @@ export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
   }, [pathname]);
 
   useEffect(() => {
-    function handleUnreadCountSync(event: Event) {
+    let cancelled = false;
+
+    async function loadUnreadChatCount() {
+      try {
+        const res = await fetch("/api/chat/unread-counts", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { total?: unknown };
+        const nextCount =
+          typeof data.total === "number" && Number.isFinite(data.total)
+            ? Math.max(0, Math.floor(data.total))
+            : 0;
+        if (!cancelled) setUnreadChatCount(nextCount);
+      } catch {
+        // best-effort
+      }
+    }
+
+    void loadUnreadChatCount();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleNotificationUnread(event: Event) {
       const customEvent = event as CustomEvent<number>;
       const nextCount =
         typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
@@ -190,20 +215,38 @@ export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
       setUnreadNotificationCount(nextCount);
     }
 
+    function handleChatUnread(event: Event) {
+      const customEvent = event as CustomEvent<number>;
+      const nextCount =
+        typeof customEvent.detail === "number" && Number.isFinite(customEvent.detail)
+          ? Math.max(0, Math.floor(customEvent.detail))
+          : 0;
+      setUnreadChatCount(nextCount);
+    }
+
     window.addEventListener(
       DOCTOR_UNREAD_COUNT_EVENT,
-      handleUnreadCountSync as EventListener,
+      handleNotificationUnread as EventListener,
+    );
+    window.addEventListener(
+      CHAT_UNREAD_COUNT_EVENT,
+      handleChatUnread as EventListener,
     );
     return () => {
       window.removeEventListener(
         DOCTOR_UNREAD_COUNT_EVENT,
-        handleUnreadCountSync as EventListener,
+        handleNotificationUnread as EventListener,
+      );
+      window.removeEventListener(
+        CHAT_UNREAD_COUNT_EVENT,
+        handleChatUnread as EventListener,
       );
     };
   }, []);
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
+      <ChatInboxRealtime />
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e5e5e5] bg-white lg:block">
         <div className="px-4 py-6">
           <h2 className="font-montaga text-xl text-[#333333]">Doctor</h2>
