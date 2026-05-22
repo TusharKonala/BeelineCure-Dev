@@ -8,6 +8,7 @@ import {
   sendChatMessage,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
+import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
 import { triggerNewChatMessage } from "@/lib/pusher-server";
 import { twilioUserIdentity } from "@/lib/twilio";
 
@@ -112,6 +113,25 @@ export async function POST(
       });
     } catch (err) {
       console.error("[chat/messages] Pusher trigger failed:", err);
+    }
+
+    try {
+      const conv = await prisma.chatConversation.findUnique({
+        where: { id },
+        select: { appointmentId: true },
+      });
+      if (conv) {
+        await notifyChatInboxAfterMessage({
+          conversationId: id,
+          appointmentId: conv.appointmentId,
+          senderUserId: userId,
+          senderRole,
+          messageBody: message.body,
+          messageCreatedAt: message.createdAt,
+        });
+      }
+    } catch (err) {
+      console.error("[chat/messages] Inbox notify failed:", err);
     }
 
     return NextResponse.json({
