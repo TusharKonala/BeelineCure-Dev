@@ -1,5 +1,10 @@
 import Pusher from "pusher";
-import type { ChatSenderRole } from "@/generated/prisma/client";
+import type {
+  ChatInboxUpdatePayload,
+  ChatMessagePushPayload,
+} from "@/lib/chat-realtime-types";
+
+export type { ChatInboxUpdatePayload, ChatMessagePushPayload };
 
 let pusherServer: Pusher | null = null;
 
@@ -28,13 +33,9 @@ function getPusherServer() {
   return pusherServer;
 }
 
-export type ChatMessagePushPayload = {
-  id: string;
-  body: string;
-  senderUserId: string;
-  senderRole: ChatSenderRole;
-  createdAt: string;
-};
+export function userPrivateChannel(userId: string) {
+  return `private-user-${userId}`;
+}
 
 export async function triggerNewChatMessage(
   conversationId: string,
@@ -43,3 +44,13 @@ export async function triggerNewChatMessage(
   const pusher = getPusherServer();
   await pusher.trigger(`conversation-${conversationId}`, "new-message", message);
 }
+
+export async function triggerChatInboxUpdate(
+  userId: string,
+  payload: ChatInboxUpdatePayload,
+) {
+  const pusher = getPusherServer();
+  await pusher.trigger(userPrivateChannel(userId), "inbox-update", payload);
+}
+
+export { getPusherServer };
