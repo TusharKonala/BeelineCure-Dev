@@ -21,6 +21,20 @@ function parseCursor(raw: string | null): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function sortThreadsByActivity<
+  T extends { lastMessageAt: string | null; sortFallbackAt: string },
+>(threads: T[]): T[] {
+  return [...threads].sort((a, b) => {
+    const at = a.lastMessageAt
+      ? new Date(a.lastMessageAt).getTime()
+      : new Date(a.sortFallbackAt).getTime();
+    const bt = b.lastMessageAt
+      ? new Date(b.lastMessageAt).getTime()
+      : new Date(b.sortFallbackAt).getTime();
+    return bt - at;
+  });
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
@@ -77,9 +91,11 @@ export async function GET(request: NextRequest) {
       ? completedAppointments.slice(0, limit)
       : completedAppointments;
 
-    const threads = page.map((apt) => {
+    const mapped = page.map((apt) => {
       const conv = apt.chatConversation;
       const convId = conv?.id ?? `pending-${apt.id}`;
+      const lastMessageAt =
+        conv?.messages[0]?.createdAt?.toISOString() ?? null;
       return {
         id: convId,
         appointmentId: apt.id,
@@ -87,14 +103,19 @@ export async function GET(request: NextRequest) {
         peerSubtitle: apt.doctor.specialization,
         peerPhotoUrl: apt.doctor.profilePhotoUrl,
         lastMessagePreview: conv?.messages[0]?.body ?? null,
-        lastMessageAt: conv?.messages[0]?.createdAt?.toISOString() ?? null,
+        lastMessageAt,
         unreadCount: conv ? (unread.byConversationId[conv.id] ?? 0) : 0,
         isReadOnly: conv
           ? isChatLocked(conv.completedAt, conv.lockedAt)
           : false,
         isReady: Boolean(conv?.twilioConversationSid),
+        sortFallbackAt: apt.createdAt.toISOString(),
       };
     });
+
+    const threads = sortThreadsByActivity(mapped).map(
+      ({ sortFallbackAt: _s, ...t }) => t,
+    );
 
     const nextCursor = hasMore
       ? page[page.length - 1]!.createdAt.toISOString()
@@ -137,18 +158,26 @@ export async function GET(request: NextRequest) {
     const hasMore = conversations.length > limit;
     const page = hasMore ? conversations.slice(0, limit) : conversations;
 
-    const threads = page.map((c) => ({
-      id: c.id,
-      appointmentId: c.appointmentId,
-      peerName: c.appointment.patientName,
-      peerSubtitle: null,
-      peerPhotoUrl: null,
-      lastMessagePreview: c.messages[0]?.body ?? null,
-      lastMessageAt: c.messages[0]?.createdAt?.toISOString() ?? null,
-      unreadCount: unread.byConversationId[c.id] ?? 0,
-      isReadOnly: isChatLocked(c.completedAt, c.lockedAt),
-      isReady: Boolean(c.twilioConversationSid),
-    }));
+    const mapped = page.map((c) => {
+      const lastMessageAt = c.messages[0]?.createdAt?.toISOString() ?? null;
+      return {
+        id: c.id,
+        appointmentId: c.appointmentId,
+        peerName: c.appointment.patientName,
+        peerSubtitle: null,
+        peerPhotoUrl: null,
+        lastMessagePreview: c.messages[0]?.body ?? null,
+        lastMessageAt,
+        unreadCount: unread.byConversationId[c.id] ?? 0,
+        isReadOnly: isChatLocked(c.completedAt, c.lockedAt),
+        isReady: Boolean(c.twilioConversationSid),
+        sortFallbackAt: c.createdAt.toISOString(),
+      };
+    });
+
+    const threads = sortThreadsByActivity(mapped).map(
+      ({ sortFallbackAt: _s, ...t }) => t,
+    );
 
     const nextCursor = hasMore
       ? page[page.length - 1]!.createdAt.toISOString()

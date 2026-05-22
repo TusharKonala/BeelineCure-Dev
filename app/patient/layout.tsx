@@ -13,6 +13,7 @@ import {
   Settings,
   Menu,
 } from "lucide-react";
+import { ChatInboxRealtime } from "@/components/chat/ChatInboxRealtime";
 import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
 import { Container } from "@/components/layout/Container";
 import { PATIENT_UNREAD_COUNT_EVENT } from "@/components/patient/PatientNotificationToaster";
@@ -166,6 +167,7 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#fafafa]">
+      <ChatInboxRealtime />
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e5e5e5] bg-white lg:block">
         <div className="px-4 py-6">
           <h2 className="font-montaga text-xl text-[#333333]">Patient</h2>
