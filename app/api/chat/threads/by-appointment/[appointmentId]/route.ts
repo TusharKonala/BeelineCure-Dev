@@ -4,9 +4,9 @@ import { AppointmentStatus, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
+  enqueueChatConversationEnsure,
   ensureChatConversationForAppointment,
   isChatLocked,
-  lazyEnsureForPatient,
   markRead,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
@@ -26,10 +26,6 @@ export async function GET(
 
   const { appointmentId } = await context.params;
 
-  if (role === UserRole.PATIENT && email) {
-    await lazyEnsureForPatient(userId, email);
-  }
-
   let conversation = await prisma.chatConversation.findUnique({
     where: { appointmentId },
     include: {
@@ -44,17 +40,27 @@ export async function GET(
     },
   });
 
-  if (!conversation && role === UserRole.PATIENT) {
+  if (!conversation) {
     const apt = await prisma.appointment.findFirst({
       where: {
         id: appointmentId,
-        email: email ?? "",
         status: AppointmentStatus.COMPLETED,
+        ...(role === UserRole.PATIENT && email ? { email } : {}),
       },
       select: { id: true },
     });
+
     if (apt) {
-      await ensureChatConversationForAppointment(apt.id);
+      try {
+        await enqueueChatConversationEnsure(apt.id);
+      } catch {
+        // best-effort enqueue
+      }
+      try {
+        await ensureChatConversationForAppointment(apt.id);
+      } catch (err) {
+        console.error("[chat/by-appointment] ensure failed:", err);
+      }
       conversation = await prisma.chatConversation.findUnique({
         where: { appointmentId },
         include: {

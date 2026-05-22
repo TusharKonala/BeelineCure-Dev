@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
-import { lazyEnsureForPatient } from "@/lib/chat";
 import { Container } from "@/components/layout/Container";
 import { ChatListClient } from "@/components/chat/ChatListClient";
 
@@ -9,10 +8,6 @@ export default async function PatientChatPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     redirect("/auth/signin?callbackUrl=/patient/chat");
-  }
-
-  if (session.user.id) {
-    await lazyEnsureForPatient(session.user.id, session.user.email);
   }
 
   return (
