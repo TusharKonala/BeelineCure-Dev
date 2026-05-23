@@ -59,7 +59,7 @@ export async function GET(
       try {
         await enqueueChatConversationEnsure(apt.id);
       } catch {
-        // best-effort enqueue for Twilio provisioning
+        // best-effort enqueue for background record ensure
       }
       conversation = await prisma.chatConversation.findUnique({
         where: { appointmentId },
@@ -99,7 +99,7 @@ export async function GET(
       appointmentId: conversation.appointmentId,
       peerName,
       isReadOnly: isChatLocked(conversation.completedAt, conversation.lockedAt),
-      isReady: Boolean(conversation.twilioConversationSid),
+      isReady: true,
       completedAt: conversation.completedAt.toISOString(),
       lockedAt: conversation.lockedAt?.toISOString() ?? null,
     },

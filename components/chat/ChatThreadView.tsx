@@ -8,8 +8,6 @@ import { Loader2, Send } from "lucide-react";
 import { formatMessageTime } from "@/components/chat/format-chat-time";
 import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
 
-export const CHAT_UNREAD_COUNT_EVENT = "chat:unread-count";
-
 type ChatMessage = {
   id: string;
   clientId?: string;
@@ -20,9 +18,6 @@ type ChatMessage = {
   createdAt: string;
   status?: "pending" | "sent" | "failed";
 };
-
-const PROVISION_POLL_MS = 2500;
-const PROVISION_POLL_MAX = 24;
 
 type ThreadMeta = {
   id: string;
@@ -113,9 +108,7 @@ export function ChatThreadView({
       try {
         const t = await loadThread();
         if (cancelled) return;
-        if (t.isReady) {
-          void loadMessages(t.id);
-        }
+        void loadMessages(t.id);
       } catch {
         if (!cancelled) setError("Unable to load this chat.");
       } finally {
@@ -130,39 +123,9 @@ export function ChatThreadView({
   }, [status, loadThread, loadMessages]);
 
   useEffect(() => {
-    if (!thread || thread.isReady) return;
-
-    let attempts = 0;
-    let cancelled = false;
-
-    const poll = async () => {
-      if (cancelled || attempts >= PROVISION_POLL_MAX) return;
-      attempts += 1;
-      try {
-        const t = await loadThread();
-        if (cancelled) return;
-        if (t.isReady) {
-          void loadMessages(t.id);
-        }
-      } catch {
-        // keep polling until max attempts
-      }
-    };
-
-    const interval = window.setInterval(() => {
-      void poll();
-    }, PROVISION_POLL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [thread?.isReady, thread?.id, loadThread, loadMessages]);
-
-  useEffect(() => {
     const conversationId = thread?.id;
     const userId = session?.user?.id;
-    if (!thread?.isReady || !conversationId || !userId) return;
+    if (!conversationId || !userId) return;
 
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
     const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
@@ -196,11 +159,13 @@ export function ChatThreadView({
         ];
       });
 
-      if (!isOwn && document.visibilityState === "visible") {
+      if (document.visibilityState === "visible") {
         void fetch(
           `/api/chat/threads/${encodeURIComponent(conversationId)}/read`,
           { method: "POST" },
         ).then(() => syncUnreadBadge());
+      } else {
+        void syncUnreadBadge();
       }
     };
 
@@ -211,7 +176,7 @@ export function ChatThreadView({
       pusher.unsubscribe(`conversation-${conversationId}`);
       pusher.disconnect();
     };
-  }, [thread?.isReady, thread?.id, session?.user?.id, syncUnreadBadge]);
+  }, [thread?.id, session?.user?.id, syncUnreadBadge]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -321,12 +286,6 @@ export function ChatThreadView({
         </div>
       )}
 
-      {!thread?.isReady && (
-        <div className="shrink-0 border-b border-[#e5e5e5] bg-[#fff9e6] px-4 py-2 font-montserrat text-xs text-[#5E5E5E]">
-          Chat is being set up. Please refresh in a moment.
-        </div>
-      )}
-
       <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {loadingMessages && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
@@ -336,7 +295,7 @@ export function ChatThreadView({
             />
           </div>
         )}
-        {messages.length === 0 && thread?.isReady && !loadingMessages && (
+        {messages.length === 0 && thread && !loadingMessages && (
           <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
             No messages yet. Say hello to start the conversation.
           </p>
@@ -381,21 +340,15 @@ export function ChatThreadView({
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={
-            thread?.isReadOnly
-              ? "Chat is closed"
-              : thread?.isReady
-                ? "Type a message…"
-                : "Chat not ready"
-          }
-          disabled={!thread?.isReady || thread?.isReadOnly || sending}
+          placeholder={thread?.isReadOnly ? "Chat is closed" : "Type a message…"}
+          disabled={!thread || thread.isReadOnly || sending}
           className="flex-1 rounded-xl border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm outline-none focus:border-[#2555F3] disabled:bg-[#f5f5f5]"
           maxLength={4000}
         />
         <button
           type="submit"
           disabled={
-            !thread?.isReady || thread?.isReadOnly || sending || !draft.trim()
+            !thread || thread.isReadOnly || sending || !draft.trim()
           }
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50"
           aria-label="Send message"
