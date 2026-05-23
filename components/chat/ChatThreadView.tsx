@@ -12,12 +12,17 @@ export const CHAT_UNREAD_COUNT_EVENT = "chat:unread-count";
 
 type ChatMessage = {
   id: string;
+  clientId?: string;
   body: string;
   senderUserId: string;
   senderRole: string;
   isOwn: boolean;
   createdAt: string;
+  status?: "pending" | "sent" | "failed";
 };
+
+const PROVISION_POLL_MS = 2500;
+const PROVISION_POLL_MAX = 24;
 
 type ThreadMeta = {
   id: string;
@@ -44,7 +49,8 @@ export function ChatThreadView({
   const [thread, setThread] = useState<ThreadMeta | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loadingThread, setLoadingThread] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -80,14 +86,19 @@ export function ChatThreadView({
 
   const loadMessages = useCallback(
     async (conversationId: string) => {
-      const res = await fetch(
-        `/api/chat/threads/${encodeURIComponent(conversationId)}/messages`,
-        { cache: "no-store" },
-      );
-      if (!res.ok) return;
-      const data = (await res.json()) as { messages?: ChatMessage[] };
-      setMessages(Array.isArray(data.messages) ? data.messages : []);
-      void syncUnreadBadge();
+      setLoadingMessages(true);
+      try {
+        const res = await fetch(
+          `/api/chat/threads/${encodeURIComponent(conversationId)}/messages`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as { messages?: ChatMessage[] };
+        setMessages(Array.isArray(data.messages) ? data.messages : []);
+        void syncUnreadBadge();
+      } finally {
+        setLoadingMessages(false);
+      }
     },
     [syncUnreadBadge],
   );
@@ -97,18 +108,18 @@ export function ChatThreadView({
     let cancelled = false;
 
     async function init() {
-      setLoading(true);
+      setLoadingThread(true);
       setError(null);
       try {
         const t = await loadThread();
         if (cancelled) return;
         if (t.isReady) {
-          await loadMessages(t.id);
+          void loadMessages(t.id);
         }
       } catch {
         if (!cancelled) setError("Unable to load this chat.");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadingThread(false);
       }
     }
 
@@ -117,6 +128,36 @@ export function ChatThreadView({
       cancelled = true;
     };
   }, [status, loadThread, loadMessages]);
+
+  useEffect(() => {
+    if (!thread || thread.isReady) return;
+
+    let attempts = 0;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled || attempts >= PROVISION_POLL_MAX) return;
+      attempts += 1;
+      try {
+        const t = await loadThread();
+        if (cancelled) return;
+        if (t.isReady) {
+          void loadMessages(t.id);
+        }
+      } catch {
+        // keep polling until max attempts
+      }
+    };
+
+    const interval = window.setInterval(() => {
+      void poll();
+    }, PROVISION_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [thread?.isReady, thread?.id, loadThread, loadMessages]);
 
   useEffect(() => {
     const conversationId = thread?.id;
@@ -180,10 +221,26 @@ export function ChatThreadView({
     e.preventDefault();
     const text = draft.trim();
     const convId = conversationIdRef.current;
-    if (!text || !convId || thread?.isReadOnly || sending) return;
+    const userId = session?.user?.id;
+    if (!text || !convId || !userId || thread?.isReadOnly || sending) return;
 
+    const clientId = crypto.randomUUID();
+    const optimistic: ChatMessage = {
+      id: clientId,
+      clientId,
+      body: text,
+      senderUserId: userId,
+      senderRole: "",
+      isOwn: true,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+    setDraft("");
     setSending(true);
     setError(null);
+
     try {
       const res = await fetch(
         `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
@@ -200,21 +257,24 @@ export function ChatThreadView({
       const data = (await res.json()) as { message?: ChatMessage };
       if (data.message) {
         setMessages((prev) =>
-          prev.some((m) => m.id === data.message!.id)
-            ? prev
-            : [...prev, data.message!],
+          prev.map((m) =>
+            m.clientId === clientId
+              ? { ...data.message!, status: "sent" as const }
+              : m,
+          ),
         );
       }
-      setDraft("");
       void syncUnreadBadge();
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
+      setDraft(text);
       setError(err instanceof Error ? err.message : "Failed to send");
     } finally {
       setSending(false);
     }
   }
 
-  if (loading) {
+  if (loadingThread && !thread) {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-[#2555F3]" aria-hidden />
@@ -267,21 +327,29 @@ export function ChatThreadView({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {messages.length === 0 && thread?.isReady && (
+      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+        {loadingMessages && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
+            <Loader2
+              className="size-6 animate-spin text-[#2555F3]"
+              aria-hidden
+            />
+          </div>
+        )}
+        {messages.length === 0 && thread?.isReady && !loadingMessages && (
           <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
             No messages yet. Say hello to start the conversation.
           </p>
         )}
         {messages.map((m) => (
           <div
-            key={m.id}
+            key={m.clientId ?? m.id}
             className={`flex ${m.isOwn ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm ${
+              className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
                 m.isOwn
-                  ? "bg-[#2555F3] text-white"
+                  ? `bg-[#2555F3] text-white${m.status === "pending" ? " opacity-80" : ""}`
                   : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
               }`}
             >
