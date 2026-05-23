@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
         isReadOnly: conv
           ? isChatLocked(conv.completedAt, conv.lockedAt)
           : false,
-        isReady: Boolean(conv?.twilioConversationSid),
+        isReady: Boolean(conv),
         sortFallbackAt: apt.createdAt.toISOString(),
       };
     });
@@ -170,7 +170,7 @@ export async function GET(request: NextRequest) {
         lastMessageAt,
         unreadCount: unread.byConversationId[c.id] ?? 0,
         isReadOnly: isChatLocked(c.completedAt, c.lockedAt),
-        isReady: Boolean(c.twilioConversationSid),
+        isReady: true,
         sortFallbackAt: c.createdAt.toISOString(),
       };
     });

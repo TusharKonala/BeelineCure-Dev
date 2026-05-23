@@ -39,7 +39,7 @@ export async function GET(
       appointmentId: conversation.appointmentId,
       peerName,
       isReadOnly: isChatLocked(conversation.completedAt, conversation.lockedAt),
-      isReady: Boolean(conversation.twilioConversationSid),
+      isReady: true,
       completedAt: conversation.completedAt.toISOString(),
       lockedAt: conversation.lockedAt?.toISOString() ?? null,
     },
