@@ -14,7 +14,7 @@ import {
   Menu,
 } from "lucide-react";
 import { ChatInboxRealtime } from "@/components/chat/ChatInboxRealtime";
-import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
+import { CHAT_UNREAD_COUNT_EVENT } from "@/lib/chat-events";
 import { Container } from "@/components/layout/Container";
 import { PATIENT_UNREAD_COUNT_EVENT } from "@/components/patient/PatientNotificationToaster";
 
