@@ -1,4 +1,6 @@
+import { randomUUID } from "crypto";
 import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
+import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
 import { prisma } from "@/lib/db";
 import { inngest } from "@/inngest/client";
 import {
@@ -81,9 +83,9 @@ export type EnsureChatResult =
   | { status: "skipped_no_doctor_user" | "pending_patient_user"; conversationId?: string };
 
 /**
- * Idempotently creates a chat conversation when an appointment is completed.
+ * Idempotently creates or links a chat conversation row (no Twilio provisioning).
  */
-export async function ensureChatConversationForAppointment(
+export async function ensureChatConversationRecord(
   appointmentId: string,
 ): Promise<EnsureChatResult> {
   const appointment = await prisma.appointment.findUnique({
@@ -125,41 +127,12 @@ export async function ensureChatConversationForAppointment(
   });
 
   if (existing) {
-    if (
-      patientUser &&
-      !existing.patientUserId &&
-      !existing.twilioConversationSid
-    ) {
+    if (patientUser && !existing.patientUserId) {
       await prisma.chatConversation.update({
         where: { id: existing.id },
         data: { patientUserId: patientUser.id },
       });
-      await provisionTwilioConversation({
-        conversationId: existing.id,
-        appointmentId,
-        doctorUserId,
-        patientUserId: patientUser.id,
-        friendlyName: `Chat: ${appointment.patientName} & ${appointment.doctor.name}`,
-      });
-      await scheduleChatLock(existing.id, chatLockAtFromCompletedAt(existing.completedAt));
-      return { status: "provisioned", conversationId: existing.id };
     }
-
-    if (
-      patientUser &&
-      existing.patientUserId &&
-      !existing.twilioConversationSid
-    ) {
-      await provisionTwilioConversation({
-        conversationId: existing.id,
-        appointmentId,
-        doctorUserId,
-        patientUserId: patientUser.id,
-        friendlyName: `Chat: ${appointment.patientName} & ${appointment.doctor.name}`,
-      });
-      return { status: "provisioned", conversationId: existing.id };
-    }
-
     return { status: "exists", conversationId: existing.id };
   }
 
@@ -187,17 +160,69 @@ export async function ensureChatConversationForAppointment(
     },
   });
 
-  await provisionTwilioConversation({
-    conversationId: row.id,
-    appointmentId,
-    doctorUserId,
-    patientUserId: patientUser.id,
-    friendlyName: `Chat: ${appointment.patientName} & ${appointment.doctor.name}`,
-  });
-
   await scheduleChatLock(row.id, chatLockAtFromCompletedAt(completedAt));
 
   return { status: "created", conversationId: row.id };
+}
+
+/**
+ * Idempotently creates a chat conversation when an appointment is completed,
+ * including Twilio provisioning when applicable.
+ */
+export async function ensureChatConversationForAppointment(
+  appointmentId: string,
+): Promise<EnsureChatResult> {
+  const appointment = await prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    select: {
+      patientName: true,
+      email: true,
+      doctor: { select: { name: true, userId: true } },
+    },
+  });
+
+  if (!appointment?.doctor.userId) {
+    return ensureChatConversationRecord(appointmentId);
+  }
+
+  const recordResult = await ensureChatConversationRecord(appointmentId);
+  if (
+    recordResult.status === "skipped_no_doctor_user" ||
+    recordResult.status === "pending_patient_user" ||
+    !recordResult.conversationId
+  ) {
+    return recordResult;
+  }
+
+  const conversationId = recordResult.conversationId;
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      id: true,
+      appointmentId: true,
+      doctorUserId: true,
+      patientUserId: true,
+      twilioConversationSid: true,
+      completedAt: true,
+    },
+  });
+
+  if (!conversation?.patientUserId || conversation.twilioConversationSid) {
+    return recordResult;
+  }
+
+  await provisionTwilioConversation({
+    conversationId: conversation.id,
+    appointmentId,
+    doctorUserId: conversation.doctorUserId,
+    patientUserId: conversation.patientUserId,
+    friendlyName: `Chat: ${appointment.patientName} & ${appointment.doctor.name}`,
+  });
+
+  if (recordResult.status === "created") {
+    return { status: "created", conversationId };
+  }
+  return { status: "provisioned", conversationId };
 }
 
 type UnreadCountRow = { conversationId: string; count: bigint };
@@ -312,23 +337,46 @@ export async function lockConversation(conversationId: string) {
   });
 }
 
-export async function sendChatMessage(params: {
+const conversationForMessageSelect = {
+  id: true,
+  appointmentId: true,
+  twilioConversationSid: true,
+  completedAt: true,
+  lockedAt: true,
+  doctorUserId: true,
+  patientUserId: true,
+} as const;
+
+export type PersistedChatMessage = {
+  id: string;
+  twilioMessageSid: string;
+  senderUserId: string;
+  senderRole: ChatSenderRole;
+  body: string;
+  createdAt: Date;
+};
+
+export type ConversationForDelivery = {
+  id: string;
+  appointmentId: string;
+  twilioConversationSid: string;
+  doctorUserId: string;
+  patientUserId: string | null;
+};
+
+/** Saves message to DB and marks read for sender (fast path). */
+export async function persistChatMessage(params: {
   conversationId: string;
   senderUserId: string;
   senderRole: ChatSenderRole;
   body: string;
-}) {
+}): Promise<{
+  message: PersistedChatMessage;
+  conversation: ConversationForDelivery;
+}> {
   const conversation = await prisma.chatConversation.findUnique({
     where: { id: params.conversationId },
-    select: {
-      id: true,
-      appointmentId: true,
-      twilioConversationSid: true,
-      completedAt: true,
-      lockedAt: true,
-      doctorUserId: true,
-      patientUserId: true,
-    },
+    select: conversationForMessageSelect,
   });
 
   if (!conversation?.twilioConversationSid) {
@@ -339,16 +387,11 @@ export async function sendChatMessage(params: {
     throw new Error("Conversation is read-only");
   }
 
-  const twilioSid = await sendConversationMessage({
-    conversationSid: conversation.twilioConversationSid,
-    authorUserId: params.senderUserId,
-    body: params.body,
-  });
-
+  const pendingSid = `pending-${randomUUID()}`;
   const message = await prisma.chatMessage.create({
     data: {
       conversationId: params.conversationId,
-      twilioMessageSid: twilioSid,
+      twilioMessageSid: pendingSid,
       senderUserId: params.senderUserId,
       senderRole: params.senderRole,
       body: params.body,
@@ -365,25 +408,72 @@ export async function sendChatMessage(params: {
 
   await markRead(params.conversationId, params.senderUserId);
 
+  return {
+    message,
+    conversation: {
+      id: conversation.id,
+      appointmentId: conversation.appointmentId,
+      twilioConversationSid: conversation.twilioConversationSid,
+      doctorUserId: conversation.doctorUserId,
+      patientUserId: conversation.patientUserId,
+    },
+  };
+}
+
+/** Twilio sync, inbox notify, and push scheduling (background). */
+export async function deliverChatMessage(params: {
+  message: PersistedChatMessage;
+  conversation: ConversationForDelivery;
+  senderUserId: string;
+  senderRole: ChatSenderRole;
+}) {
+  const { message, conversation, senderUserId, senderRole } = params;
+
+  try {
+    const twilioSid = await sendConversationMessage({
+      conversationSid: conversation.twilioConversationSid,
+      authorUserId: senderUserId,
+      body: message.body,
+    });
+    await prisma.chatMessage.update({
+      where: { id: message.id },
+      data: { twilioMessageSid: twilioSid },
+    });
+  } catch (err) {
+    console.error("[chat] Twilio message sync failed:", err);
+  }
+
+  try {
+    await notifyChatInboxAfterMessage({
+      conversationId: conversation.id,
+      appointmentId: conversation.appointmentId,
+      senderUserId,
+      senderRole,
+      messageBody: message.body,
+      messageCreatedAt: message.createdAt,
+    });
+  } catch (err) {
+    console.error("[chat] Inbox notify failed:", err);
+  }
+
   const recipientUserId =
-    params.senderRole === ChatSenderRole.DOCTOR
+    senderRole === ChatSenderRole.DOCTOR
       ? conversation.patientUserId
       : conversation.doctorUserId;
 
   if (recipientUserId) {
     try {
+      const slot = Math.floor(Date.now() / 30_000);
       await inngest.send({
-        id: `push-${message.id}`,
+        id: `push-${conversation.id}-${slot}`,
         name: "chat/message.sent",
-        data: { messageId: message.id },
+        data: { conversationId: conversation.id, messageId: message.id },
         ts: Date.now() + PUSH_DELAY_MS,
       });
     } catch (err) {
       console.error("[chat] Failed to schedule push:", err);
     }
   }
-
-  return message;
 }
 
 export { isChatLocked, chatLockAtFromCompletedAt, twilioUserIdentity, CHAT_LOCK_MS };
