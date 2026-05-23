@@ -2,7 +2,7 @@
   "name": "Clinivo Care",
   "short_name": "Clinivo",
   "description": "Patient and doctor care platform",
-  "start_url": "/",
+  "start_url": "/patient",
   "display": "standalone",
   "background_color": "#fafafa",
   "theme_color": "#2555F3",
