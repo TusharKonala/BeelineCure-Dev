@@ -21,7 +21,6 @@ export async function notifyChatInboxAfterMessage(params: {
       patientUserId: true,
       completedAt: true,
       lockedAt: true,
-      twilioConversationSid: true,
       _count: { select: { messages: true } },
       appointment: {
         select: {
@@ -45,7 +44,7 @@ export async function notifyChatInboxAfterMessage(params: {
     conversation.completedAt,
     conversation.lockedAt,
   );
-  const isReady = Boolean(conversation.twilioConversationSid);
+  const isReady = true;
   const isFirstMessage = conversation._count.messages === 1;
 
   const participantIds = [

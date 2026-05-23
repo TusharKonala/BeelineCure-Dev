@@ -4,13 +4,13 @@ import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
-  deliverChatMessage,
   markRead,
   persistChatMessage,
+  scheduleChatMessagePush,
 } from "@/lib/chat";
+import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
 import { prisma } from "@/lib/db";
 import { triggerNewChatMessage } from "@/lib/pusher-server";
-import { twilioUserIdentity } from "@/lib/twilio";
 
 export const maxDuration = 30;
 
@@ -39,7 +39,6 @@ export async function GET(
     take: 100,
     select: {
       id: true,
-      twilioMessageSid: true,
       senderUserId: true,
       senderRole: true,
       body: true,
@@ -51,12 +50,10 @@ export async function GET(
 
   const messages = dbMessages.map((m) => ({
     id: m.id,
-    sid: m.twilioMessageSid,
     body: m.body,
     senderUserId: m.senderUserId,
     senderRole: m.senderRole,
     isOwn: m.senderUserId === userId,
-    authorIdentity: twilioUserIdentity(m.senderUserId),
     createdAt: m.createdAt.toISOString(),
   }));
 
@@ -98,7 +95,7 @@ export async function POST(
     role === UserRole.DOCTOR ? ChatSenderRole.DOCTOR : ChatSenderRole.PATIENT;
 
   try {
-    const { message, conversation } = await persistChatMessage({
+    const { message, conversation: conv } = await persistChatMessage({
       conversationId: id,
       senderUserId: userId,
       senderRole,
@@ -106,7 +103,7 @@ export async function POST(
     });
 
     try {
-      await triggerNewChatMessage(conversation.id, {
+      await triggerNewChatMessage(conv.id, {
         id: message.id,
         body: message.body,
         senderUserId: message.senderUserId,
@@ -117,10 +114,22 @@ export async function POST(
       console.error("[chat/messages] Pusher new-message failed:", err);
     }
 
+    try {
+      await notifyChatInboxAfterMessage({
+        conversationId: conv.id,
+        appointmentId: conv.appointmentId,
+        senderUserId: userId,
+        senderRole,
+        messageBody: message.body,
+        messageCreatedAt: message.createdAt,
+      });
+    } catch (err) {
+      console.error("[chat/messages] Inbox notify failed:", err);
+    }
+
     const response = NextResponse.json({
       message: {
         id: message.id,
-        sid: message.twilioMessageSid,
         body: message.body,
         senderUserId: message.senderUserId,
         senderRole: message.senderRole,
@@ -130,10 +139,9 @@ export async function POST(
     });
 
     after(async () => {
-      await deliverChatMessage({
+      await scheduleChatMessagePush({
         message,
-        conversation,
-        senderUserId: userId,
+        conversation: conv,
         senderRole,
       });
     });
@@ -144,8 +152,8 @@ export async function POST(
     if (msg.includes("read-only")) {
       return NextResponse.json({ error: msg }, { status: 403 });
     }
-    if (msg.includes("not ready")) {
-      return NextResponse.json({ error: msg }, { status: 409 });
+    if (msg.includes("not found")) {
+      return NextResponse.json({ error: msg }, { status: 404 });
     }
     console.error("[chat/messages] Send failed:", err);
     return NextResponse.json({ error: "Failed to send message" }, { status: 500 });
