@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { Container } from "@/components/layout/Container";
 import { ChatInboxRealtime } from "@/components/chat/ChatInboxRealtime";
-import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
+import { CHAT_UNREAD_COUNT_EVENT } from "@/lib/chat-events";
 import { DOCTOR_UNREAD_COUNT_EVENT } from "@/components/doctor/DoctorNotificationToaster";
 
 type DoctorNavItem = {

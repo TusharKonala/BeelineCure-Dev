@@ -5,7 +5,7 @@ import { useSession } from "next-auth/react";
 import Pusher from "pusher-js";
 import type { ChatInboxUpdatePayload } from "@/lib/chat-realtime-types";
 import { emitChatInbox } from "@/components/chat/chat-inbox-bus";
-import { CHAT_UNREAD_COUNT_EVENT } from "@/components/chat/ChatThreadView";
+import { CHAT_UNREAD_COUNT_EVENT } from "@/lib/chat-events";
 
 let activeConnections = 0;
 let sharedPusher: Pusher | null = null;
