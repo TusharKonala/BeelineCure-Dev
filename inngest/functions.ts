@@ -959,38 +959,63 @@ export const chatPushAfter5m = inngest.createFunction(
     triggers: [{ event: "chat/message.sent" }],
   },
   async ({ event }) => {
-    const { messageId } = event.data as { messageId: string };
-    const message = await prisma.chatMessage.findUnique({
-      where: { id: messageId },
+    const { conversationId: eventConversationId, messageId } = event.data as {
+      conversationId?: string;
+      messageId?: string;
+    };
+
+    let conversationId = eventConversationId;
+    if (!conversationId && messageId) {
+      const row = await prisma.chatMessage.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true },
+      });
+      conversationId = row?.conversationId;
+    }
+
+    if (!conversationId) {
+      return { skipped: true, reason: "no_conversation" };
+    }
+
+    const conversation = await prisma.chatConversation.findUnique({
+      where: { id: conversationId },
       select: {
         id: true,
-        body: true,
-        senderUserId: true,
-        senderRole: true,
-        createdAt: true,
-        conversation: {
+        appointmentId: true,
+        doctorUserId: true,
+        patientUserId: true,
+        appointment: {
           select: {
-            id: true,
-            appointmentId: true,
-            doctorUserId: true,
-            patientUserId: true,
-            appointment: {
-              select: {
-                patientName: true,
-                doctor: { select: { name: true, user: { select: { name: true } } } },
-              },
-            },
+            patientName: true,
+            doctor: { select: { name: true, user: { select: { name: true } } } },
           },
         },
       },
     });
 
-    if (!message) return { skipped: true, reason: "not_found" };
+    if (!conversation) return { skipped: true, reason: "not_found" };
+
+    const { UserRole, ChatSenderRole } = await import("@/generated/prisma/client");
+
+    const latestMessage = await prisma.chatMessage.findFirst({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        body: true,
+        senderRole: true,
+        createdAt: true,
+      },
+    });
+
+    if (!latestMessage) {
+      return { skipped: true, reason: "no_messages" };
+    }
 
     const recipientUserId =
-      message.senderRole === "DOCTOR"
-        ? message.conversation.patientUserId
-        : message.conversation.doctorUserId;
+      latestMessage.senderRole === ChatSenderRole.DOCTOR
+        ? conversation.patientUserId
+        : conversation.doctorUserId;
 
     if (!recipientUserId) {
       return { skipped: true, reason: "no_recipient" };
@@ -999,47 +1024,47 @@ export const chatPushAfter5m = inngest.createFunction(
     const readState = await prisma.chatReadState.findUnique({
       where: {
         conversationId_userId: {
-          conversationId: message.conversation.id,
+          conversationId,
           userId: recipientUserId,
         },
       },
       select: { lastReadAt: true },
     });
 
-    if (readState && readState.lastReadAt >= message.createdAt) {
+    if (readState && readState.lastReadAt >= latestMessage.createdAt) {
       return { skipped: true, reason: "already_read" };
     }
 
-    const { UserRole, ChatSenderRole } = await import("@/generated/prisma/client");
     const recipientRole =
-      message.senderRole === ChatSenderRole.DOCTOR
+      latestMessage.senderRole === ChatSenderRole.DOCTOR
         ? UserRole.PATIENT
         : UserRole.DOCTOR;
 
     const senderName =
-      message.senderRole === ChatSenderRole.PATIENT
-        ? message.conversation.appointment.patientName
-        : message.conversation.appointment.doctor.user?.name?.trim() ||
-          message.conversation.appointment.doctor.name;
+      latestMessage.senderRole === ChatSenderRole.PATIENT
+        ? conversation.appointment.patientName
+        : conversation.appointment.doctor.user?.name?.trim() ||
+          conversation.appointment.doctor.name;
 
     const { chatThreadUrlForRole } = await import("@/lib/chat");
     const { sendPushToUser } = await import("@/lib/web-push");
 
-    const url = chatThreadUrlForRole(
-      recipientRole,
-      message.conversation.appointmentId,
-    );
+    const url = chatThreadUrlForRole(recipientRole, conversation.appointmentId);
 
     const result = await sendPushToUser(recipientUserId, {
       title: `New message from ${senderName}`,
       body:
-        message.body.length > 120
-          ? `${message.body.slice(0, 117).trim()}…`
-          : message.body,
+        latestMessage.body.length > 120
+          ? `${latestMessage.body.slice(0, 117).trim()}…`
+          : latestMessage.body,
       url,
     });
 
-    return { sent: result.sent, messageId, recipientUserId };
+    return {
+      sent: result.sent,
+      messageId: latestMessage.id,
+      recipientUserId,
+    };
   },
 );
 

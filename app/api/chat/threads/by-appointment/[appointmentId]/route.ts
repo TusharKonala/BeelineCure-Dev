@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
   enqueueChatConversationEnsure,
-  ensureChatConversationForAppointment,
+  ensureChatConversationRecord,
   isChatLocked,
   markRead,
 } from "@/lib/chat";
@@ -52,14 +52,14 @@ export async function GET(
 
     if (apt) {
       try {
-        await enqueueChatConversationEnsure(apt.id);
-      } catch {
-        // best-effort enqueue
+        await ensureChatConversationRecord(apt.id);
+      } catch (err) {
+        console.error("[chat/by-appointment] record ensure failed:", err);
       }
       try {
-        await ensureChatConversationForAppointment(apt.id);
-      } catch (err) {
-        console.error("[chat/by-appointment] ensure failed:", err);
+        await enqueueChatConversationEnsure(apt.id);
+      } catch {
+        // best-effort enqueue for Twilio provisioning
       }
       conversation = await prisma.chatConversation.findUnique({
         where: { appointmentId },
