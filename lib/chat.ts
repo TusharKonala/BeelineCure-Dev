@@ -12,7 +12,7 @@ import {
 } from "@/lib/twilio";
 
 const CHAT_LOCK_MS = 48 * 60 * 60 * 1000;
-const PUSH_DELAY_MS = 5 * 60 * 1000;
+const PUSH_DELAY_MS = 30 * 1000;
 
 export function resolveAppOrigin(): string {
   return (
@@ -373,7 +373,7 @@ export async function sendChatMessage(params: {
   if (recipientUserId) {
     try {
       await inngest.send({
-        id: `push-${params.conversationId}`,
+        id: `push-${message.id}`,
         name: "chat/message.sent",
         data: { messageId: message.id },
         ts: Date.now() + PUSH_DELAY_MS,

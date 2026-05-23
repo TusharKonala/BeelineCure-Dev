@@ -954,7 +954,7 @@ export const lockChatAfter48h = inngest.createFunction(
 
 export const chatPushAfter5m = inngest.createFunction(
   {
-    id: "chat-push-after-5m",
+    id: "chat-push-after-delay",
     retries: 2,
     triggers: [{ event: "chat/message.sent" }],
   },
