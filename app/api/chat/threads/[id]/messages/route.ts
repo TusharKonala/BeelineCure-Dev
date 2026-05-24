@@ -4,6 +4,7 @@ import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
+  fetchOlderMessagesForConversation,
   fetchRecentMessagesForConversation,
   linkPatientUserOnConversation,
   markRead,
@@ -16,7 +17,7 @@ import { triggerNewChatMessage } from "@/lib/pusher-server";
 export const maxDuration = 30;
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   const session = await getServerSession(authOptions);
@@ -34,9 +35,18 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const messages = await fetchRecentMessagesForConversation(id, userId);
+  const beforeRaw = request.nextUrl.searchParams.get("before")?.trim();
+  if (beforeRaw) {
+    const before = new Date(beforeRaw);
+    if (Number.isNaN(before.getTime())) {
+      return NextResponse.json({ error: "Invalid before cursor" }, { status: 400 });
+    }
+    const page = await fetchOlderMessagesForConversation(id, userId, before);
+    return NextResponse.json(page);
+  }
 
-  const response = NextResponse.json({ messages });
+  const page = await fetchRecentMessagesForConversation(id, userId);
+  const response = NextResponse.json(page);
 
   after(async () => {
     await markRead(id, userId);

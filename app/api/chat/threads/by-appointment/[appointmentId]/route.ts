@@ -89,7 +89,7 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const messages = await fetchRecentMessagesForConversation(
+  const { messages, hasMore } = await fetchRecentMessagesForConversation(
     conversation.id,
     userId,
   );
@@ -110,6 +110,7 @@ export async function GET(
       lockedAt: conversation.lockedAt?.toISOString() ?? null,
     },
     messages,
+    hasMore,
   });
 
   const conversationId = conversation.id;
