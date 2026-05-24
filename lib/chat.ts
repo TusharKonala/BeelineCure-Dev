@@ -332,6 +332,44 @@ export type ConversationForDelivery = {
   patientUserId: string | null;
 };
 
+export type ChatMessageForClient = {
+  id: string;
+  body: string;
+  senderUserId: string;
+  senderRole: ChatSenderRole;
+  isOwn: boolean;
+  createdAt: string;
+};
+
+/** Latest N messages (desc from DB), returned oldest → newest for the UI. */
+export async function fetchRecentMessagesForConversation(
+  conversationId: string,
+  userId: string,
+  limit = 50,
+): Promise<ChatMessageForClient[]> {
+  const dbMessages = await prisma.chatMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      senderUserId: true,
+      senderRole: true,
+      body: true,
+      createdAt: true,
+    },
+  });
+
+  return [...dbMessages].reverse().map((m) => ({
+    id: m.id,
+    body: m.body,
+    senderUserId: m.senderUserId,
+    senderRole: m.senderRole,
+    isOwn: m.senderUserId === userId,
+    createdAt: m.createdAt.toISOString(),
+  }));
+}
+
 /**
  * POST fast path: one conversation read + one message create before response.
  * Caller should run markRead (and optional patient link) in after().
