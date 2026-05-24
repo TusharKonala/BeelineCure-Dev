@@ -142,14 +142,23 @@ export async function ensureChatConversationForAppointment(
 
 type UnreadCountRow = { conversationId: string; count: bigint };
 
-export async function getUnreadCountsForUser(userId: string) {
+export async function getUnreadCountsForUser(
+  userId: string,
+  userEmail?: string | null,
+) {
+  const email = userEmail?.trim().toLowerCase() ?? "";
   const rows = await prisma.$queryRaw<UnreadCountRow[]>`
     SELECT m."conversationId", COUNT(*)::bigint AS count
     FROM "ChatMessage" m
     INNER JOIN "ChatConversation" c ON c.id = m."conversationId"
+    INNER JOIN "Appointment" a ON a.id = c."appointmentId"
     LEFT JOIN "ChatReadState" rs
       ON rs."conversationId" = m."conversationId" AND rs."userId" = ${userId}
-    WHERE (c."doctorUserId" = ${userId} OR c."patientUserId" = ${userId})
+    WHERE (
+      c."doctorUserId" = ${userId}
+      OR c."patientUserId" = ${userId}
+      OR (${email} <> '' AND LOWER(a.email) = ${email})
+    )
       AND m."senderUserId" != ${userId}
       AND m."createdAt" > COALESCE(rs."lastReadAt", TIMESTAMP '1970-01-01')
     GROUP BY m."conversationId"

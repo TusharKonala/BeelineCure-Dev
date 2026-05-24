@@ -95,6 +95,18 @@ export async function POST(
         body: text,
       });
 
+    try {
+      await triggerNewChatMessage(conv.id, {
+        id: message.id,
+        body: message.body,
+        senderUserId: message.senderUserId,
+        senderRole: message.senderRole,
+        createdAt: message.createdAt.toISOString(),
+      });
+    } catch (err) {
+      console.error("[chat/messages] Pusher new-message failed:", err);
+    }
+
     const response = NextResponse.json({
       message: {
         id: message.id,
@@ -107,37 +119,36 @@ export async function POST(
     });
 
     after(async () => {
-      const results = await Promise.allSettled([
-        markRead(conv.id, userId),
-        ...(linkPatientUserId
-          ? [linkPatientUserOnConversation(conv.id, userId)]
-          : []),
-        triggerNewChatMessage(conv.id, {
-          id: message.id,
-          body: message.body,
-          senderUserId: message.senderUserId,
-          senderRole: message.senderRole,
-          createdAt: message.createdAt.toISOString(),
-        }),
-        notifyChatInboxAfterMessage({
-          conversationId: conv.id,
-          appointmentId: conv.appointmentId,
-          senderUserId: userId,
-          senderRole,
-          messageBody: message.body,
-          messageCreatedAt: message.createdAt,
-        }),
-        scheduleChatMessagePush({
-          message,
-          conversation: conv,
-          senderRole,
-        }),
-      ]);
-
-      for (const result of results) {
-        if (result.status === "rejected") {
-          console.error("[chat/messages] Background delivery failed:", result.reason);
+      try {
+        if (linkPatientUserId) {
+          await linkPatientUserOnConversation(conv.id, userId);
+          conv.patientUserId = userId;
         }
+
+        const results = await Promise.allSettled([
+          markRead(conv.id, userId),
+          notifyChatInboxAfterMessage({
+            conversationId: conv.id,
+            appointmentId: conv.appointmentId,
+            senderUserId: userId,
+            senderRole,
+            messageBody: message.body,
+            messageCreatedAt: message.createdAt,
+          }),
+          scheduleChatMessagePush({
+            message,
+            conversation: conv,
+            senderRole,
+          }),
+        ]);
+
+        for (const result of results) {
+          if (result.status === "rejected") {
+            console.error("[chat/messages] Background delivery failed:", result.reason);
+          }
+        }
+      } catch (err) {
+        console.error("[chat/messages] Background delivery failed:", err);
       }
     });
 
