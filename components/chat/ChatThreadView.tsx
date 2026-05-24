@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Pusher from "pusher-js";
@@ -43,12 +50,19 @@ export function ChatThreadView({
   const { data: session, status } = useSession();
   const [thread, setThread] = useState<ThreadMeta | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasMoreOlder, setHasMoreOlder] = useState(false);
   const [draft, setDraft] = useState("");
   const [loadingInitial, setLoadingInitial] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const topSentinelRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const scrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const loadingMoreRef = useRef(false);
 
   const syncUnreadBadge = useCallback(async () => {
     try {
@@ -74,14 +88,67 @@ export function ChatThreadView({
     const data = (await res.json()) as {
       thread?: ThreadMeta;
       messages?: ChatMessage[];
+      hasMore?: boolean;
     };
     if (!data.thread) throw new Error("Chat not found");
     conversationIdRef.current = data.thread.id;
     setThread(data.thread);
     setMessages(Array.isArray(data.messages) ? data.messages : []);
+    setHasMoreOlder(Boolean(data.hasMore));
     void syncUnreadBadge();
     return data.thread;
   }, [appointmentId, syncUnreadBadge]);
+
+  const loadOlderMessages = useCallback(async () => {
+    const convId = conversationIdRef.current;
+    if (!convId || loadingMoreRef.current || !hasMoreOlder) return;
+
+    const oldest = messages[0];
+    if (!oldest) return;
+
+    loadingMoreRef.current = true;
+
+    const scrollEl = scrollContainerRef.current;
+    if (scrollEl) {
+      scrollRestoreRef.current = {
+        height: scrollEl.scrollHeight,
+        top: scrollEl.scrollTop,
+      };
+    }
+
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams({
+        before: oldest.createdAt,
+      });
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(convId)}/messages?${params}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) return;
+
+      const data = (await res.json()) as {
+        messages?: ChatMessage[];
+        hasMore?: boolean;
+      };
+      const older = Array.isArray(data.messages) ? data.messages : [];
+      setHasMoreOlder(Boolean(data.hasMore));
+
+      if (older.length === 0) {
+        setHasMoreOlder(false);
+        return;
+      }
+
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        const unique = older.filter((m) => !seen.has(m.id));
+        return [...unique, ...prev];
+      });
+    } finally {
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    }
+  }, [messages, hasMoreOlder]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -90,6 +157,7 @@ export function ChatThreadView({
     async function init() {
       setLoadingInitial(true);
       setError(null);
+      setHasMoreOlder(false);
       try {
         await loadThreadWithMessages();
       } catch {
@@ -104,6 +172,48 @@ export function ChatThreadView({
       cancelled = true;
     };
   }, [status, loadThreadWithMessages]);
+
+  useLayoutEffect(() => {
+    const restore = scrollRestoreRef.current;
+    if (!restore) return;
+
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) {
+      scrollRestoreRef.current = null;
+      return;
+    }
+
+    scrollEl.scrollTop =
+      scrollEl.scrollHeight - restore.height + restore.top;
+    scrollRestoreRef.current = null;
+  }, [messages]);
+
+  const lastMessageId = messages[messages.length - 1]?.id;
+
+  useEffect(() => {
+    if (loadingInitial || loadingMore || !lastMessageId) return;
+    if (lastMessageIdRef.current === lastMessageId) return;
+    lastMessageIdRef.current = lastMessageId;
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [lastMessageId, loadingInitial, loadingMore]);
+
+  useEffect(() => {
+    const root = scrollContainerRef.current;
+    const sentinel = topSentinelRef.current;
+    if (!root || !sentinel || loadingInitial) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadOlderMessages();
+        }
+      },
+      { root, rootMargin: "80px 0px 0px 0px", threshold: 0 },
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadOlderMessages, loadingInitial, hasMoreOlder]);
 
   useEffect(() => {
     const conversationId = thread?.id;
@@ -160,10 +270,6 @@ export function ChatThreadView({
       pusher.disconnect();
     };
   }, [thread?.id, session?.user?.id, syncUnreadBadge]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
@@ -272,7 +378,25 @@ export function ChatThreadView({
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
+      <div
+        ref={scrollContainerRef}
+        className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6"
+      >
+        <div ref={topSentinelRef} className="h-px w-full shrink-0" aria-hidden />
+        {(loadingMore || (hasMoreOlder && messages.length > 0)) && (
+          <div className="flex justify-center py-2">
+            {loadingMore ? (
+              <Loader2
+                className="size-5 animate-spin text-[#2555F3]"
+                aria-label="Loading older messages"
+              />
+            ) : (
+              <span className="font-montserrat text-xs text-[#9A9A9A]">
+                Scroll up for older messages
+              </span>
+            )}
+          </div>
+        )}
         {messages.length === 0 && thread && !loadingInitial && (
           <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
             No messages yet. Say hello to start the conversation.
