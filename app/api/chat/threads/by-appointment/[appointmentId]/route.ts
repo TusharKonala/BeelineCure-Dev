@@ -1,15 +1,27 @@
 import { getServerSession } from "next-auth/next";
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { AppointmentStatus, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
-  assertConversationAccess,
   enqueueChatConversationEnsure,
   ensureChatConversationRecord,
   isChatLocked,
+  linkPatientUserOnConversation,
   markRead,
+  resolveConversationAccess,
 } from "@/lib/chat";
 import { prisma } from "@/lib/db";
+
+const appointmentInclude = {
+  appointment: {
+    select: {
+      id: true,
+      email: true,
+      patientName: true,
+      doctor: { select: { name: true, userId: true } },
+    },
+  },
+} as const;
 
 export async function GET(
   _request: NextRequest,
@@ -28,16 +40,7 @@ export async function GET(
 
   let conversation = await prisma.chatConversation.findUnique({
     where: { appointmentId },
-    include: {
-      appointment: {
-        select: {
-          id: true,
-          email: true,
-          patientName: true,
-          doctor: { select: { name: true, userId: true } },
-        },
-      },
-    },
+    include: appointmentInclude,
   });
 
   if (!conversation) {
@@ -63,16 +66,7 @@ export async function GET(
       }
       conversation = await prisma.chatConversation.findUnique({
         where: { appointmentId },
-        include: {
-          appointment: {
-            select: {
-              id: true,
-              email: true,
-              patientName: true,
-              doctor: { select: { name: true, userId: true } },
-            },
-          },
-        },
+        include: appointmentInclude,
       });
     }
   }
@@ -81,19 +75,47 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const access = await assertConversationAccess(conversation.id, userId, role);
-  if (!access) {
+  const access = resolveConversationAccess(
+    {
+      doctorUserId: conversation.doctorUserId,
+      patientUserId: conversation.patientUserId,
+      appointmentEmail: conversation.appointment.email,
+    },
+    { userId, role, userEmail: email },
+  );
+
+  if (!access.allowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  await markRead(conversation.id, userId);
+  const dbMessages = await prisma.chatMessage.findMany({
+    where: { conversationId: conversation.id },
+    orderBy: { createdAt: "asc" },
+    take: 100,
+    select: {
+      id: true,
+      senderUserId: true,
+      senderRole: true,
+      body: true,
+      createdAt: true,
+    },
+  });
 
   const peerName =
     role === UserRole.DOCTOR
       ? conversation.appointment.patientName
       : conversation.appointment.doctor.name;
 
-  return NextResponse.json({
+  const messages = dbMessages.map((m) => ({
+    id: m.id,
+    body: m.body,
+    senderUserId: m.senderUserId,
+    senderRole: m.senderRole,
+    isOwn: m.senderUserId === userId,
+    createdAt: m.createdAt.toISOString(),
+  }));
+
+  const response = NextResponse.json({
     thread: {
       id: conversation.id,
       appointmentId: conversation.appointmentId,
@@ -103,5 +125,20 @@ export async function GET(
       completedAt: conversation.completedAt.toISOString(),
       lockedAt: conversation.lockedAt?.toISOString() ?? null,
     },
+    messages,
   });
+
+  const conversationId = conversation.id;
+  const linkPatientUserId = access.linkPatientUserId;
+
+  after(async () => {
+    await Promise.allSettled([
+      markRead(conversationId, userId),
+      ...(linkPatientUserId
+        ? [linkPatientUserOnConversation(conversationId, userId)]
+        : []),
+    ]);
+  });
+
+  return response;
 }
