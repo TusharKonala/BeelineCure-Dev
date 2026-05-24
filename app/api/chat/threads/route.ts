@@ -64,7 +64,6 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         doctor: {
           select: {
-            id: true,
             name: true,
             specialization: true,
             profilePhotoUrl: true,
@@ -75,7 +74,6 @@ export async function GET(request: NextRequest) {
             id: true,
             completedAt: true,
             lockedAt: true,
-            twilioConversationSid: true,
             messages: {
               orderBy: { createdAt: "desc" },
               take: 1,
@@ -139,12 +137,9 @@ export async function GET(request: NextRequest) {
         createdAt: true,
         completedAt: true,
         lockedAt: true,
-        twilioConversationSid: true,
         appointment: {
           select: {
             patientName: true,
-            date: true,
-            time: true,
           },
         },
         messages: {
