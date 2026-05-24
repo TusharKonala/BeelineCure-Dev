@@ -44,8 +44,7 @@ export function ChatThreadView({
   const [thread, setThread] = useState<ThreadMeta | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
-  const [loadingThread, setLoadingThread] = useState(true);
-  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -64,7 +63,7 @@ export function ChatThreadView({
     }
   }, []);
 
-  const loadThread = useCallback(async () => {
+  const loadThreadWithMessages = useCallback(async () => {
     const res = await fetch(
       `/api/chat/threads/by-appointment/${encodeURIComponent(appointmentId)}`,
       { cache: "no-store" },
@@ -72,47 +71,31 @@ export function ChatThreadView({
     if (!res.ok) {
       throw new Error("Could not load chat");
     }
-    const data = (await res.json()) as { thread?: ThreadMeta };
+    const data = (await res.json()) as {
+      thread?: ThreadMeta;
+      messages?: ChatMessage[];
+    };
     if (!data.thread) throw new Error("Chat not found");
     conversationIdRef.current = data.thread.id;
     setThread(data.thread);
+    setMessages(Array.isArray(data.messages) ? data.messages : []);
+    void syncUnreadBadge();
     return data.thread;
-  }, [appointmentId]);
-
-  const loadMessages = useCallback(
-    async (conversationId: string) => {
-      setLoadingMessages(true);
-      try {
-        const res = await fetch(
-          `/api/chat/threads/${encodeURIComponent(conversationId)}/messages`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) return;
-        const data = (await res.json()) as { messages?: ChatMessage[] };
-        setMessages(Array.isArray(data.messages) ? data.messages : []);
-        void syncUnreadBadge();
-      } finally {
-        setLoadingMessages(false);
-      }
-    },
-    [syncUnreadBadge],
-  );
+  }, [appointmentId, syncUnreadBadge]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
 
     async function init() {
-      setLoadingThread(true);
+      setLoadingInitial(true);
       setError(null);
       try {
-        const t = await loadThread();
-        if (cancelled) return;
-        void loadMessages(t.id);
+        await loadThreadWithMessages();
       } catch {
         if (!cancelled) setError("Unable to load this chat.");
       } finally {
-        if (!cancelled) setLoadingThread(false);
+        if (!cancelled) setLoadingInitial(false);
       }
     }
 
@@ -120,7 +103,7 @@ export function ChatThreadView({
     return () => {
       cancelled = true;
     };
-  }, [status, loadThread, loadMessages]);
+  }, [status, loadThreadWithMessages]);
 
   useEffect(() => {
     const conversationId = thread?.id;
@@ -239,7 +222,10 @@ export function ChatThreadView({
     }
   }
 
-  if (loadingThread && !thread) {
+  const inputDisabled =
+    loadingInitial || !thread || thread.isReadOnly || sending;
+
+  if (loadingInitial && !thread) {
     return (
       <div className="flex min-h-[320px] items-center justify-center">
         <Loader2 className="size-8 animate-spin text-[#2555F3]" aria-hidden />
@@ -286,16 +272,8 @@ export function ChatThreadView({
         </div>
       )}
 
-      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-        {loadingMessages && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60">
-            <Loader2
-              className="size-6 animate-spin text-[#2555F3]"
-              aria-hidden
-            />
-          </div>
-        )}
-        {messages.length === 0 && thread && !loadingMessages && (
+      <div className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6">
+        {messages.length === 0 && thread && !loadingInitial && (
           <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
             No messages yet. Say hello to start the conversation.
           </p>
@@ -303,7 +281,7 @@ export function ChatThreadView({
         {messages.map((m) => (
           <div
             key={m.clientId ?? m.id}
-            className={`flex ${m.isOwn ? "justify-end" : "justify-start"}`}
+            className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
           >
             <div
               className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
@@ -341,15 +319,13 @@ export function ChatThreadView({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder={thread?.isReadOnly ? "Chat is closed" : "Type a message…"}
-          disabled={!thread || thread.isReadOnly || sending}
-          className="flex-1 rounded-xl border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm outline-none focus:border-[#2555F3] disabled:bg-[#f5f5f5]"
+          disabled={inputDisabled}
+          className="flex-1 rounded-xl border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm outline-none focus:border-[#2555F3] disabled:cursor-not-allowed disabled:bg-[#f5f5f5] disabled:text-[#9A9A9A]"
           maxLength={4000}
         />
         <button
           type="submit"
-          disabled={
-            !thread || thread.isReadOnly || sending || !draft.trim()
-          }
+          disabled={inputDisabled || !draft.trim()}
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50"
           aria-label="Send message"
         >
