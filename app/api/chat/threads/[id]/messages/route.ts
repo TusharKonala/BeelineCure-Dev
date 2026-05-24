@@ -47,8 +47,6 @@ export async function GET(
     },
   });
 
-  await markRead(id, userId);
-
   const messages = dbMessages.map((m) => ({
     id: m.id,
     body: m.body,
@@ -58,7 +56,13 @@ export async function GET(
     createdAt: m.createdAt.toISOString(),
   }));
 
-  return NextResponse.json({ messages });
+  const response = NextResponse.json({ messages });
+
+  after(async () => {
+    await markRead(id, userId);
+  });
+
+  return response;
 }
 
 export async function POST(
