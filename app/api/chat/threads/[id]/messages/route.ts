@@ -4,9 +4,10 @@ import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
+  linkPatientUserOnConversation,
   markRead,
-  persistChatMessage,
   scheduleChatMessagePush,
+  sendChatMessage,
 } from "@/lib/chat";
 import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
 import { prisma } from "@/lib/db";
@@ -73,11 +74,6 @@ export async function POST(
   }
 
   const { id } = await context.params;
-  const conversation = await assertConversationAccess(id, userId, role);
-
-  if (!conversation) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
 
   const body = (await request.json().catch(() => null)) as {
     body?: unknown;
@@ -95,12 +91,15 @@ export async function POST(
     role === UserRole.DOCTOR ? ChatSenderRole.DOCTOR : ChatSenderRole.PATIENT;
 
   try {
-    const { message, conversation: conv } = await persistChatMessage({
-      conversationId: id,
-      senderUserId: userId,
-      senderRole,
-      body: text,
-    });
+    const { message, conversation: conv, linkPatientUserId } =
+      await sendChatMessage({
+        conversationId: id,
+        userId,
+        role,
+        userEmail: session?.user?.email ?? null,
+        senderRole,
+        body: text,
+      });
 
     const response = NextResponse.json({
       message: {
@@ -115,6 +114,10 @@ export async function POST(
 
     after(async () => {
       const results = await Promise.allSettled([
+        markRead(conv.id, userId),
+        ...(linkPatientUserId
+          ? [linkPatientUserOnConversation(conv.id, userId)]
+          : []),
         triggerNewChatMessage(conv.id, {
           id: message.id,
           body: message.body,

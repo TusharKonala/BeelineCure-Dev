@@ -184,6 +184,65 @@ export async function markRead(conversationId: string, userId: string) {
   });
 }
 
+function normalizeChatEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+type ConversationAccessFields = {
+  doctorUserId: string;
+  patientUserId: string | null;
+  appointmentEmail: string;
+};
+
+type ConversationAccessResult =
+  | { allowed: true; linkPatientUserId: boolean }
+  | { allowed: false };
+
+/** Pure access check shared by assertConversationAccess and sendChatMessage. */
+export function resolveConversationAccess(
+  conversation: ConversationAccessFields,
+  params: { userId: string; role: UserRole; userEmail?: string | null },
+): ConversationAccessResult {
+  const { userId, role, userEmail } = params;
+
+  if (role === UserRole.DOCTOR) {
+    if (conversation.doctorUserId === userId) {
+      return { allowed: true, linkPatientUserId: false };
+    }
+    return { allowed: false };
+  }
+
+  if (role === UserRole.PATIENT) {
+    if (conversation.patientUserId === userId) {
+      return { allowed: true, linkPatientUserId: false };
+    }
+    const email = userEmail?.trim();
+    if (
+      email &&
+      normalizeChatEmail(email) ===
+        normalizeChatEmail(conversation.appointmentEmail)
+    ) {
+      return {
+        allowed: true,
+        linkPatientUserId: conversation.patientUserId === null,
+      };
+    }
+    return { allowed: false };
+  }
+
+  return { allowed: false };
+}
+
+export async function linkPatientUserOnConversation(
+  conversationId: string,
+  userId: string,
+) {
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { patientUserId: userId },
+  });
+}
+
 export async function assertConversationAccess(
   conversationId: string,
   userId: string,
@@ -205,30 +264,34 @@ export async function assertConversationAccess(
 
   if (!conversation) return null;
 
-  if (role === UserRole.DOCTOR && conversation.doctorUserId === userId) {
-    return conversation;
-  }
-
-  if (role === UserRole.PATIENT) {
-    if (conversation.patientUserId === userId) {
-      return conversation;
-    }
+  let userEmail: string | null | undefined;
+  if (
+    role === UserRole.PATIENT &&
+    conversation.patientUserId !== userId
+  ) {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { email: true },
     });
-    if (user?.email === conversation.appointment.email) {
-      if (!conversation.patientUserId) {
-        await prisma.chatConversation.update({
-          where: { id: conversationId },
-          data: { patientUserId: userId },
-        });
-      }
-      return conversation;
-    }
+    userEmail = user?.email ?? null;
   }
 
-  return null;
+  const access = resolveConversationAccess(
+    {
+      doctorUserId: conversation.doctorUserId,
+      patientUserId: conversation.patientUserId,
+      appointmentEmail: conversation.appointment.email,
+    },
+    { userId, role, userEmail },
+  );
+
+  if (!access.allowed) return null;
+
+  if (access.linkPatientUserId) {
+    await linkPatientUserOnConversation(conversationId, userId);
+  }
+
+  return conversation;
 }
 
 export async function lockConversation(conversationId: string) {
@@ -269,22 +332,48 @@ export type ConversationForDelivery = {
   patientUserId: string | null;
 };
 
-/** Saves message to DB and marks read for sender (fast path). */
-export async function persistChatMessage(params: {
+/**
+ * POST fast path: one conversation read + one message create before response.
+ * Caller should run markRead (and optional patient link) in after().
+ */
+export async function sendChatMessage(params: {
   conversationId: string;
-  senderUserId: string;
+  userId: string;
+  role: UserRole;
+  userEmail?: string | null;
   senderRole: ChatSenderRole;
   body: string;
 }): Promise<{
   message: PersistedChatMessage;
   conversation: ConversationForDelivery;
+  linkPatientUserId: boolean;
 }> {
   const conversation = await prisma.chatConversation.findUnique({
     where: { id: params.conversationId },
-    select: conversationForMessageSelect,
+    select: {
+      ...conversationForMessageSelect,
+      appointment: { select: { email: true } },
+    },
   });
 
   if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+
+  const access = resolveConversationAccess(
+    {
+      doctorUserId: conversation.doctorUserId,
+      patientUserId: conversation.patientUserId,
+      appointmentEmail: conversation.appointment.email,
+    },
+    {
+      userId: params.userId,
+      role: params.role,
+      userEmail: params.userEmail,
+    },
+  );
+
+  if (!access.allowed) {
     throw new Error("Conversation not found");
   }
 
@@ -297,7 +386,7 @@ export async function persistChatMessage(params: {
     data: {
       conversationId: params.conversationId,
       twilioMessageSid: localSid,
-      senderUserId: params.senderUserId,
+      senderUserId: params.userId,
       senderRole: params.senderRole,
       body: params.body,
     },
@@ -311,8 +400,6 @@ export async function persistChatMessage(params: {
     },
   });
 
-  await markRead(params.conversationId, params.senderUserId);
-
   return {
     message,
     conversation: {
@@ -321,6 +408,7 @@ export async function persistChatMessage(params: {
       doctorUserId: conversation.doctorUserId,
       patientUserId: conversation.patientUserId,
     },
+    linkPatientUserId: access.linkPatientUserId,
   };
 }
 
