@@ -1,4 +1,3 @@
-import { Container } from "@/components/layout/Container";
 import { ChatThreadView } from "@/components/chat/ChatThreadView";
 
 type PageProps = {
@@ -9,15 +8,15 @@ export default async function DoctorChatThreadPage({ params }: PageProps) {
   const { appointmentId } = await params;
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] flex-col overflow-hidden bg-[#fafafa] py-4 md:py-6">
-      <Container className="flex h-full min-h-0 !max-w-[min(100%,90rem)] flex-col px-4 md:px-6">
+    <div className="flex h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-[#fafafa]">
+      <div className="flex h-full min-h-0 w-full flex-col">
         <ChatThreadView
           appointmentId={appointmentId}
           backHref="/doctor/chat"
           backLabel="All chats"
-          className="h-full"
+          className="h-full w-full"
         />
-      </Container>
+      </div>
     </div>
   );
 }
