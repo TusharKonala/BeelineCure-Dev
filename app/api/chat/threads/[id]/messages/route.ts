@@ -4,13 +4,13 @@ import { ChatSenderRole, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   assertConversationAccess,
+  fetchRecentMessagesForConversation,
   linkPatientUserOnConversation,
   markRead,
   scheduleChatMessagePush,
   sendChatMessage,
 } from "@/lib/chat";
 import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
-import { prisma } from "@/lib/db";
 import { triggerNewChatMessage } from "@/lib/pusher-server";
 
 export const maxDuration = 30;
@@ -34,27 +34,7 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const dbMessages = await prisma.chatMessage.findMany({
-    where: { conversationId: id },
-    orderBy: { createdAt: "asc" },
-    take: 100,
-    select: {
-      id: true,
-      senderUserId: true,
-      senderRole: true,
-      body: true,
-      createdAt: true,
-    },
-  });
-
-  const messages = dbMessages.map((m) => ({
-    id: m.id,
-    body: m.body,
-    senderUserId: m.senderUserId,
-    senderRole: m.senderRole,
-    isOwn: m.senderUserId === userId,
-    createdAt: m.createdAt.toISOString(),
-  }));
+  const messages = await fetchRecentMessagesForConversation(id, userId);
 
   const response = NextResponse.json({ messages });
 

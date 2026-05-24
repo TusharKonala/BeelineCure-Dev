@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import {
   enqueueChatConversationEnsure,
   ensureChatConversationRecord,
+  fetchRecentMessagesForConversation,
   isChatLocked,
   linkPatientUserOnConversation,
   markRead,
@@ -88,32 +89,15 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const dbMessages = await prisma.chatMessage.findMany({
-    where: { conversationId: conversation.id },
-    orderBy: { createdAt: "asc" },
-    take: 100,
-    select: {
-      id: true,
-      senderUserId: true,
-      senderRole: true,
-      body: true,
-      createdAt: true,
-    },
-  });
+  const messages = await fetchRecentMessagesForConversation(
+    conversation.id,
+    userId,
+  );
 
   const peerName =
     role === UserRole.DOCTOR
       ? conversation.appointment.patientName
       : conversation.appointment.doctor.name;
-
-  const messages = dbMessages.map((m) => ({
-    id: m.id,
-    body: m.body,
-    senderUserId: m.senderUserId,
-    senderRole: m.senderRole,
-    isOwn: m.senderUserId === userId,
-    createdAt: m.createdAt.toISOString(),
-  }));
 
   const response = NextResponse.json({
     thread: {
