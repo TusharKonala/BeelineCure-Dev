@@ -102,31 +102,6 @@ export async function POST(
       body: text,
     });
 
-    try {
-      await triggerNewChatMessage(conv.id, {
-        id: message.id,
-        body: message.body,
-        senderUserId: message.senderUserId,
-        senderRole: message.senderRole,
-        createdAt: message.createdAt.toISOString(),
-      });
-    } catch (err) {
-      console.error("[chat/messages] Pusher new-message failed:", err);
-    }
-
-    try {
-      await notifyChatInboxAfterMessage({
-        conversationId: conv.id,
-        appointmentId: conv.appointmentId,
-        senderUserId: userId,
-        senderRole,
-        messageBody: message.body,
-        messageCreatedAt: message.createdAt,
-      });
-    } catch (err) {
-      console.error("[chat/messages] Inbox notify failed:", err);
-    }
-
     const response = NextResponse.json({
       message: {
         id: message.id,
@@ -139,11 +114,34 @@ export async function POST(
     });
 
     after(async () => {
-      await scheduleChatMessagePush({
-        message,
-        conversation: conv,
-        senderRole,
-      });
+      const results = await Promise.allSettled([
+        triggerNewChatMessage(conv.id, {
+          id: message.id,
+          body: message.body,
+          senderUserId: message.senderUserId,
+          senderRole: message.senderRole,
+          createdAt: message.createdAt.toISOString(),
+        }),
+        notifyChatInboxAfterMessage({
+          conversationId: conv.id,
+          appointmentId: conv.appointmentId,
+          senderUserId: userId,
+          senderRole,
+          messageBody: message.body,
+          messageCreatedAt: message.createdAt,
+        }),
+        scheduleChatMessagePush({
+          message,
+          conversation: conv,
+          senderRole,
+        }),
+      ]);
+
+      for (const result of results) {
+        if (result.status === "rejected") {
+          console.error("[chat/messages] Background delivery failed:", result.reason);
+        }
+      }
     });
 
     return response;
