@@ -341,25 +341,31 @@ export type ChatMessageForClient = {
   createdAt: string;
 };
 
-/** Latest N messages (desc from DB), returned oldest → newest for the UI. */
-export async function fetchRecentMessagesForConversation(
-  conversationId: string,
-  userId: string,
-  limit = 50,
-): Promise<ChatMessageForClient[]> {
-  const dbMessages = await prisma.chatMessage.findMany({
-    where: { conversationId },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-    select: {
-      id: true,
-      senderUserId: true,
-      senderRole: true,
-      body: true,
-      createdAt: true,
-    },
-  });
+export type ChatMessagesPage = {
+  messages: ChatMessageForClient[];
+  hasMore: boolean;
+};
 
+export const CHAT_MESSAGE_PAGE_SIZE = 50;
+
+const messageListSelect = {
+  id: true,
+  senderUserId: true,
+  senderRole: true,
+  body: true,
+  createdAt: true,
+} as const;
+
+function mapDbMessagesToClient(
+  dbMessages: {
+    id: string;
+    senderUserId: string;
+    senderRole: ChatSenderRole;
+    body: string;
+    createdAt: Date;
+  }[],
+  userId: string,
+): ChatMessageForClient[] {
   return [...dbMessages].reverse().map((m) => ({
     id: m.id,
     body: m.body,
@@ -368,6 +374,51 @@ export async function fetchRecentMessagesForConversation(
     isOwn: m.senderUserId === userId,
     createdAt: m.createdAt.toISOString(),
   }));
+}
+
+/** Latest N messages (desc from DB), returned oldest → newest for the UI. */
+export async function fetchRecentMessagesForConversation(
+  conversationId: string,
+  userId: string,
+  limit = CHAT_MESSAGE_PAGE_SIZE,
+): Promise<ChatMessagesPage> {
+  const dbMessages = await prisma.chatMessage.findMany({
+    where: { conversationId },
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    select: messageListSelect,
+  });
+
+  const hasMore = dbMessages.length > limit;
+  const page = hasMore ? dbMessages.slice(0, limit) : dbMessages;
+
+  return {
+    messages: mapDbMessagesToClient(page, userId),
+    hasMore,
+  };
+}
+
+/** Messages older than `before`, returned oldest → newest for prepending in the UI. */
+export async function fetchOlderMessagesForConversation(
+  conversationId: string,
+  userId: string,
+  before: Date,
+  limit = CHAT_MESSAGE_PAGE_SIZE,
+): Promise<ChatMessagesPage> {
+  const dbMessages = await prisma.chatMessage.findMany({
+    where: { conversationId, createdAt: { lt: before } },
+    orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    select: messageListSelect,
+  });
+
+  const hasMore = dbMessages.length > limit;
+  const page = hasMore ? dbMessages.slice(0, limit) : dbMessages;
+
+  return {
+    messages: mapDbMessagesToClient(page, userId),
+    hasMore,
+  };
 }
 
 /**
