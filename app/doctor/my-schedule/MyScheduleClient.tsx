@@ -32,6 +32,22 @@ type Meta = {
   slotDurationMinutes: AllowedSlotDurationMinutes;
 };
 
+type ScheduleWindow = {
+  id: string;
+  duration: AllowedSlotDurationMinutes;
+  start: string;
+  end: string;
+};
+
+function windowsOverlap(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+) {
+  return aStart < bEnd && bStart < aEnd;
+}
+
 export function MyScheduleClient() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -84,6 +100,12 @@ export function MyScheduleClient() {
   >([]);
   /** Bumps only after a successful Save so View Schedule list reloads; decoupled from Set-tab date changes. */
   const [viewScheduleListVersion, setViewScheduleListVersion] = useState(0);
+
+  const [windows, setWindows] = useState<ScheduleWindow[]>([]);
+  const [slotDurationMap, setSlotDurationMap] = useState<
+    Map<string, AllowedSlotDurationMinutes>
+  >(() => new Map());
+  const [windowOverlapError, setWindowOverlapError] = useState<string | null>(null);
 
   const [slotWindowStart, setSlotWindowStart] = useState(
     DEFAULT_SLOT_WINDOW_START,
@@ -166,15 +188,18 @@ export function MyScheduleClient() {
     };
   }, [meta, viewScheduleListVersion]);
 
-  const displaySlots = useMemo(
-    () =>
-      generateSlots(
-        slotWindowStart,
-        slotWindowEnd,
-        slotDurationMinutes,
-      ),
-    [slotWindowStart, slotWindowEnd, slotDurationMinutes],
-  );
+  const displaySlots = useMemo(() => {
+    const all = new Set<string>();
+    for (const w of windows) {
+      for (const s of generateSlots(w.start, w.end, w.duration)) {
+        all.add(s);
+      }
+    }
+    for (const s of generateSlots(slotWindowStart, slotWindowEnd, slotDurationMinutes)) {
+      all.add(s);
+    }
+    return [...all].sort();
+  }, [slotWindowStart, slotWindowEnd, slotDurationMinutes, windows]);
 
   useEffect(() => {
     slotWindowStartRef.current = slotWindowStart;
@@ -272,9 +297,11 @@ export function MyScheduleClient() {
       );
       const normalizedStarts = starts.filter((t) => allowed.has(t));
       const normalizedStartSet = new Set(normalizedStarts);
-      setSelected(normalizedStartSet);
+      setSelected(new Set());
       setInitialSelected(new Set(normalizedStartSet));
       setExplicitlyRemoved(new Set());
+      setWindows([]);
+      setSlotDurationMap(new Map());
       const normalizedBooked = (data.bookedSlotStarts ?? []).filter((slot) =>
         allowed.has(slot),
       );
@@ -289,6 +316,8 @@ export function MyScheduleClient() {
       setSelected(new Set());
       setInitialSelected(new Set());
       setExplicitlyRemoved(new Set());
+      setWindows([]);
+      setSlotDurationMap(new Map());
       setBookedSlots(new Set());
       setCurrentDaySlotDetails([]);
     } finally {
@@ -300,14 +329,68 @@ export function MyScheduleClient() {
   const applySlotDurationForEditing = useCallback(
     (minutes: AllowedSlotDurationMinutes) => {
       setSaveOk(null);
+      setWindowOverlapError(null);
       slotDurationRef.current = minutes;
       setSlotDurationMinutes(minutes);
       setSlotWindowStart((s) => alignWindowStartToSlotGrid(s, minutes));
       setSlotWindowEnd((e) => alignWindowEndExclusiveToSlotGrid(e, minutes));
-      setSelected(new Set());
     },
     [],
   );
+
+  function addWindow() {
+    if (timeToMinutes(slotWindowEnd) <= timeToMinutes(slotWindowStart)) return;
+    const overlapping = windows.find((w) =>
+      windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end),
+    );
+    if (overlapping) {
+      setWindowOverlapError(
+        `This window overlaps with ${overlapping.start}\u2013${overlapping.end}. Remove the conflicting window first or adjust times.`,
+      );
+      return;
+    }
+    setWindowOverlapError(null);
+    const slots = generateSlots(slotWindowStart, slotWindowEnd, slotDurationMinutes);
+    if (slots.length === 0) return;
+    const w: ScheduleWindow = {
+      id: crypto.randomUUID(),
+      duration: slotDurationMinutes,
+      start: slotWindowStart,
+      end: slotWindowEnd,
+    };
+    setWindows((prev) => [...prev, w]);
+    const nextSelected = new Set(selected);
+    const nextDurMap = new Map(slotDurationMap);
+    for (const s of slots) {
+      nextSelected.add(s);
+      nextDurMap.set(s, slotDurationMinutes);
+    }
+    setSelected(nextSelected);
+    setSlotDurationMap(nextDurMap);
+    setSaveOk(null);
+  }
+
+  function removeWindow(windowId: string) {
+    const w = windows.find((x) => x.id === windowId);
+    if (!w) return;
+    const slotsInWindow = new Set(generateSlots(w.start, w.end, w.duration));
+    setWindows((prev) => prev.filter((x) => x.id !== windowId));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const s of slotsInWindow) {
+        if (!initialSelected.has(s)) next.delete(s);
+      }
+      return next;
+    });
+    setSlotDurationMap((prev) => {
+      const next = new Map(prev);
+      for (const s of slotsInWindow) {
+        next.delete(s);
+      }
+      return next;
+    });
+    setSaveOk(null);
+  }
 
   const handleEditDateFromView = useCallback((isoDate: string) => {
     setMainTab("set");
@@ -409,16 +492,20 @@ export function MyScheduleClient() {
       else next.add(t);
       return next;
     });
+    if (!wasSelected) {
+      setSlotDurationMap((prev) => {
+        const next = new Map(prev);
+        if (!next.has(t)) next.set(t, slotDurationMinutes);
+        return next;
+      });
+    }
     setExplicitlyRemoved((prev) => {
       const next = new Set(prev);
       if (wasSelected) {
-        // Explicit deselection. Only mark for DB removal if it was part of the
-        // initially loaded set; new-and-then-deselected slots leave no trace.
         if (initialSelected.has(t)) {
           next.add(t);
         }
       } else {
-        // Re-selection clears any pending removal for this slot.
         next.delete(t);
       }
       return next;
@@ -472,12 +559,15 @@ export function MyScheduleClient() {
       const newlyAdded = [...currentSet].filter(
         (slot) => !initialSelected.has(slot),
       );
-      // Authoritative removal list: only slots the doctor explicitly clicked
-      // off (or cleared via Clear all) within this edit session. Slots that
-      // disappeared from `selected` purely because the time-window filter
-      // hid them (e.g. the doctor scrolled to a different window) are NOT
-      // included, so untouched off-window slots stay safe in the DB.
       const removed = [...explicitlyRemoved];
+
+      const durMap: Record<string, number> = {};
+      for (const s of slotStarts) {
+        const dur = slotDurationMap.get(s);
+        if (dur) durMap[s] = dur;
+      }
+      const hasPerSlotDurations = Object.keys(durMap).length > 0;
+
       const body =
         mode === "range"
           ? {
@@ -488,6 +578,7 @@ export function MyScheduleClient() {
               slotDurationMinutes,
               consultationType,
               clearDay: false,
+              ...(hasPerSlotDurations ? { slotDurationMap: durMap } : {}),
             }
           : {
               mode: "single" as const,
@@ -498,6 +589,7 @@ export function MyScheduleClient() {
               slotDurationMinutes,
               consultationType,
               clearDay: false,
+              ...(hasPerSlotDurations ? { slotDurationMap: durMap } : {}),
             };
       const res = await fetch("/api/doctor/availability", {
         method: "PUT",
@@ -512,6 +604,8 @@ export function MyScheduleClient() {
       setSaveOk(
         `Saved availability for ${data.affectedDates} day${data.affectedDates === 1 ? "" : "s"}.`,
       );
+      setWindows([]);
+      setSlotDurationMap(new Map());
       if (mode === "single") {
         await fetchSlotsForDate(singleDate);
       }
@@ -592,6 +686,12 @@ export function MyScheduleClient() {
   const rangeStartMinDate = addOneDayYmd(minDate);
   const slotWindowOk =
     timeToMinutes(slotWindowEnd) > timeToMinutes(slotWindowStart);
+  const builderOverlapsExisting = useMemo(() => {
+    if (!slotWindowOk) return false;
+    return windows.some((w) =>
+      windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end),
+    );
+  }, [slotWindowOk, slotWindowStart, slotWindowEnd, windows]);
   const editableSelectableSlots = selectableSlots.filter((slot) => !bookedSlots.has(slot));
   const allSlotsSelected =
     editableSelectableSlots.length > 0 &&
@@ -744,6 +844,7 @@ export function MyScheduleClient() {
                       value={slotWindowStart}
                       onChange={(e) => {
                         setSaveOk(null);
+                        setWindowOverlapError(null);
                         const v = e.target.value;
                         if (!v) return;
                         setSlotWindowStart(
@@ -774,6 +875,7 @@ export function MyScheduleClient() {
                       value={slotWindowEnd}
                       onChange={(e) => {
                         setSaveOk(null);
+                        setWindowOverlapError(null);
                         const v = e.target.value;
                         if (!v) return;
                         setSlotWindowEnd(
@@ -788,11 +890,59 @@ export function MyScheduleClient() {
                     />
                   </div>
                 </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    disabled={!slotWindowOk || builderOverlapsExisting}
+                    onClick={addWindow}
+                    className="cursor-pointer rounded-xl border border-[#2555F3] bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    + Add Window
+                  </button>
+                </div>
               </div>
               {!slotWindowOk && (
                 <p className="mt-2 font-montserrat text-sm text-red-600">
                   End time must be after start time.
                 </p>
+              )}
+              {windowOverlapError && (
+                <p className="mt-2 font-montserrat text-sm text-red-600">
+                  {windowOverlapError}
+                </p>
+              )}
+              {builderOverlapsExisting && !windowOverlapError && (
+                <p className="mt-2 font-montserrat text-sm text-amber-600">
+                  This time range overlaps an existing window — adding it will be blocked.
+                </p>
+              )}
+
+              {windows.length > 0 && (
+                <div className="mt-4 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3">
+                  <p className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5E5E5E]">
+                    Added windows
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {windows.map((w) => (
+                      <li
+                        key={w.id}
+                        className="flex items-center justify-between rounded-lg border border-[#e5e5e5] bg-white px-3 py-2"
+                      >
+                        <span className="font-montserrat text-sm text-[#333333]">
+                          {w.start}–{w.end} → {w.duration} min
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeWindow(w.id)}
+                          className="ml-3 cursor-pointer font-montserrat text-sm text-red-500 hover:text-red-700"
+                          aria-label={`Remove window ${w.start}–${w.end}`}
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               )}
 
               <div className="mt-6 flex flex-wrap gap-2">
@@ -981,7 +1131,10 @@ export function MyScheduleClient() {
           <div className="mt-8">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="font-montserrat text-sm font-medium text-[#333333]">
-                Slots ({slotDurationMinutes} minutes each)
+                Slots
+                {windows.length > 0
+                  ? ` (${[...new Set(windows.map((w) => w.duration))].sort((a, b) => a - b).join("/")} min)`
+                  : ` (${slotDurationMinutes} minutes each)`}
               </p>
               <button
                 type="button"
@@ -1012,6 +1165,13 @@ export function MyScheduleClient() {
                       next.add(slot);
                     }
                     setSelected(next);
+                    setSlotDurationMap((prev) => {
+                      const nextMap = new Map(prev);
+                      for (const slot of editableSelectableSlots) {
+                        if (!nextMap.has(slot)) nextMap.set(slot, slotDurationMinutes);
+                      }
+                      return nextMap;
+                    });
                     setExplicitlyRemoved((prev) => {
                       const cleared = new Set(prev);
                       for (const slot of editableSelectableSlots) {
