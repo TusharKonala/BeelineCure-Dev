@@ -646,43 +646,67 @@ export function MyScheduleClient() {
       <div className="w-full bg-[#fafafa] py-6 md:py-8">
         <Container>
           <section className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
+            {/* Title */}
             <Skeleton className="h-8 w-56 max-w-[85%] md:h-9" />
+            {/* Tab buttons: Set Availability / View Schedule */}
             <div className="mt-5 flex flex-wrap gap-2">
-              <Skeleton className="h-10 w-[9.5rem] rounded-xl" />
-              <Skeleton className="h-10 w-[9.5rem] rounded-xl" />
+              <Skeleton className="h-10 w-38 rounded-xl" />
+              <Skeleton className="h-10 w-38 rounded-xl" />
             </div>
+            {/* Description / timezone text */}
             <div className="mt-4 space-y-2">
               <Skeleton className="h-4 w-full max-w-2xl" />
               <Skeleton className="h-4 w-full max-w-xl" />
             </div>
+            {/* Slot duration dropdown */}
+            <div className="mt-5 space-y-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-11 w-48 rounded-xl" />
+            </div>
+            {/* Window start / Window end / Add Window button */}
             <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
               <div className="space-y-2">
                 <Skeleton className="h-4 w-28" />
-                <Skeleton className="h-11 w-40 max-w-[min(100%,10rem)] rounded-xl" />
+                <Skeleton className="h-11 w-40 rounded-xl" />
               </div>
               <div className="space-y-2">
                 <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-11 w-40 max-w-[min(100%,10rem)] rounded-xl" />
+                <Skeleton className="h-11 w-40 rounded-xl" />
               </div>
+              <Skeleton className="h-10 w-32 rounded-xl" />
             </div>
+            {/* Mode toggle: Single day / Range */}
             <div className="mt-6 flex flex-wrap gap-2">
               <Skeleton className="h-10 w-28 rounded-xl" />
               <Skeleton className="h-10 w-20 rounded-xl" />
             </div>
-            <Skeleton className="mt-6 h-11 w-40 max-w-[min(100%,10rem)] rounded-xl" />
+            {/* Calendar placeholder */}
+            <Skeleton className="mt-6 h-64 w-full max-w-sm rounded-xl" />
+            {/* Consultation type: 3 pills */}
+            <div className="mt-6 space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <div className="flex flex-wrap gap-2">
+                <Skeleton className="h-10 w-28 rounded-xl" />
+                <Skeleton className="h-10 w-28 rounded-xl" />
+                <Skeleton className="h-10 w-16 rounded-xl" />
+              </div>
+            </div>
+            {/* Slots header + Select all */}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <Skeleton className="h-5 w-44" />
               <Skeleton className="h-10 w-28 rounded-xl" />
             </div>
+            {/* Slot grid */}
             <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
               {Array.from({ length: slotSkeletonCount }).map((_, i) => (
                 <Skeleton
                   key={i}
-                  className="h-10 min-w-[5.5rem] rounded-xl"
+                  className="h-10 min-w-22 rounded-xl"
                 />
               ))}
             </div>
             <Skeleton className="mt-3 h-3 w-full max-w-md" />
+            {/* Save button */}
             <Skeleton className="mt-8 h-11 w-24 rounded-xl" />
           </section>
         </Container>
