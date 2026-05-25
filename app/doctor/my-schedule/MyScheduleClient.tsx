@@ -106,6 +106,7 @@ export function MyScheduleClient() {
     Map<string, AllowedSlotDurationMinutes>
   >(() => new Map());
   const [windowOverlapError, setWindowOverlapError] = useState<string | null>(null);
+  const [builderPhase, setBuilderPhase] = useState<"idle" | "adding" | "done">("idle");
 
   const [slotWindowStart, setSlotWindowStart] = useState(
     DEFAULT_SLOT_WINDOW_START,
@@ -195,11 +196,8 @@ export function MyScheduleClient() {
         all.add(s);
       }
     }
-    for (const s of generateSlots(slotWindowStart, slotWindowEnd, slotDurationMinutes)) {
-      all.add(s);
-    }
     return [...all].sort();
-  }, [slotWindowStart, slotWindowEnd, slotDurationMinutes, windows]);
+  }, [windows]);
 
   useEffect(() => {
     slotWindowStartRef.current = slotWindowStart;
@@ -302,6 +300,7 @@ export function MyScheduleClient() {
       setExplicitlyRemoved(new Set());
       setWindows([]);
       setSlotDurationMap(new Map());
+      setBuilderPhase("idle");
       const normalizedBooked = (data.bookedSlotStarts ?? []).filter((slot) =>
         allowed.has(slot),
       );
@@ -318,6 +317,7 @@ export function MyScheduleClient() {
       setExplicitlyRemoved(new Set());
       setWindows([]);
       setSlotDurationMap(new Map());
+      setBuilderPhase("idle");
       setBookedSlots(new Set());
       setCurrentDaySlotDetails([]);
     } finally {
@@ -345,7 +345,7 @@ export function MyScheduleClient() {
     );
     if (overlapping) {
       setWindowOverlapError(
-        `This window overlaps with ${overlapping.start}\u2013${overlapping.end}. Remove the conflicting window first or adjust times.`,
+        `This range overlaps with ${overlapping.start}\u2013${overlapping.end}. Adjust times.`,
       );
       return;
     }
@@ -368,13 +368,17 @@ export function MyScheduleClient() {
     setSelected(nextSelected);
     setSlotDurationMap(nextDurMap);
     setSaveOk(null);
+    setBuilderPhase("done");
+    setSlotWindowStart(DEFAULT_SLOT_WINDOW_START);
+    setSlotWindowEnd(DEFAULT_SLOT_WINDOW_END);
   }
 
   function removeWindow(windowId: string) {
     const w = windows.find((x) => x.id === windowId);
     if (!w) return;
     const slotsInWindow = new Set(generateSlots(w.start, w.end, w.duration));
-    setWindows((prev) => prev.filter((x) => x.id !== windowId));
+    const remaining = windows.filter((x) => x.id !== windowId);
+    setWindows(remaining);
     setSelected((prev) => {
       const next = new Set(prev);
       for (const s of slotsInWindow) {
@@ -390,6 +394,9 @@ export function MyScheduleClient() {
       return next;
     });
     setSaveOk(null);
+    if (remaining.length === 0) {
+      setBuilderPhase("idle");
+    }
   }
 
   const handleEditDateFromView = useCallback((isoDate: string) => {
@@ -451,16 +458,6 @@ export function MyScheduleClient() {
     );
   }, [slotWindowStart, slotWindowEnd, windows]);
 
-  useEffect(() => {
-    const allowed = new Set(displaySlots);
-    setSelected((prev) => {
-      const next = new Set([...prev].filter((t) => allowed.has(t)));
-      if (next.size === prev.size && [...prev].every((t) => next.has(t))) {
-        return prev;
-      }
-      return next;
-    });
-  }, [displaySlots]);
 
   useEffect(() => {
     if (!meta || !scheduleIncludesToday) return;
@@ -614,6 +611,7 @@ export function MyScheduleClient() {
       );
       setWindows([]);
       setSlotDurationMap(new Map());
+      setBuilderPhase("idle");
       if (mode === "single") {
         await fetchSlotsForDate(singleDate);
       }
@@ -848,99 +846,125 @@ export function MyScheduleClient() {
                 </div>
               </div>
 
-              <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div>
-                  <label
-                    htmlFor="schedule-slot-window-start"
-                    className="font-montserrat text-sm font-medium text-[#333333]"
-                  >
-                    Window start
-                  </label>
-                  <div
-                    className="mt-2 w-full max-w-[10rem] cursor-pointer"
-                    onClick={() =>
-                      slotWindowStartInputRef.current?.showPicker?.()
-                    }
-                  >
-                    <input
-                      ref={slotWindowStartInputRef}
-                      id="schedule-slot-window-start"
-                      type="time"
-                      step={slotDurationMinutes * 60}
-                      value={slotWindowStart}
-                      onChange={(e) => {
-                        setSaveOk(null);
-                        setWindowOverlapError(null);
-                        const v = e.target.value;
-                        if (!v) return;
-                        setSlotWindowStart(
-                          alignWindowStartToSlotGrid(v, slotDurationMinutes),
-                        );
-                      }}
-                      className={cn(dateInputClassName, "w-full")}
-                      aria-label="Earliest slot start time"
-                    />
+              {builderPhase !== "done" && (
+                <>
+                  {builderPhase === "adding" && (
+                    <p className="mt-5 font-montserrat text-sm text-[#5E5E5E]">
+                      Enter a new time range. It must not overlap with your existing windows.
+                    </p>
+                  )}
+                  <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
+                    <div>
+                      <label
+                        htmlFor="schedule-slot-window-start"
+                        className="font-montserrat text-sm font-medium text-[#333333]"
+                      >
+                        Window start
+                      </label>
+                      <div
+                        className="mt-2 w-full max-w-[10rem] cursor-pointer"
+                        onClick={() =>
+                          slotWindowStartInputRef.current?.showPicker?.()
+                        }
+                      >
+                        <input
+                          ref={slotWindowStartInputRef}
+                          id="schedule-slot-window-start"
+                          type="time"
+                          step={slotDurationMinutes * 60}
+                          value={slotWindowStart}
+                          onChange={(e) => {
+                            setSaveOk(null);
+                            setWindowOverlapError(null);
+                            const v = e.target.value;
+                            if (!v) return;
+                            setSlotWindowStart(
+                              alignWindowStartToSlotGrid(v, slotDurationMinutes),
+                            );
+                          }}
+                          className={cn(dateInputClassName, "w-full")}
+                          aria-label="Earliest slot start time"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="schedule-slot-window-end"
+                        className="font-montserrat text-sm font-medium text-[#333333]"
+                      >
+                        Window end
+                      </label>
+                      <div
+                        className="mt-2 w-full max-w-[10rem] cursor-pointer"
+                        onClick={() => slotWindowEndInputRef.current?.showPicker?.()}
+                      >
+                        <input
+                          ref={slotWindowEndInputRef}
+                          id="schedule-slot-window-end"
+                          type="time"
+                          step={slotDurationMinutes * 60}
+                          value={slotWindowEnd}
+                          onChange={(e) => {
+                            setSaveOk(null);
+                            setWindowOverlapError(null);
+                            const v = e.target.value;
+                            if (!v) return;
+                            setSlotWindowEnd(
+                              alignWindowEndExclusiveToSlotGrid(
+                                v,
+                                slotDurationMinutes,
+                              ),
+                            );
+                          }}
+                          className={cn(dateInputClassName, "w-full")}
+                          aria-label="End of booking window (exclusive)"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        disabled={!slotWindowOk || builderOverlapsExisting}
+                        onClick={addWindow}
+                        className="cursor-pointer rounded-xl border border-[#2555F3] bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        + Add Window
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <label
-                    htmlFor="schedule-slot-window-end"
-                    className="font-montserrat text-sm font-medium text-[#333333]"
-                  >
-                    Window end
-                  </label>
-                  <div
-                    className="mt-2 w-full max-w-[10rem] cursor-pointer"
-                    onClick={() => slotWindowEndInputRef.current?.showPicker?.()}
-                  >
-                    <input
-                      ref={slotWindowEndInputRef}
-                      id="schedule-slot-window-end"
-                      type="time"
-                      step={slotDurationMinutes * 60}
-                      value={slotWindowEnd}
-                      onChange={(e) => {
-                        setSaveOk(null);
-                        setWindowOverlapError(null);
-                        const v = e.target.value;
-                        if (!v) return;
-                        setSlotWindowEnd(
-                          alignWindowEndExclusiveToSlotGrid(
-                            v,
-                            slotDurationMinutes,
-                          ),
-                        );
-                      }}
-                      className={cn(dateInputClassName, "w-full")}
-                      aria-label="End of booking window (exclusive)"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-end">
+                  {!slotWindowOk && (
+                    <p className="mt-2 font-montserrat text-sm text-red-600">
+                      End time must be after start time.
+                    </p>
+                  )}
+                  {slotWindowOk && windowOverlapError && (
+                    <p className="mt-2 font-montserrat text-sm text-red-600">
+                      {windowOverlapError}
+                    </p>
+                  )}
+                  {slotWindowOk && builderOverlapsExisting && !windowOverlapError && (
+                    <p className="mt-2 font-montserrat text-sm text-amber-600">
+                      This range overlaps with {windows.find((w) => windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end))?.start}–{windows.find((w) => windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end))?.end}. Adjust times.
+                    </p>
+                  )}
+                </>
+              )}
+
+              {builderPhase === "done" && (
+                <div className="mt-5">
                   <button
                     type="button"
-                    disabled={!slotWindowOk || builderOverlapsExisting}
-                    onClick={addWindow}
-                    className="cursor-pointer rounded-xl border border-[#2555F3] bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-medium text-white transition-colors hover:bg-[#1e44c7] disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => {
+                      setBuilderPhase("adding");
+                      setSlotWindowStart(DEFAULT_SLOT_WINDOW_START);
+                      setSlotWindowEnd(DEFAULT_SLOT_WINDOW_END);
+                      setWindowOverlapError(null);
+                    }}
+                    className="cursor-pointer rounded-xl border border-[#2555F3] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] transition-colors hover:bg-[#f0f4ff]"
                   >
-                    + Add Window
+                    + Set New Window
                   </button>
                 </div>
-              </div>
-              {!slotWindowOk && (
-                <p className="mt-2 font-montserrat text-sm text-red-600">
-                  End time must be after start time.
-                </p>
-              )}
-              {windowOverlapError && (
-                <p className="mt-2 font-montserrat text-sm text-red-600">
-                  {windowOverlapError}
-                </p>
-              )}
-              {builderOverlapsExisting && !windowOverlapError && (
-                <p className="mt-2 font-montserrat text-sm text-amber-600">
-                  This time range overlaps an existing window — adding it will be blocked.
-                </p>
               )}
 
               {windows.length > 0 && (
@@ -1239,7 +1263,7 @@ export function MyScheduleClient() {
               </div>
             ) : (
               <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-                {slotWindowOk ? (
+                {displaySlots.length > 0 ? (
                   displaySlots.map((t) => {
                     const on = selected.has(t);
                     const booked = bookedSlots.has(t);
@@ -1273,7 +1297,7 @@ export function MyScheduleClient() {
                   })
                 ) : (
                   <p className="font-montserrat text-sm text-[#5E5E5E]">
-                    Adjust the window times to see slots.
+                    Add a window to see available slots.
                   </p>
                 )}
               </div>
