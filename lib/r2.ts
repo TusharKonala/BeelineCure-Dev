@@ -53,7 +53,6 @@ export async function getR2Object(
     throw new Error("Empty response body from R2");
   }
   const contentType = response.ContentType ?? "application/octet-stream";
-  // @ts-expect-error -- AWS SDK body is a web ReadableStream in Node 18+
   const body = response.Body.transformToWebStream() as ReadableStream;
   return { body, contentType };
 }
