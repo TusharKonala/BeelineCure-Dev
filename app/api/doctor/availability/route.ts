@@ -18,6 +18,7 @@ import {
   getDoctorLocalTodayIso,
   ymdToPrismaDate,
 } from "@/lib/doctor-local-date";
+import { timeToMinutes } from "@/lib/time";
 import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -52,6 +53,15 @@ function parseYmdOrNull(s: string | null): string | null {
   return t;
 }
 
+function slotsOverlap(
+  startA: number,
+  durationA: number,
+  startB: number,
+  durationB: number,
+): boolean {
+  return startA < startB + durationB && startB < startA + durationA;
+}
+
 const putBodySchema = z.discriminatedUnion("mode", [
   z.object({
     mode: z.literal("range"),
@@ -61,6 +71,7 @@ const putBodySchema = z.discriminatedUnion("mode", [
     newSlots: z.array(z.string()).optional(),
     removedSlots: z.array(z.string()).optional(),
     slotDurationMinutes: durationSchema.optional(),
+    slotDurationMap: z.record(z.string(), durationSchema).optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
     /**
      * Explicitly clear the day(s) — delete all availability rows and cancel any
@@ -77,6 +88,7 @@ const putBodySchema = z.discriminatedUnion("mode", [
     newSlots: z.array(z.string()).optional(),
     removedSlots: z.array(z.string()).optional(),
     slotDurationMinutes: durationSchema.optional(),
+    slotDurationMap: z.record(z.string(), durationSchema).optional(),
     consultationType: z.enum(["CLINIC", "ONLINE", "BOTH"]).optional(),
     clearDay: z.boolean().optional().default(false),
   }),
@@ -485,6 +497,7 @@ export async function PUT(request: Request) {
   const duration =
     parsed.slotDurationMinutes ??
     coerceAllowedSlotDurationMinutes(doctor.slotDurationMinutes);
+  const perSlotDuration: Record<string, number> = parsed.slotDurationMap ?? {};
   const consultationType = parsed.consultationType ?? "BOTH";
   const clearDay = parsed.clearDay ?? false;
 
@@ -513,10 +526,11 @@ export async function PUT(request: Request) {
   }
 
   for (const s of [...slotStarts, ...newSlots, ...removedSlots]) {
-    if (!isValidSlotStartForDuration(s, duration)) {
+    const slotDur = perSlotDuration[s] ?? duration;
+    if (!isValidSlotStartForDuration(s, slotDur)) {
       return NextResponse.json(
         {
-          error: `Each slot must align to a ${duration}-minute schedule (valid start times for this duration).`,
+          error: `Slot ${s} must align to a ${slotDur}-minute schedule (valid start times for this duration).`,
         },
         { status: 400 },
       );
@@ -657,7 +671,7 @@ export async function PUT(request: Request) {
         for (const startTime of newSlots) {
           merged.set(startTime, {
             startTime,
-            slotDurationMinutes: duration,
+            slotDurationMinutes: perSlotDuration[startTime] ?? duration,
             consultationType,
           });
         }
@@ -665,11 +679,38 @@ export async function PUT(request: Request) {
         for (const startTime of slotStarts) {
           merged.set(startTime, {
             startTime,
-            slotDurationMinutes: duration,
+            slotDurationMinutes: perSlotDuration[startTime] ?? duration,
             consultationType,
           });
         }
       }
+
+      const newSlotSet = new Set(
+        parsed.mode === "single" && (newSlots.length > 0 || removedSlots.length > 0)
+          ? newSlots
+          : slotStarts,
+      );
+      for (const newStart of newSlotSet) {
+        const newEntry = merged.get(newStart);
+        if (!newEntry) continue;
+        const newStartMin = timeToMinutes(newStart);
+        for (const [key, entry] of merged) {
+          if (key === newStart) continue;
+          if (newSlotSet.has(key)) continue;
+          const existStartMin = timeToMinutes(key);
+          if (
+            slotsOverlap(
+              newStartMin,
+              newEntry.slotDurationMinutes,
+              existStartMin,
+              entry.slotDurationMinutes,
+            )
+          ) {
+            merged.delete(key);
+          }
+        }
+      }
+
       await tx.doctorAvailability.deleteMany({
         where: { doctorId: doctor.id, date },
       });
