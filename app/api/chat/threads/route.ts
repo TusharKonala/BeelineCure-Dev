@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
   const limit = parseLimit(request.nextUrl.searchParams.get("limit"));
   const cursor = parseCursor(request.nextUrl.searchParams.get("cursor"));
 
-  const unread = await getUnreadCountsForUser(userId);
+  const unread = await getUnreadCountsForUser(userId, email ?? null);
 
   if (role === UserRole.PATIENT && email) {
     const completedAppointments = await prisma.appointment.findMany({

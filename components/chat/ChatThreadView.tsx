@@ -15,6 +15,8 @@ import { Loader2, Send } from "lucide-react";
 import { formatMessageTime } from "@/components/chat/format-chat-time";
 import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
 
+const SCROLL_NEAR_BOTTOM_PX = 80;
+
 type ChatMessage = {
   id: string;
   clientId?: string;
@@ -54,15 +56,17 @@ export function ChatThreadView({
   const [draft, setDraft] = useState("");
   const [loadingInitial, setLoadingInitial] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [sending, setSending] = useState(false);
+  const [pendingSendCount, setPendingSendCount] = useState(0);
+  const [hasNewMessagesBelow, setHasNewMessagesBelow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const conversationIdRef = useRef<string | null>(null);
   const scrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
-  const lastMessageIdRef = useRef<string | null>(null);
   const loadingMoreRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const didInitialScrollRef = useRef(false);
 
   const syncUnreadBadge = useCallback(async () => {
     try {
@@ -75,6 +79,24 @@ export function ChatThreadView({
     } catch {
       // best-effort
     }
+  }, []);
+
+  const updateNearBottom = useCallback(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const near =
+      el.scrollTop + el.clientHeight >=
+      el.scrollHeight - SCROLL_NEAR_BOTTOM_PX;
+    isNearBottomRef.current = near;
+    if (near) {
+      setHasNewMessagesBelow(false);
+    }
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    bottomRef.current?.scrollIntoView({ behavior });
+    isNearBottomRef.current = true;
+    setHasNewMessagesBelow(false);
   }, []);
 
   const loadThreadWithMessages = useCallback(async () => {
@@ -158,6 +180,7 @@ export function ChatThreadView({
       setLoadingInitial(true);
       setError(null);
       setHasMoreOlder(false);
+      didInitialScrollRef.current = false;
       try {
         await loadThreadWithMessages();
       } catch {
@@ -186,16 +209,15 @@ export function ChatThreadView({
     scrollEl.scrollTop =
       scrollEl.scrollHeight - restore.height + restore.top;
     scrollRestoreRef.current = null;
-  }, [messages]);
-
-  const lastMessageId = messages[messages.length - 1]?.id;
+    updateNearBottom();
+  }, [messages, updateNearBottom]);
 
   useEffect(() => {
-    if (loadingInitial || loadingMore || !lastMessageId) return;
-    if (lastMessageIdRef.current === lastMessageId) return;
-    lastMessageIdRef.current = lastMessageId;
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [lastMessageId, loadingInitial, loadingMore]);
+    if (loadingInitial || didInitialScrollRef.current) return;
+    if (messages.length === 0) return;
+    didInitialScrollRef.current = true;
+    requestAnimationFrame(() => scrollToBottom("auto"));
+  }, [loadingInitial, messages.length, scrollToBottom]);
 
   useEffect(() => {
     const root = scrollContainerRef.current;
@@ -252,6 +274,12 @@ export function ChatThreadView({
         ];
       });
 
+      if (isNearBottomRef.current) {
+        requestAnimationFrame(() => scrollToBottom("smooth"));
+      } else {
+        setHasNewMessagesBelow(true);
+      }
+
       if (document.visibilityState === "visible") {
         void fetch(
           `/api/chat/threads/${encodeURIComponent(conversationId)}/read`,
@@ -269,14 +297,14 @@ export function ChatThreadView({
       pusher.unsubscribe(`conversation-${conversationId}`);
       pusher.disconnect();
     };
-  }, [thread?.id, session?.user?.id, syncUnreadBadge]);
+  }, [thread?.id, session?.user?.id, syncUnreadBadge, scrollToBottom]);
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
     const convId = conversationIdRef.current;
     const userId = session?.user?.id;
-    if (!text || !convId || !userId || thread?.isReadOnly || sending) return;
+    if (!text || !convId || !userId || thread?.isReadOnly) return;
 
     const clientId = crypto.randomUUID();
     const optimistic: ChatMessage = {
@@ -292,8 +320,9 @@ export function ChatThreadView({
 
     setMessages((prev) => [...prev, optimistic]);
     setDraft("");
-    setSending(true);
+    setPendingSendCount((n) => n + 1);
     setError(null);
+    requestAnimationFrame(() => scrollToBottom("smooth"));
 
     try {
       const res = await fetch(
@@ -324,12 +353,11 @@ export function ChatThreadView({
       setDraft(text);
       setError(err instanceof Error ? err.message : "Failed to send");
     } finally {
-      setSending(false);
+      setPendingSendCount((n) => Math.max(0, n - 1));
     }
   }
 
-  const inputDisabled =
-    loadingInitial || !thread || thread.isReadOnly || sending;
+  const inputDisabled = loadingInitial || !thread || thread.isReadOnly;
 
   if (loadingInitial && !thread) {
     return (
@@ -378,54 +406,69 @@ export function ChatThreadView({
         </div>
       )}
 
-      <div
-        ref={scrollContainerRef}
-        className="relative min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4 sm:px-6"
-      >
-        <div ref={topSentinelRef} className="h-px w-full shrink-0" aria-hidden />
-        {(loadingMore || (hasMoreOlder && messages.length > 0)) && (
-          <div className="flex justify-center py-2">
-            {loadingMore ? (
-              <Loader2
-                className="size-5 animate-spin text-[#2555F3]"
-                aria-label="Loading older messages"
-              />
-            ) : (
-              <span className="font-montserrat text-xs text-[#9A9A9A]">
-                Scroll up for older messages
-              </span>
-            )}
-          </div>
-        )}
-        {messages.length === 0 && thread && !loadingInitial && (
-          <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
-            No messages yet. Say hello to start the conversation.
-          </p>
-        )}
-        {messages.map((m) => (
-          <div
-            key={m.clientId ?? m.id}
-            className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
-          >
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={scrollContainerRef}
+          onScroll={updateNearBottom}
+          className="absolute inset-0 space-y-3 overflow-y-auto px-4 py-4 sm:px-6"
+        >
+          <div ref={topSentinelRef} className="h-px w-full shrink-0" aria-hidden />
+          {(loadingMore || (hasMoreOlder && messages.length > 0)) && (
+            <div className="flex justify-center py-2">
+              {loadingMore ? (
+                <Loader2
+                  className="size-5 animate-spin text-[#2555F3]"
+                  aria-label="Loading older messages"
+                />
+              ) : (
+                <span className="font-montserrat text-xs text-[#9A9A9A]">
+                  Scroll up for older messages
+                </span>
+              )}
+            </div>
+          )}
+          {messages.length === 0 && thread && !loadingInitial && (
+            <p className="text-center font-montserrat text-sm text-[#9A9A9A]">
+              No messages yet. Say hello to start the conversation.
+            </p>
+          )}
+          {messages.map((m) => (
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
-                m.isOwn
-                  ? `bg-[#2555F3] text-white${m.status === "pending" ? " opacity-80" : ""}`
-                  : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
-              }`}
+              key={m.clientId ?? m.id}
+              className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
             >
-              <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
-              <p
-                className={`mt-1 text-[10px] ${
-                  m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
+                  m.isOwn
+                    ? `bg-[#2555F3] text-white${m.status === "pending" ? " opacity-80" : ""}`
+                    : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
                 }`}
               >
-                {formatMessageTime(m.createdAt)}
-              </p>
+                <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                <p
+                  className={`mt-1 text-[10px] ${
+                    m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
+                  }`}
+                >
+                  {formatMessageTime(m.createdAt)}
+                </p>
+              </div>
             </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        {hasNewMessagesBelow && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <button
+              type="button"
+              onClick={() => scrollToBottom("smooth")}
+              className="pointer-events-auto rounded-full border border-[#e5e5e5] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] shadow-md transition-colors hover:bg-[#f5f8ff]"
+            >
+              New message ↓
+            </button>
           </div>
-        ))}
-        <div ref={bottomRef} />
+        )}
       </div>
 
       {error && (
@@ -453,7 +496,7 @@ export function ChatThreadView({
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50"
           aria-label="Send message"
         >
-          {sending ? (
+          {pendingSendCount > 0 ? (
             <Loader2 className="size-4 animate-spin" />
           ) : (
             <Send className="size-4" />
