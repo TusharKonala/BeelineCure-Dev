@@ -443,6 +443,14 @@ export function MyScheduleClient() {
     );
   }, [meta, scheduleIncludesToday, displaySlots]);
 
+  const builderOverlapsExisting = useMemo(() => {
+    const windowOk = timeToMinutes(slotWindowEnd) > timeToMinutes(slotWindowStart);
+    if (!windowOk) return false;
+    return windows.some((w) =>
+      windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end),
+    );
+  }, [slotWindowStart, slotWindowEnd, windows]);
+
   useEffect(() => {
     const allowed = new Set(displaySlots);
     setSelected((prev) => {
@@ -686,12 +694,6 @@ export function MyScheduleClient() {
   const rangeStartMinDate = addOneDayYmd(minDate);
   const slotWindowOk =
     timeToMinutes(slotWindowEnd) > timeToMinutes(slotWindowStart);
-  const builderOverlapsExisting = useMemo(() => {
-    if (!slotWindowOk) return false;
-    return windows.some((w) =>
-      windowsOverlap(slotWindowStart, slotWindowEnd, w.start, w.end),
-    );
-  }, [slotWindowOk, slotWindowStart, slotWindowEnd, windows]);
   const editableSelectableSlots = selectableSlots.filter((slot) => !bookedSlots.has(slot));
   const allSlotsSelected =
     editableSelectableSlots.length > 0 &&
