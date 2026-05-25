@@ -10,6 +10,7 @@ export async function notifyChatInboxAfterMessage(params: {
   senderUserId: string;
   senderRole: ChatSenderRole;
   messageBody: string;
+  messageType?: string;
   messageCreatedAt: Date;
 }) {
   const conversation = await prisma.chatConversation.findUnique({
@@ -78,7 +79,10 @@ export async function notifyChatInboxAfterMessage(params: {
       type: isFirstMessage ? "thread" : "message",
       conversationId: params.conversationId,
       appointmentId: params.appointmentId,
-      lastMessagePreview: params.messageBody,
+      lastMessagePreview:
+        params.messageType === "image" && !params.messageBody
+          ? "Sent an image"
+          : params.messageBody,
       lastMessageAt,
       senderUserId: params.senderUserId,
       peerName,

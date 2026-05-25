@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import Pusher from "pusher-js";
-import { Loader2, Send } from "lucide-react";
+import { ImageIcon, Loader2, Send } from "lucide-react";
 import { formatMessageTime } from "@/components/chat/format-chat-time";
 import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
 
@@ -26,7 +26,12 @@ type ChatMessage = {
   isOwn: boolean;
   createdAt: string;
   status?: "pending" | "sent" | "failed";
+  messageType?: string;
+  localImageUrl?: string;
 };
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 type ThreadMeta = {
   id: string;
@@ -255,6 +260,7 @@ export function ChatThreadView({
       senderUserId: string;
       senderRole: string;
       createdAt: string;
+      messageType?: string;
     }) => {
       const isOwn = payload.senderUserId === userId;
       if (isOwn) return;
@@ -270,6 +276,7 @@ export function ChatThreadView({
             senderRole: payload.senderRole,
             isOwn,
             createdAt: payload.createdAt,
+            messageType: payload.messageType,
           },
         ];
       });
@@ -353,6 +360,105 @@ export function ChatThreadView({
       setDraft(text);
       setError(err instanceof Error ? err.message : "Failed to send");
     } finally {
+      setPendingSendCount((n) => Math.max(0, n - 1));
+    }
+  }
+
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageSend(file: File) {
+    const convId = conversationIdRef.current;
+    const userId = session?.user?.id;
+    if (!convId || !userId || thread?.isReadOnly) return;
+
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      setError("Only JPEG, PNG, and WebP images are allowed.");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("Image must be 10MB or smaller.");
+      return;
+    }
+
+    const localUrl = URL.createObjectURL(file);
+    const clientId = crypto.randomUUID();
+    const optimistic: ChatMessage = {
+      id: clientId,
+      clientId,
+      body: "",
+      senderUserId: userId,
+      senderRole: "",
+      isOwn: true,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+      messageType: "image",
+      localImageUrl: localUrl,
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+    setPendingSendCount((n) => n + 1);
+    setError(null);
+    requestAnimationFrame(() => scrollToBottom("smooth"));
+
+    try {
+      const urlRes = await fetch("/api/chat/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: convId,
+          contentType: file.type,
+        }),
+      });
+      if (!urlRes.ok) {
+        const d = (await urlRes.json().catch(() => null)) as { error?: string };
+        throw new Error(d?.error ?? "Failed to get upload URL");
+      }
+      const { uploadUrl, key } = (await urlRes.json()) as {
+        uploadUrl: string;
+        key: string;
+      };
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        throw new Error("Image upload failed");
+      }
+
+      const msgRes = await fetch(
+        `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            body: "",
+            messageType: "image",
+            imageKey: key,
+          }),
+        },
+      );
+      if (!msgRes.ok) {
+        const d = (await msgRes.json().catch(() => null)) as { error?: string };
+        throw new Error(d?.error ?? "Failed to send image message");
+      }
+      const data = (await msgRes.json()) as { message?: ChatMessage };
+      if (data.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.clientId === clientId
+              ? { ...data.message!, status: "sent" as const }
+              : m,
+          ),
+        );
+      }
+      void syncUnreadBadge();
+    } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
+      setError(err instanceof Error ? err.message : "Failed to send image");
+    } finally {
+      URL.revokeObjectURL(localUrl);
       setPendingSendCount((n) => Math.max(0, n - 1));
     }
   }
@@ -444,7 +550,31 @@ export function ChatThreadView({
                     : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
                 }`}
               >
-                <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                {m.messageType === "image" ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={
+                        m.status === "pending" && m.localImageUrl
+                          ? m.localImageUrl
+                          : `/api/chat/image/${m.id}`
+                      }
+                      alt="Shared image"
+                      className="max-h-64 w-auto rounded-xl object-contain"
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        target.style.display = "none";
+                        const fallback = target.nextElementSibling;
+                        if (fallback instanceof HTMLElement) fallback.style.display = "block";
+                      }}
+                    />
+                    <p className="hidden italic opacity-70" aria-hidden>
+                      Image failed to load
+                    </p>
+                  </>
+                ) : (
+                  <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                )}
                 <p
                   className={`mt-1 text-[10px] ${
                     m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
@@ -481,6 +611,26 @@ export function ChatThreadView({
         onSubmit={handleSend}
         className="flex shrink-0 gap-2 border-t border-[#e5e5e5] p-4"
       >
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void handleImageSend(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          disabled={inputDisabled}
+          onClick={() => imageInputRef.current?.click()}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label="Send image"
+        >
+          <ImageIcon className="size-4" />
+        </button>
         <input
           type="text"
           value={draft}
