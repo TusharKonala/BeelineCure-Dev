@@ -331,6 +331,8 @@ export type PersistedChatMessage = {
   senderUserId: string;
   senderRole: ChatSenderRole;
   body: string;
+  messageType: string;
+  imageKey: string | null;
   createdAt: Date;
 };
 
@@ -348,6 +350,7 @@ export type ChatMessageForClient = {
   senderRole: ChatSenderRole;
   isOwn: boolean;
   createdAt: string;
+  messageType: string;
 };
 
 export type ChatMessagesPage = {
@@ -362,6 +365,8 @@ const messageListSelect = {
   senderUserId: true,
   senderRole: true,
   body: true,
+  messageType: true,
+  imageKey: true,
   createdAt: true,
 } as const;
 
@@ -371,6 +376,8 @@ function mapDbMessagesToClient(
     senderUserId: string;
     senderRole: ChatSenderRole;
     body: string;
+    messageType: string;
+    imageKey: string | null;
     createdAt: Date;
   }[],
   userId: string,
@@ -382,6 +389,7 @@ function mapDbMessagesToClient(
     senderRole: m.senderRole,
     isOwn: m.senderUserId === userId,
     createdAt: m.createdAt.toISOString(),
+    messageType: m.messageType,
   }));
 }
 
@@ -441,6 +449,8 @@ export async function sendChatMessage(params: {
   userEmail?: string | null;
   senderRole: ChatSenderRole;
   body: string;
+  messageType?: string;
+  imageKey?: string;
 }): Promise<{
   message: PersistedChatMessage;
   conversation: ConversationForDelivery;
@@ -487,6 +497,8 @@ export async function sendChatMessage(params: {
       senderUserId: params.userId,
       senderRole: params.senderRole,
       body: params.body,
+      messageType: params.messageType ?? "text",
+      imageKey: params.imageKey ?? null,
     },
     select: {
       id: true,
@@ -494,6 +506,8 @@ export async function sendChatMessage(params: {
       senderUserId: true,
       senderRole: true,
       body: true,
+      messageType: true,
+      imageKey: true,
       createdAt: true,
     },
   });

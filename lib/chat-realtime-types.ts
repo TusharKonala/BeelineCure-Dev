@@ -6,6 +6,7 @@ export type ChatMessagePushPayload = {
   senderUserId: string;
   senderRole: ChatSenderRole;
   createdAt: string;
+  messageType?: string;
 };
 
 export type ChatInboxUpdatePayload = {
