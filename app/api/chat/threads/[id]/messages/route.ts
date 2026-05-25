@@ -71,14 +71,33 @@ export async function POST(
 
   const body = (await request.json().catch(() => null)) as {
     body?: unknown;
+    messageType?: unknown;
+    imageKey?: unknown;
   } | null;
 
+  const messageType =
+    body?.messageType === "image" ? "image" : "text";
+  const imageKey =
+    messageType === "image" && typeof body?.imageKey === "string"
+      ? body.imageKey.trim()
+      : undefined;
+
   const text = typeof body?.body === "string" ? body.body.trim() : "";
-  if (!text || text.length > 4000) {
-    return NextResponse.json(
-      { error: "Message body is required (max 4000 characters)" },
-      { status: 400 },
-    );
+
+  if (messageType === "image") {
+    if (!imageKey || !imageKey.startsWith("chat-images/")) {
+      return NextResponse.json(
+        { error: "Valid imageKey is required for image messages" },
+        { status: 400 },
+      );
+    }
+  } else {
+    if (!text || text.length > 4000) {
+      return NextResponse.json(
+        { error: "Message body is required (max 4000 characters)" },
+        { status: 400 },
+      );
+    }
   }
 
   const senderRole =
@@ -93,6 +112,8 @@ export async function POST(
         userEmail: session?.user?.email ?? null,
         senderRole,
         body: text,
+        messageType,
+        imageKey,
       });
 
     try {
@@ -102,6 +123,7 @@ export async function POST(
         senderUserId: message.senderUserId,
         senderRole: message.senderRole,
         createdAt: message.createdAt.toISOString(),
+        messageType: message.messageType,
       });
     } catch (err) {
       console.error("[chat/messages] Pusher new-message failed:", err);
@@ -115,6 +137,7 @@ export async function POST(
         senderRole: message.senderRole,
         isOwn: true,
         createdAt: message.createdAt.toISOString(),
+        messageType: message.messageType,
       },
     });
 
@@ -133,6 +156,7 @@ export async function POST(
             senderUserId: userId,
             senderRole,
             messageBody: message.body,
+            messageType: message.messageType,
             messageCreatedAt: message.createdAt,
           }),
           scheduleChatMessagePush({
