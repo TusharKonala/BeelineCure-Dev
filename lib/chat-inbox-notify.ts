@@ -24,6 +24,7 @@ export async function notifyChatInboxAfterMessage(params: {
       _count: { select: { messages: true } },
       appointment: {
         select: {
+          email: true,
           patientName: true,
           doctor: {
             select: {
@@ -47,12 +48,21 @@ export async function notifyChatInboxAfterMessage(params: {
   const isReady = true;
   const isFirstMessage = conversation._count.messages === 1;
 
-  const participantIds = [
-    conversation.doctorUserId,
-    conversation.patientUserId,
-  ].filter((id): id is string => Boolean(id));
+  const recipientIds = new Set<string>([conversation.doctorUserId]);
 
-  for (const userId of participantIds) {
+  if (conversation.patientUserId) {
+    recipientIds.add(conversation.patientUserId);
+  } else {
+    const patientUser = await prisma.user.findFirst({
+      where: { email: conversation.appointment.email },
+      select: { id: true },
+    });
+    if (patientUser) {
+      recipientIds.add(patientUser.id);
+    }
+  }
+
+  for (const userId of recipientIds) {
     const isDoctorRecipient = userId === conversation.doctorUserId;
     const peerName = isDoctorRecipient
       ? conversation.appointment.patientName
