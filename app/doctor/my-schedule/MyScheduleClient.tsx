@@ -13,6 +13,8 @@ import {
   DEFAULT_SLOT_WINDOW_START,
   generateSlots,
   minutesToTime,
+  slotEndFromStart,
+  slotOverlapsRange,
   type AllowedSlotDurationMinutes,
 } from "@/lib/doctor-availability-slots";
 import { timeToMinutes } from "@/lib/time";
@@ -234,6 +236,7 @@ export function MyScheduleClient() {
             startTime: s.startTime,
             consultationType: s.consultationType,
             booked: Boolean(s.booked),
+            slotDurationMinutes: s.slotDurationMinutes ?? data.slotDurationMinutes ?? 30,
           }))
         : [];
       setCurrentDaySlotDetails(rawSlotDetails);
@@ -561,10 +564,38 @@ export function MyScheduleClient() {
       }
 
       const currentSet = new Set(slotStarts);
-      const newlyAdded = [...currentSet].filter(
-        (slot) => !initialSelected.has(slot),
-      );
       const removed = [...explicitlyRemoved];
+
+      if (mode === "single" && windows.length > 0) {
+        const newSlotStarts = [...currentSet];
+        const bookedInWindows: string[] = [];
+        const droppedUnbooked: string[] = [];
+        for (const detail of currentDaySlotDetails) {
+          if (currentSet.has(detail.startTime)) continue;
+          const overlaps = newSlotStarts.some((ns) => {
+            const nsDur = slotDurationMap.get(ns) ?? slotDurationMinutes;
+            return slotOverlapsRange(
+              detail.startTime,
+              detail.slotDurationMinutes,
+              ns,
+              slotEndFromStart(ns, nsDur),
+            );
+          });
+          if (!overlaps) continue;
+          if (detail.booked) bookedInWindows.push(detail.startTime);
+          else droppedUnbooked.push(detail.startTime);
+        }
+        if (bookedInWindows.length > 0) {
+          setSaveError(
+            `You have booked appointment(s) at ${bookedInWindows.join(", ")} inside your new time window. Adjust the window's start/end to skip those times before saving.`,
+          );
+          setSaving(false);
+          return;
+        }
+        removed.push(...droppedUnbooked);
+      }
+
+      const newlyAdded = [...currentSet];
 
       const durMap: Record<string, number> = {};
       for (const s of slotStarts) {
@@ -590,7 +621,7 @@ export function MyScheduleClient() {
               singleDate,
               slotStarts,
               newSlots: newlyAdded.sort(),
-              removedSlots: removed.sort(),
+              removedSlots: [...new Set(removed)].sort(),
               slotDurationMinutes,
               consultationType,
               clearDay: false,
