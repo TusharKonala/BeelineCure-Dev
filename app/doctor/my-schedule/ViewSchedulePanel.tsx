@@ -249,7 +249,9 @@ export function ViewSchedulePanel({
             startTime: string;
             consultationType: SlotDetail["consultationType"];
             booked: boolean;
+            slotDurationMinutes?: number;
           }[];
+          slotDurationMinutes?: number;
         };
         if (!cancelled) {
           const raw = Array.isArray(data.slotDetails) ? data.slotDetails : [];
@@ -258,6 +260,7 @@ export function ViewSchedulePanel({
               startTime: s.startTime,
               consultationType: s.consultationType,
               booked: Boolean(s.booked),
+              slotDurationMinutes: s.slotDurationMinutes ?? data.slotDurationMinutes ?? 30,
             })),
           );
         }
