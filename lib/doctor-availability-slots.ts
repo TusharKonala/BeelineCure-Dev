@@ -253,6 +253,22 @@ export function resolveSlotMetaForStart(
   };
 }
 
+/**
+ * Whether a slot's full extent `[slotStart, slotStart + slotDurationMinutes)`
+ * overlaps a time range `[rangeStart, rangeEnd)` (half-open intervals).
+ */
+export function slotOverlapsRange(
+  slotStart: string,
+  slotDurationMinutes: number,
+  rangeStart: string,
+  rangeEnd: string,
+): boolean {
+  const s = timeToMinutes(slotStart);
+  const a = timeToMinutes(rangeStart);
+  const b = timeToMinutes(rangeEnd);
+  return s < b && a < s + slotDurationMinutes;
+}
+
 /** End time for one bookable block starting at HH:mm. */
 export function slotEndFromStart(
   startTime: string,
