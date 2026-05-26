@@ -531,13 +531,21 @@ export async function PUT(request: Request) {
     );
   }
 
-  for (const s of [...slotStarts, ...newSlots, ...removedSlots]) {
+  for (const s of [...slotStarts, ...newSlots]) {
     const slotDur = perSlotDuration[s] ?? duration;
     if (!isValidSlotStartForDuration(s, slotDur)) {
       return NextResponse.json(
         {
           error: `Slot ${s} must align to a ${slotDur}-minute schedule (valid start times for this duration).`,
         },
+        { status: 400 },
+      );
+    }
+  }
+  for (const s of removedSlots) {
+    if (!/^\d{2}:\d{2}$/.test(s)) {
+      return NextResponse.json(
+        { error: `Invalid time format for removed slot: ${s}` },
         { status: 400 },
       );
     }
