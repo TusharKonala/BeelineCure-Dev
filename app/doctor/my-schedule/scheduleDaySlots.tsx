@@ -4,6 +4,7 @@ export type SlotDetail = {
   startTime: string;
   consultationType: "CLINIC" | "ONLINE" | "BOTH";
   booked: boolean;
+  slotDurationMinutes: number;
 };
 
 export type ScheduleListDay = {
@@ -32,6 +33,7 @@ export function normalizeDaySlots(day: ScheduleListDay): SlotDetail[] {
       startTime,
       consultationType: "BOTH" as const,
       booked: false,
+      slotDurationMinutes: 30,
     }))
   );
 }
