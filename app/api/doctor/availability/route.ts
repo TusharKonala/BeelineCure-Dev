@@ -12,6 +12,7 @@ import {
   inferSlotDurationMinutesFromRows,
   isValidSlotStartForDuration,
   slotEndFromStart,
+  slotOverlapsRange,
 } from "@/lib/doctor-availability-slots";
 import {
   enumerateInclusiveYmd,
@@ -228,6 +229,7 @@ export async function GET(request: NextRequest) {
       slotStarts: string[];
       slotDetails: {
         startTime: string;
+        slotDurationMinutes: number;
         consultationType: "CLINIC" | "ONLINE" | "BOTH";
         booked: boolean;
       }[];
@@ -238,6 +240,7 @@ export async function GET(request: NextRequest) {
       const booked = bookedByDate.get(dateStr) ?? new Set<string>();
       const slotDetails = details.map((slot) => ({
         startTime: slot.startTime,
+        slotDurationMinutes: slot.slotDurationMinutes,
         consultationType: slot.consultationType,
         booked: booked.has(slot.startTime),
       }));
@@ -327,7 +330,7 @@ export async function GET(request: NextRequest) {
       date: ymdToPrismaDate(dateParam),
       status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
     },
-    select: { time: true, consultationType: true },
+    select: { time: true, consultationType: true, durationMinutes: true },
   });
 
   const slotDurationMinutes = inferSlotDurationMinutesFromRows(
@@ -339,24 +342,26 @@ export async function GET(request: NextRequest) {
   const consultationType = rows[0]?.consultationType ?? "BOTH";
 
   /** Map booked start times → how the appointment was booked (video vs clinic). */
-  const appointmentsByTime = new Map<string, ConsultationType>();
+  const appointmentsByTime = new Map<string, { consultationType: ConsultationType; durationMinutes: number }>();
   for (const a of appointments) {
-    appointmentsByTime.set(a.time, a.consultationType);
+    appointmentsByTime.set(a.time, { consultationType: a.consultationType, durationMinutes: a.durationMinutes });
   }
 
   const seenTimes = new Set<string>();
   const slotDetailsWithBooked: {
     startTime: string;
+    slotDurationMinutes: number;
     consultationType: ConsultationType | "BOTH";
     booked: boolean;
   }[] = [];
 
   for (const slot of expandedSlots) {
-    const apptType = appointmentsByTime.get(slot.startTime);
-    const booked = apptType !== undefined;
+    const appt = appointmentsByTime.get(slot.startTime);
+    const booked = appt !== undefined;
     slotDetailsWithBooked.push({
       startTime: slot.startTime,
-      consultationType: booked ? apptType : slot.consultationType,
+      slotDurationMinutes: slot.slotDurationMinutes,
+      consultationType: booked ? appt.consultationType : slot.consultationType,
       booked,
     });
     seenTimes.add(slot.startTime);
@@ -367,6 +372,7 @@ export async function GET(request: NextRequest) {
     if (seenTimes.has(a.time)) continue;
     slotDetailsWithBooked.push({
       startTime: a.time,
+      slotDurationMinutes: a.durationMinutes || slotDurationMinutes,
       consultationType: a.consultationType,
       booked: true,
     });
@@ -590,6 +596,7 @@ export async function PUT(request: Request) {
       id: true,
       date: true,
       time: true,
+      durationMinutes: true,
       patientName: true,
       email: true,
       phone: true,
@@ -597,11 +604,11 @@ export async function PUT(request: Request) {
       timezone: true,
     },
   });
-  const appointmentsByDate = new Map<string, { id: string; time: string }[]>();
+  const appointmentsByDate = new Map<string, { id: string; time: string; durationMinutes: number }[]>();
   for (const appointment of activeAppointments) {
     const dateKey = appointment.date.toISOString().slice(0, 10);
     const current = appointmentsByDate.get(dateKey) ?? [];
-    current.push({ id: appointment.id, time: appointment.time });
+    current.push({ id: appointment.id, time: appointment.time, durationMinutes: appointment.durationMinutes });
     appointmentsByDate.set(dateKey, current);
   }
 
@@ -621,6 +628,34 @@ export async function PUT(request: Request) {
         return NextResponse.json(
           {
             error: `Cannot remove booked slots (${removedBookedSlots.join(", ")}). Booked slots are locked.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
+  if (parsed.mode === "single" && newSlots.length > 0) {
+    const newSlotSet = new Set(newSlots);
+    for (const ymdStr of affectedYmd) {
+      const booked = appointmentsByDate.get(ymdStr) ?? [];
+      const conflicting: string[] = [];
+      for (const appt of booked) {
+        if (newSlotSet.has(appt.time)) {
+          conflicting.push(appt.time);
+          continue;
+        }
+        const apptDur = appt.durationMinutes || duration;
+        const overlapsNew = newSlots.some((ns) => {
+          const nsDur = perSlotDuration[ns] ?? duration;
+          return slotOverlapsRange(appt.time, apptDur, ns, slotEndFromStart(ns, nsDur));
+        });
+        if (overlapsNew) conflicting.push(appt.time);
+      }
+      if (conflicting.length > 0) {
+        return NextResponse.json(
+          {
+            error: `Cannot save: existing booked appointment(s) at ${conflicting.sort().join(", ")} overlap your new time window. Adjust your new slots to avoid these times.`,
           },
           { status: 409 },
         );
@@ -690,6 +725,9 @@ export async function PUT(request: Request) {
           ? newSlots
           : slotStarts,
       );
+      const bookedTimesForDay = new Set(
+        (appointmentsByDate.get(ymdStr) ?? []).map((a) => a.time),
+      );
       for (const newStart of newSlotSet) {
         const newEntry = merged.get(newStart);
         if (!newEntry) continue;
@@ -697,6 +735,7 @@ export async function PUT(request: Request) {
         for (const [key, entry] of merged) {
           if (key === newStart) continue;
           if (newSlotSet.has(key)) continue;
+          if (bookedTimesForDay.has(key)) continue;
           const existStartMin = timeToMinutes(key);
           if (
             slotsOverlap(
