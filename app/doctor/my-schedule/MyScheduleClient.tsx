@@ -110,6 +110,12 @@ export function MyScheduleClient() {
   const [windowOverlapError, setWindowOverlapError] = useState<string | null>(null);
   const [builderPhase, setBuilderPhase] = useState<"idle" | "adding" | "done">("idle");
 
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [slotsToDelete, setSlotsToDelete] = useState<Set<string>>(() => new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteOk, setDeleteOk] = useState<string | null>(null);
+
   const [slotWindowStart, setSlotWindowStart] = useState(
     DEFAULT_SLOT_WINDOW_START,
   );
@@ -304,6 +310,10 @@ export function MyScheduleClient() {
       setWindows([]);
       setSlotDurationMap(new Map());
       setBuilderPhase("idle");
+      setDeleteMode(false);
+      setSlotsToDelete(new Set());
+      setDeleteError(null);
+      setDeleteOk(null);
       const normalizedBooked = (data.bookedSlotStarts ?? []).filter((slot) =>
         allowed.has(slot),
       );
@@ -323,6 +333,10 @@ export function MyScheduleClient() {
       setBuilderPhase("idle");
       setBookedSlots(new Set());
       setCurrentDaySlotDetails([]);
+      setDeleteMode(false);
+      setSlotsToDelete(new Set());
+      setDeleteError(null);
+      setDeleteOk(null);
     } finally {
       setLoadingSlots(false);
     }
@@ -372,8 +386,8 @@ export function MyScheduleClient() {
     setSlotDurationMap(nextDurMap);
     setSaveOk(null);
     setBuilderPhase("done");
-    setSlotWindowStart(DEFAULT_SLOT_WINDOW_START);
-    setSlotWindowEnd(DEFAULT_SLOT_WINDOW_END);
+    setSlotWindowStart("");
+    setSlotWindowEnd("");
   }
 
   function removeWindow(windowId: string) {
@@ -655,6 +669,39 @@ export function MyScheduleClient() {
     }
   }
 
+  async function handleDeleteSlots() {
+    if (slotsToDelete.size === 0 || !meta) return;
+    setDeleting(true);
+    setDeleteError(null);
+    setDeleteOk(null);
+    try {
+      const res = await fetch("/api/doctor/availability", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: singleDate,
+          slotStarts: [...slotsToDelete],
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Delete failed");
+      }
+      const data = (await res.json()) as { deletedCount: number };
+      setDeleteOk(
+        `Deleted ${data.deletedCount} slot${data.deletedCount === 1 ? "" : "s"}.`,
+      );
+      setSlotsToDelete(new Set());
+      setDeleteMode(false);
+      await fetchSlotsForDate(singleDate);
+      setViewScheduleListVersion((v) => v + 1);
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (metaError) {
     return (
       <div className="w-full bg-[#fafafa] py-6 md:py-8">
@@ -893,7 +940,7 @@ export function MyScheduleClient() {
                         Window start
                       </label>
                       <div
-                        className="mt-2 w-full max-w-[10rem] cursor-pointer"
+                        className="mt-2 w-full max-w-[10rem] cursor-pointer select-none"
                         onClick={() =>
                           slotWindowStartInputRef.current?.showPicker?.()
                         }
@@ -926,7 +973,7 @@ export function MyScheduleClient() {
                         Window end
                       </label>
                       <div
-                        className="mt-2 w-full max-w-[10rem] cursor-pointer"
+                        className="mt-2 w-full max-w-[10rem] cursor-pointer select-none"
                         onClick={() => slotWindowEndInputRef.current?.showPicker?.()}
                       >
                         <input
@@ -987,8 +1034,8 @@ export function MyScheduleClient() {
                     type="button"
                     onClick={() => {
                       setBuilderPhase("adding");
-                      setSlotWindowStart(DEFAULT_SLOT_WINDOW_START);
-                      setSlotWindowEnd(DEFAULT_SLOT_WINDOW_END);
+                      setSlotWindowStart("");
+                      setSlotWindowEnd("");
                       setWindowOverlapError(null);
                     }}
                     className="cursor-pointer rounded-xl border border-[#2555F3] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] transition-colors hover:bg-[#f0f4ff]"
@@ -1199,13 +1246,103 @@ export function MyScheduleClient() {
           !loadingSlots &&
           currentDaySlotDetails.length > 0 ? (
             <div className="mt-8 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3">
-              <p className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5E5E5E]">
-                Current schedule
-              </p>
-              <SlotSummaryFromDetails slots={currentDaySlotDetails} />
-              <p className="mt-2 font-montserrat text-[11px] text-[#5E5E5E]">
-                This is your current saved schedule. You can edit slots below.
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5E5E5E]">
+                  Current schedule
+                </p>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={deleteMode}
+                  onClick={() => {
+                    setDeleteMode((v) => !v);
+                    setSlotsToDelete(new Set());
+                    setDeleteError(null);
+                    setDeleteOk(null);
+                  }}
+                  className={cn(
+                    "cursor-pointer rounded-lg border px-3 py-1 font-montserrat text-xs font-medium transition-colors",
+                    deleteMode
+                      ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100"
+                      : "border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f5f5]",
+                  )}
+                >
+                  {deleteMode ? "Cancel delete" : "Delete Slots"}
+                </button>
+              </div>
+              {deleteMode ? (
+                <div className="mt-3 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {currentDaySlotDetails.map((slot) => {
+                      const isBooked = slot.booked;
+                      const isChecked = slotsToDelete.has(slot.startTime);
+                      return (
+                        <label
+                          key={slot.startTime}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-montserrat text-xs transition-colors",
+                            isBooked
+                              ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700 opacity-70"
+                              : isChecked
+                                ? "cursor-pointer border-red-300 bg-red-50 text-red-700"
+                                : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f5f5]",
+                          )}
+                        >
+                          {!isBooked ? (
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                setSlotsToDelete((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(slot.startTime))
+                                    next.delete(slot.startTime);
+                                  else next.add(slot.startTime);
+                                  return next;
+                                });
+                              }}
+                              className="accent-red-600"
+                            />
+                          ) : null}
+                          <span>
+                            {slot.startTime}
+                            {isBooked ? " (Booked)" : ""}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={slotsToDelete.size === 0 || deleting}
+                      onClick={() => void handleDeleteSlots()}
+                      className="cursor-pointer rounded-lg bg-red-600 px-3 py-1.5 font-montserrat text-xs font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deleting
+                        ? "Deleting…"
+                        : `Delete Selected (${slotsToDelete.size})`}
+                    </button>
+                    {deleteError ? (
+                      <p className="font-montserrat text-xs text-red-600">
+                        {deleteError}
+                      </p>
+                    ) : null}
+                    {deleteOk ? (
+                      <p className="font-montserrat text-xs text-green-700">
+                        {deleteOk}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <SlotSummaryFromDetails slots={currentDaySlotDetails} />
+                  <p className="mt-2 font-montserrat text-[11px] text-[#5E5E5E]">
+                    This is your current saved schedule. You can edit slots below.
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
 
