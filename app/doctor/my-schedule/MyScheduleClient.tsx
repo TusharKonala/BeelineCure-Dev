@@ -1010,12 +1010,12 @@ export function MyScheduleClient() {
                       </button>
                     </div>
                   </div>
-                  {!slotWindowOk && (
+                  {!slotWindowOk && !windowOverlapError && (
                     <p className="mt-2 font-montserrat text-sm text-red-600">
                       End time must be after start time.
                     </p>
                   )}
-                  {slotWindowOk && windowOverlapError && (
+                  {windowOverlapError && (
                     <p className="mt-2 font-montserrat text-sm text-red-600">
                       {windowOverlapError}
                     </p>
