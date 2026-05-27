@@ -960,7 +960,7 @@ export function MyScheduleClient() {
                               alignWindowStartToSlotGrid(v, slotDurationMinutes),
                             );
                           }}
-                          className={cn(dateInputClassName, "w-full")}
+                          className={cn(dateInputClassName, "w-full select-none")}
                           aria-label="Earliest slot start time"
                         />
                       </div>
@@ -994,7 +994,7 @@ export function MyScheduleClient() {
                               ),
                             );
                           }}
-                          className={cn(dateInputClassName, "w-full")}
+                          className={cn(dateInputClassName, "w-full select-none")}
                           aria-label="End of booking window (exclusive)"
                         />
                       </div>
