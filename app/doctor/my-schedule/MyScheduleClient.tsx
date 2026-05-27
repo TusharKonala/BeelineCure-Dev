@@ -941,6 +941,7 @@ export function MyScheduleClient() {
                       </label>
                       <div
                         className="mt-2 w-full max-w-[10rem] cursor-pointer select-none"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() =>
                           slotWindowStartInputRef.current?.showPicker?.()
                         }
@@ -974,6 +975,7 @@ export function MyScheduleClient() {
                       </label>
                       <div
                         className="mt-2 w-full max-w-[10rem] cursor-pointer select-none"
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={() => slotWindowEndInputRef.current?.showPicker?.()}
                       >
                         <input
