@@ -37,6 +37,11 @@ enum PaymentStatus {
   FAILED
 }
 
+enum PaymentMethod {
+  ONLINE
+  PAY_AT_CLINIC
+}
+
 enum BookingSessionStatus {
   PENDING
   COMPLETED
@@ -291,6 +296,9 @@ model Appointment {
   consultationType ConsultationType
   status           AppointmentStatus @default(PENDING)
   paymentStatus    PaymentStatus     @default(PENDING)
+  /// How the patient chose to pay: ONLINE (Stripe) or PAY_AT_CLINIC.
+  /// Null for historical rows created before this field was added.
+  paymentMethod    PaymentMethod?
   stripePaymentId       String?
   /// Stripe PaymentIntent id resolved from the checkout session once needed for a refund.
   /// Cached on the appointment to avoid re-fetching the session for future refund-related calls.
