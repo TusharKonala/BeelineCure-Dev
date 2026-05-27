@@ -1034,8 +1034,23 @@ export function MyScheduleClient() {
                     type="button"
                     onClick={() => {
                       setBuilderPhase("adding");
-                      setSlotWindowStart("");
-                      setSlotWindowEnd("");
+                      const startCandidate =
+                        windows.length > 0
+                          ? windows.reduce((maxW, w) =>
+                              timeToMinutes(w.end) > timeToMinutes(maxW.end)
+                                ? w
+                                : maxW,
+                            ).end
+                          : DEFAULT_SLOT_WINDOW_START;
+
+                      const startMinutes = timeToMinutes(startCandidate);
+                      const endMinutes = Math.min(
+                        startMinutes + 60,
+                        timeToMinutes(DEFAULT_SLOT_WINDOW_END),
+                      );
+
+                      setSlotWindowStart(startCandidate);
+                      setSlotWindowEnd(minutesToTime(endMinutes));
                       setWindowOverlapError(null);
                     }}
                     className="cursor-pointer rounded-xl border border-[#2555F3] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] transition-colors hover:bg-[#f0f4ff]"
