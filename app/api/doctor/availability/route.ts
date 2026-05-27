@@ -846,3 +846,80 @@ export async function PUT(request: Request) {
     cancelledAppointments: clearDay ? activeAppointments.length : 0,
   });
 }
+
+const deleteBodySchema = z.object({
+  date: ymd,
+  slotStarts: z.array(z.string().regex(/^\d{2}:\d{2}$/)).min(1),
+});
+
+export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (session.user.role !== UserRole.DOCTOR) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: session.user.id },
+    select: { id: true, timezone: true },
+  });
+  if (!doctor) {
+    return NextResponse.json(
+      { error: "Doctor profile not found" },
+      { status: 404 },
+    );
+  }
+
+  let parsed: z.infer<typeof deleteBodySchema>;
+  try {
+    const json: unknown = await request.json();
+    parsed = deleteBodySchema.parse(json);
+  } catch {
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
+  }
+
+  const tz = doctor.timezone;
+  const today = getDoctorLocalTodayIso(tz);
+
+  if (parsed.date < today) {
+    return NextResponse.json(
+      { error: "Cannot delete slots for past dates" },
+      { status: 400 },
+    );
+  }
+
+  const date = ymdToPrismaDate(parsed.date);
+  const slotStartSet = new Set(parsed.slotStarts);
+
+  const bookedAppointments = await prisma.appointment.findMany({
+    where: {
+      doctorId: doctor.id,
+      date,
+      status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.PENDING] },
+      time: { in: [...slotStartSet] },
+    },
+    select: { time: true },
+  });
+
+  if (bookedAppointments.length > 0) {
+    const bookedTimes = bookedAppointments.map((a) => a.time).sort();
+    return NextResponse.json(
+      {
+        error: `Cannot delete booked slots (${bookedTimes.join(", ")}). Cancel the appointments first.`,
+      },
+      { status: 409 },
+    );
+  }
+
+  const result = await prisma.doctorAvailability.deleteMany({
+    where: {
+      doctorId: doctor.id,
+      date,
+      startTime: { in: [...slotStartSet] },
+    },
+  });
+
+  return NextResponse.json({ ok: true, deletedCount: result.count });
+}
