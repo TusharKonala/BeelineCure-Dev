@@ -181,7 +181,7 @@ export function SlotSummaryFromDetails({
           <div key={group.consultationType}>
             <p className="font-semibold">{group.label}:</p>
             {group.durations.map((dur) => (
-              <p key={dur.durationMinutes} className="ml-3">
+              <p key={dur.durationMinutes}>
                 {hasMixedDurations ? (
                   <>
                     <span className="font-medium">{dur.durationMinutes} min:</span>{" "}
@@ -208,7 +208,7 @@ export function SlotSummaryFromDetails({
               return [...byDur.entries()]
                 .sort(([a], [b]) => a - b)
                 .map(([dur, items]) => (
-                  <p key={dur} className="ml-3">
+                  <p key={dur}>
                     <span className="font-medium">{dur} min:</span>{" "}
                     <span className="text-[#333333]">
                       {items
@@ -222,7 +222,7 @@ export function SlotSummaryFromDetails({
                 ));
             })()
           ) : (
-            <p className="ml-3">
+            <p>
               <span className="text-[#333333]">
                 {booked
                   .map(
