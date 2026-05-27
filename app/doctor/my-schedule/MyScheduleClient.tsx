@@ -1043,7 +1043,11 @@ export function MyScheduleClient() {
                             ).end
                           : DEFAULT_SLOT_WINDOW_START;
 
-                      const startMinutes = timeToMinutes(startCandidate);
+                      const snappedStart = alignWindowStartToSlotGrid(
+                        startCandidate,
+                        slotDurationMinutes,
+                      );
+                      const startMinutes = timeToMinutes(snappedStart);
                       if (startMinutes + slotDurationMinutes >= 24 * 60) {
                         setWindowOverlapError(
                           "Not enough room for a new window with the current slot duration.",
@@ -1051,13 +1055,17 @@ export function MyScheduleClient() {
                         return;
                       }
 
-                      const endMinutes = Math.min(
+                      const endCandidateMinutes = Math.min(
                         startMinutes + 60,
                         timeToMinutes(DEFAULT_SLOT_WINDOW_END),
                       );
+                      const snappedEnd = alignWindowEndExclusiveToSlotGrid(
+                        minutesToTime(endCandidateMinutes),
+                        slotDurationMinutes,
+                      );
 
-                      setSlotWindowStart(startCandidate);
-                      setSlotWindowEnd(minutesToTime(endMinutes));
+                      setSlotWindowStart(snappedStart);
+                      setSlotWindowEnd(snappedEnd);
                       setWindowOverlapError(null);
                     }}
                     className="cursor-pointer rounded-xl border border-[#2555F3] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] transition-colors hover:bg-[#f0f4ff]"
