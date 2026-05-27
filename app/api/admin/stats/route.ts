@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
         ],
       },
     ],
-  } as const;
+  };
 
   const revenueBaseSelect = {
     priceCentsAtBooking: true,
