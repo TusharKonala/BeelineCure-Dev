@@ -17,6 +17,8 @@ type StatsResponse = {
   };
   revenue: {
     amountCents: number;
+    onlineAmountCents: number;
+    offlineAmountCents: number;
     currency: SupportedCurrency;
     source: "preference" | "query";
   };
@@ -157,6 +159,26 @@ export default function AdminDashboardPage() {
                       {stats.revenue.currency}
                     </span>
                   </p>
+                  <div className="mt-2 space-y-0.5">
+                    <p className="font-montserrat text-xs text-[#5e5e5e]">
+                      Online:{" "}
+                      <span className="font-medium text-[#333333]">
+                        {formatPrice(
+                          stats.revenue.onlineAmountCents,
+                          stats.revenue.currency,
+                        )}
+                      </span>
+                    </p>
+                    <p className="font-montserrat text-xs text-[#5e5e5e]">
+                      Offline (pay at clinic):{" "}
+                      <span className="font-medium text-[#333333]">
+                        {formatPrice(
+                          stats.revenue.offlineAmountCents,
+                          stats.revenue.currency,
+                        )}
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 <div className="rounded-xl border border-[#e5e5e5] bg-[#fafafa] p-4">
                   <p className="font-montserrat text-xs uppercase tracking-wide text-[#5e5e5e]">

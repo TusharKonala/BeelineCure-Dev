@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   AppointmentStatus,
   DoctorApprovalStatus,
+  PaymentMethod,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -62,13 +63,33 @@ export async function GET(request: NextRequest) {
     now.getMinutes(),
   ).padStart(2, "0")}`;
 
+  const pastDateFilter = {
+    OR: [
+      { date: { lt: todayDateOnly } },
+      {
+        AND: [
+          { date: todayDateOnly },
+          { time: { lte: nowTime } },
+        ],
+      },
+    ],
+  } as const;
+
+  const revenueBaseSelect = {
+    priceCentsAtBooking: true,
+    currencyAtBooking: true,
+    paymentMethod: true,
+    stripePaymentId: true,
+  } as const;
+
   const [
     totalApprovedDoctors,
     totalPatients,
     totalBookingsAllTime,
     totalBookingsThisMonth,
     totalCancelledBookings,
-    revenueCandidates,
+    onlineRevenueCandidates,
+    offlineRevenueCandidates,
     recentBookingsRaw,
   ] = await Promise.all([
     prisma.doctor.count({
@@ -89,23 +110,41 @@ export async function GET(request: NextRequest) {
     }),
     prisma.appointment.findMany({
       where: {
-        status: { in: [AppointmentStatus.CONFIRMED, AppointmentStatus.COMPLETED] },
-        priceCentsAtBooking: { not: null },
-        currencyAtBooking: { not: null },
-        OR: [
-          { date: { lt: todayDateOnly } },
+        AND: [
           {
-            AND: [
-              { date: todayDateOnly },
-              { time: { lte: nowTime } },
+            status: AppointmentStatus.COMPLETED,
+            priceCentsAtBooking: { not: null },
+            currencyAtBooking: { not: null },
+          },
+          {
+            OR: [
+              { paymentMethod: PaymentMethod.ONLINE },
+              { paymentMethod: null, stripePaymentId: { not: null } },
             ],
           },
+          pastDateFilter,
         ],
       },
-      select: {
-        priceCentsAtBooking: true,
-        currencyAtBooking: true,
+      select: revenueBaseSelect,
+    }),
+    prisma.appointment.findMany({
+      where: {
+        AND: [
+          {
+            status: AppointmentStatus.COMPLETED,
+            priceCentsAtBooking: { not: null },
+            currencyAtBooking: { not: null },
+          },
+          {
+            OR: [
+              { paymentMethod: PaymentMethod.PAY_AT_CLINIC },
+              { paymentMethod: null, stripePaymentId: null },
+            ],
+          },
+          pastDateFilter,
+        ],
       },
+      select: revenueBaseSelect,
     }),
     prisma.appointment.findMany({
       orderBy: { createdAt: "desc" },
@@ -127,21 +166,28 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  let totalRevenueCents = 0;
-  for (const row of revenueCandidates) {
-    const amountCents = row.priceCentsAtBooking;
-    const fromCurrency = row.currencyAtBooking;
-    if (typeof amountCents !== "number" || !fromCurrency) continue;
-    try {
-      totalRevenueCents += await convertCentsAmount(
-        amountCents,
-        fromCurrency,
-        targetCurrency,
-      );
-    } catch {
-      // Skip rows we cannot convert, so one API failure does not break dashboard.
+  async function sumRevenueCents(
+    rows: { priceCentsAtBooking: number | null; currencyAtBooking: string | null }[],
+  ): Promise<number> {
+    let total = 0;
+    for (const row of rows) {
+      const amountCents = row.priceCentsAtBooking;
+      const fromCurrency = row.currencyAtBooking;
+      if (typeof amountCents !== "number" || !fromCurrency) continue;
+      try {
+        total += await convertCentsAmount(amountCents, fromCurrency, targetCurrency);
+      } catch {
+        // Skip rows we cannot convert.
+      }
     }
+    return total;
   }
+
+  const [onlineRevenueCents, offlineRevenueCents] = await Promise.all([
+    sumRevenueCents(onlineRevenueCandidates),
+    sumRevenueCents(offlineRevenueCandidates),
+  ]);
+  const totalRevenueCents = onlineRevenueCents + offlineRevenueCents;
 
   const recentBookings = await Promise.all(
     recentBookingsRaw.map(async (row) => {
@@ -182,6 +228,8 @@ export async function GET(request: NextRequest) {
     },
     revenue: {
       amountCents: totalRevenueCents,
+      onlineAmountCents: onlineRevenueCents,
+      offlineAmountCents: offlineRevenueCents,
       currency: targetCurrency,
       source,
     },
