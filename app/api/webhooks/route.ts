@@ -8,6 +8,7 @@ import { headers } from "next/headers";
 import {
   BookingSessionStatus,
   AppointmentStatus,
+  PaymentMethod,
   PaymentStatus,
   ConsultationType,
   NotificationType,
@@ -157,6 +158,7 @@ export async function POST(request: NextRequest) {
           currencyAtBooking,
           stripePaymentId: session.id,
           paymentStatus: PaymentStatus.PAID,
+          paymentMethod: PaymentMethod.ONLINE,
           cancelToken,
           rescheduleToken,
           timezone: bookingSession.timezone,

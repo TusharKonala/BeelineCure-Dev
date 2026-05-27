@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   AppointmentStatus,
   NotificationType,
+  PaymentMethod,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -271,6 +272,7 @@ export async function POST(request: NextRequest) {
         timezone: doctorTimezone,
         patientTimezone,
         status: AppointmentStatus.CONFIRMED,
+        paymentMethod: PaymentMethod.PAY_AT_CLINIC,
         cancelToken,
         rescheduleToken,
       },
