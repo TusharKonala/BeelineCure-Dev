@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { MontagaCapitalN } from "@/components/ui/MontagaCapitalN";
 import {
   formatTimeInPatientTz,
@@ -48,6 +49,34 @@ function consultationLabel(type: ConsultationType) {
   return type === "ONLINE" ? "Online" : "Clinic";
 }
 
+function AppointmentCardSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="rounded-xl border border-[#e5e5e5] bg-white p-4 shadow-sm"
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-4 w-28" />
+          <div className="mt-1 space-y-2">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Skeleton className="h-6 w-16 rounded-full" />
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Skeleton className="h-9 w-28 rounded-xl" />
+        <Skeleton className="h-9 w-32 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 function badgeClass(kind: "consultation" | "status", value: string) {
   if (kind === "consultation") {
     return value === "Online"
@@ -74,12 +103,14 @@ export default function PatientAppointmentsClient() {
   const [doctorOptions, setDoctorOptions] = useState<DoctorOption[]>([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [tab, setTab] = useState<TabKey>("upcoming");
   const [doctorId, setDoctorId] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<DateFilterValue>("desc");
   const [error, setError] = useState<string | null>(null);
   const [reviewTarget, setReviewTarget] = useState<PatientAppointmentItem | null>(null);
+  const latestRequestIdRef = useRef(0);
 
   const effectiveDoctorId = useMemo(
     () => (doctorOptions.some((d) => d.id === doctorId) ? doctorId : ""),
@@ -88,7 +119,13 @@ export default function PatientAppointmentsClient() {
 
   const loadAppointments = useCallback(
     async (nextPage: number, append: boolean) => {
-      setIsLoading(true);
+      const requestId = ++latestRequestIdRef.current;
+      if (append) {
+        setIsLoadingMore(true);
+      } else {
+        setIsRefreshing(true);
+        setAppointments([]);
+      }
       setError(null);
       try {
         const params = new URLSearchParams({
@@ -101,6 +138,7 @@ export default function PatientAppointmentsClient() {
         const res = await fetch(`/api/patient/appointments?${params.toString()}`, {
           cache: "no-store",
         });
+        if (latestRequestIdRef.current !== requestId) return;
         if (!res.ok) {
           setError("Failed to load appointments.");
           return;
@@ -111,15 +149,22 @@ export default function PatientAppointmentsClient() {
           hasMore?: boolean;
           page?: number;
         };
+        if (latestRequestIdRef.current !== requestId) return;
         const nextItems = Array.isArray(data.items) ? data.items : [];
         setAppointments((current) => (append ? [...current, ...nextItems] : nextItems));
         setDoctorOptions(Array.isArray(data.doctorOptions) ? data.doctorOptions : []);
         setHasMore(Boolean(data.hasMore));
         setPage(typeof data.page === "number" ? data.page : nextPage);
       } catch {
+        if (latestRequestIdRef.current !== requestId) return;
         setError("Failed to load appointments.");
       } finally {
-        setIsLoading(false);
+        if (latestRequestIdRef.current !== requestId) return;
+        if (append) {
+          setIsLoadingMore(false);
+        } else {
+          setIsRefreshing(false);
+        }
       }
     },
     [dateFilter, effectiveDoctorId, tab],
@@ -130,10 +175,10 @@ export default function PatientAppointmentsClient() {
   }, [loadAppointments]);
 
   const [sentryRef] = useInfiniteScroll({
-    loading: isLoading,
+    loading: isLoadingMore,
     hasNextPage: hasMore,
     onLoadMore: () => void loadAppointments(page + 1, true),
-    disabled: false,
+    disabled: isRefreshing,
     rootMargin: "0px 0px 300px 0px",
   });
 
@@ -281,7 +326,17 @@ export default function PatientAppointmentsClient() {
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">{error}</p>
         </div>
-      ) : !isLoading && appointments.length === 0 ? (
+      ) : isRefreshing ? (
+        <div
+          aria-busy="true"
+          aria-live="polite"
+          className="mt-6 grid w-full grid-cols-1 gap-4"
+        >
+          {Array.from({ length: 3 }).map((_, i) => (
+            <AppointmentCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : appointments.length === 0 ? (
         <div className="mt-6 rounded-xl border border-dashed border-[#e5e5e5] bg-[#fafafa] p-6 text-center">
           <p className="font-montserrat text-sm font-medium text-[#333333]">
             {tab === "upcoming"
@@ -297,8 +352,7 @@ export default function PatientAppointmentsClient() {
           </p>
         </div>
       ) : (
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:gap-x-8 sm:gap-y-4">
-          <div className="mt-6 grid w-full grid-cols-1 gap-4">
+        <div className="mt-6 grid w-full grid-cols-1 gap-4">
             {appointments.map((a) => {
             const consultation = consultationLabel(a.consultationType);
             return (
@@ -441,15 +495,14 @@ export default function PatientAppointmentsClient() {
               </div>
             );
             })}
-            {(hasMore || isLoading) && (
+            {(hasMore || isLoadingMore) && (
               <div
                 ref={sentryRef}
                 className="py-2 text-center font-montserrat text-sm text-[#5E5E5E]"
               >
-                {isLoading ? "Loading..." : "Scroll for more"}
+                {isLoadingMore ? "Loading..." : "Scroll for more"}
               </div>
             )}
-          </div>
         </div>
       )}
       {reviewTarget ? (
