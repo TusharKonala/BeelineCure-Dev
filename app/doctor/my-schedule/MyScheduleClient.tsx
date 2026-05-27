@@ -1044,6 +1044,13 @@ export function MyScheduleClient() {
                           : DEFAULT_SLOT_WINDOW_START;
 
                       const startMinutes = timeToMinutes(startCandidate);
+                      if (startMinutes + slotDurationMinutes >= 24 * 60) {
+                        setWindowOverlapError(
+                          "Not enough room for a new window with the current slot duration.",
+                        );
+                        return;
+                      }
+
                       const endMinutes = Math.min(
                         startMinutes + 60,
                         timeToMinutes(DEFAULT_SLOT_WINDOW_END),
