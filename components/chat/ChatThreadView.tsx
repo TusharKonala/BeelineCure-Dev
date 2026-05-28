@@ -561,6 +561,9 @@ export function ChatThreadView({
                     <p className="hidden italic opacity-70" aria-hidden>
                       Image failed to load
                     </p>
+                    {m.body.trim() && (
+                      <p className="mt-2 whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                    )}
                   </>
                 ) : (
                   <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
