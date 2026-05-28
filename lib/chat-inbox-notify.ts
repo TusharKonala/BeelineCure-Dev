@@ -81,7 +81,7 @@ export async function notifyChatInboxAfterMessage(params: {
       appointmentId: params.appointmentId,
       lastMessagePreview:
         params.messageType === "image" && !params.messageBody
-          ? "Sent an image"
+          ? "Image"
           : params.messageBody,
       lastMessageAt,
       senderUserId: params.senderUserId,

@@ -35,6 +35,18 @@ function sortThreadsByActivity<
   });
 }
 
+function deriveLastMessagePreview(message?: {
+  body?: string | null;
+  messageType?: string | null;
+  imageKey?: string | null;
+}): string | null {
+  if (!message) return null;
+  const body = message.body?.trim() ?? "";
+  if (body.length > 0) return body;
+  if (message.imageKey || message.messageType === "image") return "Image";
+  return null;
+}
+
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
@@ -77,7 +89,7 @@ export async function GET(request: NextRequest) {
             messages: {
               orderBy: { createdAt: "desc" },
               take: 1,
-              select: { body: true, createdAt: true },
+              select: { body: true, createdAt: true, messageType: true, imageKey: true },
             },
           },
         },
@@ -94,13 +106,14 @@ export async function GET(request: NextRequest) {
       const convId = conv?.id ?? `pending-${apt.id}`;
       const lastMessageAt =
         conv?.messages[0]?.createdAt?.toISOString() ?? null;
+      const lastMessagePreview = deriveLastMessagePreview(conv?.messages[0]);
       return {
         id: convId,
         appointmentId: apt.id,
         peerName: apt.doctor.name,
         peerSubtitle: apt.doctor.specialization,
         peerPhotoUrl: apt.doctor.profilePhotoUrl,
-        lastMessagePreview: conv?.messages[0]?.body ?? null,
+        lastMessagePreview,
         lastMessageAt,
         unreadCount: conv ? (unread.byConversationId[conv.id] ?? 0) : 0,
         isReadOnly: conv
@@ -145,7 +158,7 @@ export async function GET(request: NextRequest) {
         messages: {
           orderBy: { createdAt: "desc" },
           take: 1,
-          select: { body: true, createdAt: true },
+          select: { body: true, createdAt: true, messageType: true, imageKey: true },
         },
       },
     });
@@ -155,13 +168,14 @@ export async function GET(request: NextRequest) {
 
     const mapped = page.map((c) => {
       const lastMessageAt = c.messages[0]?.createdAt?.toISOString() ?? null;
+      const lastMessagePreview = deriveLastMessagePreview(c.messages[0]);
       return {
         id: c.id,
         appointmentId: c.appointmentId,
         peerName: c.appointment.patientName,
         peerSubtitle: null,
         peerPhotoUrl: null,
-        lastMessagePreview: c.messages[0]?.body ?? null,
+        lastMessagePreview,
         lastMessageAt,
         unreadCount: unread.byConversationId[c.id] ?? 0,
         isReadOnly: isChatLocked(c.completedAt, c.lockedAt),
