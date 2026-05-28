@@ -277,10 +277,8 @@ export async function POST(request: NextRequest) {
       where: { id: appointment.doctorId },
     });
 
-    const isOnline =
-      appointment.consultationType === ConsultationType.ONLINE;
     const isPaid = appointment.paymentStatus === PaymentStatus.PAID;
-    // Build the cancellation message body. Online+paid cancellations append
+    // Build the cancellation message body. Paid cancellations append
     // refund policy outcomes (full/50%/no-refund) or a refund-failure sentence.
     const baseMessage = React.createElement(
       React.Fragment,
@@ -290,7 +288,7 @@ export async function POST(request: NextRequest) {
       ".",
     );
     let refundNode: React.ReactNode = null;
-    if (isOnline && isPaid) {
+    if (isPaid) {
       if (refundSentence) {
         refundNode = React.createElement(
           "span",
