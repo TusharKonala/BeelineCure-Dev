@@ -84,7 +84,6 @@ export async function GET(request: NextRequest) {
     appointment.timezone,
   ).getTime();
   const refundPolicy =
-    appointment.consultationType === ConsultationType.ONLINE &&
     appointment.paymentStatus === PaymentStatus.PAID
       ? cancellationRefundPolicy(appointmentStartMs)
       : null;
@@ -198,21 +197,17 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Refund logic: online + paid appointments get a full refund if cancelled
-  // 24+ hours before start, a 50% refund otherwise. Clinic appointments and
-  // unpaid appointments are never refunded.
+  // Refund logic: paid appointments get a full refund if cancelled
+  // 24+ hours before start, a 50% refund otherwise. Unpaid appointments
+  // are never refunded.
   let refundSentence: string | null = null;
   let refundFailed = false;
   let noRefundSentence: string | null = null;
   const policy =
-    appointment.consultationType === ConsultationType.ONLINE &&
     appointment.paymentStatus === PaymentStatus.PAID
       ? cancellationRefundPolicy(appointmentStartMs)
       : null;
-  if (
-    appointment.consultationType === ConsultationType.ONLINE &&
-    appointment.paymentStatus === PaymentStatus.PAID
-  ) {
+  if (appointment.paymentStatus === PaymentStatus.PAID) {
     if (policy?.percentage === 0) {
       noRefundSentence =
         "Per our cancellation policy, this cancellation is considered a no-show and is not eligible for a refund.";

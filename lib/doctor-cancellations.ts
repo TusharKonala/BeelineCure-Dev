@@ -117,7 +117,6 @@ export async function cancelAppointmentByStaff(input: {
   let refundSentence: string | null = null;
   let refundFailed = false;
   const shouldRefund =
-    appointment.consultationType === ConsultationType.ONLINE &&
     appointment.paymentStatus === PaymentStatus.PAID &&
     input.reason !== "patient_no_show";
 
