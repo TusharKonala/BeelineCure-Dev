@@ -10,6 +10,7 @@ import {
   AppointmentStatus,
   NotificationType,
   PaymentMethod,
+  PaymentStatus,
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
@@ -323,6 +324,7 @@ export async function POST(request: NextRequest) {
         rescheduleUrl,
         priceLabel,
         approxLocalPriceLabel,
+        isPricePaid: appointment.paymentStatus === PaymentStatus.PAID,
       }),
     });
     if (error) {

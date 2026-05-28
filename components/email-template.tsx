@@ -17,6 +17,8 @@ export interface EmailTemplateProps {
   priceLabel?: string | null;
   /** Optional approx local-currency equivalent, e.g. "(approx $18.07)". */
   approxLocalPriceLabel?: string | null;
+  /** Whether the shown price has already been paid. */
+  isPricePaid?: boolean;
   primaryActionLabel?: string;
   primaryActionUrl?: string;
   secondaryActionLabel?: string;
@@ -46,6 +48,7 @@ export function EmailTemplate({
   meetLink,
   priceLabel,
   approxLocalPriceLabel,
+  isPricePaid = false,
   primaryActionLabel,
   primaryActionUrl,
   secondaryActionLabel,
@@ -98,7 +101,7 @@ export function EmailTemplate({
           <p style={{ margin: "0.25rem 0", color: "#111111" }}>
             <strong>Price:</strong> {priceLabel}
             {approxLocalPriceLabel ? ` ${approxLocalPriceLabel}` : ""}
-            {" (Paid)"}
+            {isPricePaid ? " (Paid)" : ""}
           </p>
         ) : null}
       </div>

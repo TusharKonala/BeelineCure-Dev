@@ -261,6 +261,7 @@ export async function POST(request: NextRequest) {
           meetLink,
           priceLabel,
           approxLocalPriceLabel,
+          isPricePaid: appointment.paymentStatus === PaymentStatus.PAID,
         }),
       });
 
