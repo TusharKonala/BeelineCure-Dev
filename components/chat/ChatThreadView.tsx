@@ -609,7 +609,7 @@ export function ChatThreadView({
 
       <form
         onSubmit={handleSend}
-        className="flex shrink-0 gap-2 border-t border-[#e5e5e5] p-4"
+        className="flex shrink-0 items-center gap-1.5 border-t border-[#e5e5e5] p-2 sm:gap-2 sm:p-4"
       >
         <input
           ref={imageInputRef}
@@ -626,10 +626,10 @@ export function ChatThreadView({
           type="button"
           disabled={inputDisabled}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
           aria-label="Send image"
         >
-          <ImageIcon className="size-4" />
+          <ImageIcon className="size-3.5 sm:size-4" />
         </button>
         <input
           type="text"
@@ -637,19 +637,19 @@ export function ChatThreadView({
           onChange={(e) => setDraft(e.target.value)}
           placeholder={thread?.isReadOnly ? "Chat is closed" : "Type a message…"}
           disabled={inputDisabled}
-          className="flex-1 rounded-xl border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm outline-none focus:border-[#2555F3] disabled:cursor-not-allowed disabled:bg-[#f5f5f5] disabled:text-[#9A9A9A]"
+          className="min-w-0 flex-1 rounded-xl border border-[#e5e5e5] px-3 py-2 font-montserrat text-sm outline-none focus:border-[#2555F3] disabled:cursor-not-allowed disabled:bg-[#f5f5f5] disabled:text-[#9A9A9A] sm:px-4"
           maxLength={4000}
         />
         <button
           type="submit"
           disabled={inputDisabled || !draft.trim()}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50 sm:h-10 sm:w-10"
           aria-label="Send message"
         >
           {pendingSendCount > 0 ? (
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 className="size-3.5 animate-spin sm:size-4" />
           ) : (
-            <Send className="size-4" />
+            <Send className="size-3.5 sm:size-4" />
           )}
         </button>
       </form>
