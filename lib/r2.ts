@@ -25,14 +25,14 @@ function getBucketName() {
 export async function createPresignedPut(
   key: string,
   contentType: string,
-  maxBytes: number,
+  contentLength: number,
 ): Promise<string> {
   const client = getR2Client();
   const command = new PutObjectCommand({
     Bucket: getBucketName(),
     Key: key,
     ContentType: contentType,
-    ContentLength: maxBytes,
+    ContentLength: contentLength,
   });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return getSignedUrl(client as any, command as any, {

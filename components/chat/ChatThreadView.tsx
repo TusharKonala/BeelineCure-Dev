@@ -407,6 +407,7 @@ export function ChatThreadView({
         body: JSON.stringify({
           conversationId: convId,
           contentType: file.type,
+          fileSize: file.size,
         }),
       });
       if (!urlRes.ok) {
@@ -456,7 +457,12 @@ export function ChatThreadView({
       void syncUnreadBadge();
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
-      setError(err instanceof Error ? err.message : "Failed to send image");
+      const message = err instanceof Error ? err.message : "Failed to send image";
+      setError(
+        message === "Failed to fetch"
+          ? "Network error while uploading image. Please check your connection and try again."
+          : message,
+      );
     } finally {
       URL.revokeObjectURL(localUrl);
       setPendingSendCount((n) => Math.max(0, n - 1));
@@ -626,7 +632,7 @@ export function ChatThreadView({
           type="button"
           disabled={inputDisabled}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
+          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
           aria-label="Send image"
         >
           <ImageIcon className="size-3.5 sm:size-4" />
