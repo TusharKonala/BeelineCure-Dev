@@ -486,6 +486,7 @@ export function MyScheduleClient() {
 
   /** Bumped by ViewSchedulePanel after a holiday is marked so existingAvailabilityDates picks up the cleared day instantly. */
   const handleAvailabilityChanged = useCallback((changedDate?: string) => {
+    setSaveError(null);
     if (changedDate) {
       setExistingAvailabilityDates((prev) => {
         const next = new Set(prev);
