@@ -401,32 +401,20 @@ export function ChatThreadView({
     requestAnimationFrame(() => scrollToBottom("smooth"));
 
     try {
-      const urlRes = await fetch("/api/chat/upload-url", {
+      const uploadFormData = new FormData();
+      uploadFormData.append("conversationId", convId);
+      uploadFormData.append("file", file);
+      const uploadRes = await fetch("/api/chat/upload-image", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: convId,
-          contentType: file.type,
-          fileSize: file.size,
-        }),
-      });
-      if (!urlRes.ok) {
-        const d = (await urlRes.json().catch(() => null)) as { error?: string };
-        throw new Error(d?.error ?? "Failed to get upload URL");
-      }
-      const { uploadUrl, key } = (await urlRes.json()) as {
-        uploadUrl: string;
-        key: string;
-      };
-
-      const uploadRes = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
+        body: uploadFormData,
       });
       if (!uploadRes.ok) {
-        throw new Error("Image upload failed");
+        const d = (await uploadRes.json().catch(() => null)) as { error?: string };
+        throw new Error(d?.error ?? "Failed to upload image");
       }
+      const { key } = (await uploadRes.json()) as {
+        key: string;
+      };
 
       const msgRes = await fetch(
         `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
@@ -457,12 +445,7 @@ export function ChatThreadView({
       void syncUnreadBadge();
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
-      const message = err instanceof Error ? err.message : "Failed to send image";
-      setError(
-        message === "Failed to fetch"
-          ? "Network error while uploading image. Please check your connection and try again."
-          : message,
-      );
+      setError(err instanceof Error ? err.message : "Failed to send image");
     } finally {
       URL.revokeObjectURL(localUrl);
       setPendingSendCount((n) => Math.max(0, n - 1));
