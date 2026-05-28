@@ -148,11 +148,10 @@ export function cancellationRefundPolicy(
 }
 
 /**
- * Creates a Stripe refund for an online, paid appointment and records
+ * Creates a Stripe refund for a paid appointment and records
  * the refund lifecycle state on the appointment row.
  *
  * Guards:
- *   - Only ONLINE appointments are eligible (clinic appointments never refund).
  *   - Only PAID appointments can be refunded.
  *   - A refund is only initiated once (refundStatus must be null).
  */
@@ -160,9 +159,6 @@ export async function initiateRefund({
   appointment,
   percentage,
 }: InitiateRefundInput): Promise<InitiateRefundResult> {
-  if (appointment.consultationType !== ConsultationType.ONLINE) {
-    return { ok: false, reason: "not_online" };
-  }
   if (appointment.paymentStatus !== PaymentStatus.PAID) {
     return { ok: false, reason: "not_paid" };
   }

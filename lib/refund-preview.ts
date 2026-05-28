@@ -1,6 +1,6 @@
 import "server-only";
 
-import { ConsultationType, PaymentStatus } from "@/generated/prisma/client";
+import { PaymentStatus } from "@/generated/prisma/client";
 import { fromZonedTime } from "date-fns-tz";
 import {
   cancellationRefundPolicy,
@@ -31,16 +31,13 @@ type AppointmentForRefundPreview = RefundableAppointment & {
 /**
  * Computes the refund preview for an appointment: tier, percentage, original
  * paid amount, and eligible refund amount. Returns null when the appointment
- * isn't eligible for any refund (clinic / unpaid).
+ * isn't eligible for any refund (unpaid).
  */
 export async function getRefundPreviewForAppointment(
   appointment: AppointmentForRefundPreview,
   nowMs = Date.now(),
 ): Promise<RefundPreview | null> {
-  if (
-    appointment.consultationType !== ConsultationType.ONLINE ||
-    appointment.paymentStatus !== PaymentStatus.PAID
-  ) {
+  if (appointment.paymentStatus !== PaymentStatus.PAID) {
     return null;
   }
 
