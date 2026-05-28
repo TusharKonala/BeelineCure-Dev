@@ -343,6 +343,51 @@ export function MyScheduleClient() {
     }
   }, []);
 
+  /**
+   * Refreshes persisted day details used by the "Current schedule" panel
+   * without resetting in-progress edit-builder state (windows/selected/etc).
+   */
+  const refreshCurrentDaySlotDetailsOnly = useCallback(
+    async (date: string): Promise<boolean> => {
+      try {
+        const res = await fetch(
+          `/api/doctor/availability?date=${encodeURIComponent(date)}`,
+        );
+        if (!res.ok) return false;
+        const data = (await res.json()) as {
+          slotDetails?: SlotDetail[];
+          bookedSlotStarts?: string[];
+          today: string;
+          timezone: string;
+          slotDurationMinutes?: number;
+        };
+        const rawSlotDetails: SlotDetail[] = Array.isArray(data.slotDetails)
+          ? data.slotDetails.map((s) => ({
+              startTime: s.startTime,
+              consultationType: s.consultationType,
+              booked: Boolean(s.booked),
+              slotDurationMinutes:
+                s.slotDurationMinutes ?? data.slotDurationMinutes ?? 30,
+            }))
+          : [];
+        setCurrentDaySlotDetails(rawSlotDetails);
+
+        // Keep booked guards current without reinitializing edit selections/windows.
+        let normalizedBooked = data.bookedSlotStarts ?? [];
+        if (date === data.today) {
+          normalizedBooked = normalizedBooked.filter(
+            (t) => !isDoctorTimeInPast(date, t, data.timezone),
+          );
+        }
+        setBookedSlots(new Set(normalizedBooked));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [],
+  );
+
   /** Local-only: duration is persisted on Save (PUT). Avoid PATCH so changing length here does not clobber saved-day inference or snap the dropdown back from the API. */
   const applySlotDurationForEditing = useCallback(
     (minutes: AllowedSlotDurationMinutes) => {
@@ -414,6 +459,19 @@ export function MyScheduleClient() {
     setSaveOk(null);
     if (remaining.length === 0) {
       setBuilderPhase("idle");
+      const defaultStart = alignWindowStartToSlotGrid(
+        DEFAULT_SLOT_WINDOW_START,
+        slotDurationMinutes,
+      );
+      const defaultEnd = alignWindowEndExclusiveToSlotGrid(
+        DEFAULT_SLOT_WINDOW_END,
+        slotDurationMinutes,
+      );
+      slotWindowStartRef.current = defaultStart;
+      slotWindowEndRef.current = defaultEnd;
+      setSlotWindowStart(defaultStart);
+      setSlotWindowEnd(defaultEnd);
+      setWindowOverlapError(null);
     }
   }
 
@@ -694,7 +752,10 @@ export function MyScheduleClient() {
       );
       setSlotsToDelete(new Set());
       setDeleteMode(false);
-      await fetchSlotsForDate(singleDate);
+      const refreshed = await refreshCurrentDaySlotDetailsOnly(singleDate);
+      if (!refreshed) {
+        setDeleteError("Deleted slots, but failed to refresh current schedule.");
+      }
       setViewScheduleListVersion((v) => v + 1);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : "Delete failed");
