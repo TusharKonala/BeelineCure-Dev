@@ -817,18 +817,33 @@ export function ViewSchedulePanel({
                 >
                   Edit
                 </button>
-                <button
-                  type="button"
-                  disabled={clearingDate === day.date}
-                  onClick={() => setHolidayConfirmDate(day.date)}
-                  className={cn(
-                    "cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#333333] transition-colors",
-                    "hover:bg-[#fef2f2] hover:text-red-700 hover:border-red-200",
-                    "disabled:cursor-not-allowed disabled:opacity-50",
-                  )}
-                >
-                  {clearingDate === day.date ? "Removing…" : "Mark Holiday"}
-                </button>
+                {(() => {
+                  const isHolidayBlocked =
+                    !!todayFromApi && day.date <= todayFromApi;
+                  return (
+                    <span
+                      title={
+                        isHolidayBlocked
+                          ? "Cannot mark a day in progress as a holiday"
+                          : undefined
+                      }
+                      className="inline-flex"
+                    >
+                      <button
+                        type="button"
+                        disabled={clearingDate === day.date || isHolidayBlocked}
+                        onClick={() => setHolidayConfirmDate(day.date)}
+                        className={cn(
+                          "cursor-pointer rounded-lg border border-[#e5e5e5] bg-white px-3 py-1.5 font-montserrat text-xs font-medium text-[#333333] transition-colors",
+                          "hover:bg-[#fef2f2] hover:text-red-700 hover:border-red-200",
+                          "disabled:cursor-not-allowed disabled:opacity-50",
+                        )}
+                      >
+                        {clearingDate === day.date ? "Removing…" : "Mark Holiday"}
+                      </button>
+                    </span>
+                  );
+                })()}
               </div>
             </li>
           ))}

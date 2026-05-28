@@ -576,6 +576,12 @@ export async function PUT(request: Request) {
         { status: 400 },
       );
     }
+    if (clearDay && d === today) {
+      return NextResponse.json(
+        { error: "Cannot mark a day in progress as a holiday" },
+        { status: 400 },
+      );
+    }
   }
 
   const affectedDates = affectedYmd.map((date) => ymdToPrismaDate(date));
