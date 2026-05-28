@@ -71,12 +71,15 @@ export function ChatThreadView({
   const [pendingSendCount, setPendingSendCount] = useState(0);
   const [hasNewMessagesBelow, setHasNewMessagesBelow] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [imageLoadFailed, setImageLoadFailed] = useState<Set<string>>(() => new Set());
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const selectedImagesRef = useRef<SelectedImage[]>([]);
+  const messagesRef = useRef<ChatMessage[]>([]);
   const conversationIdRef = useRef<string | null>(null);
   const scrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
   const loadingMoreRef = useRef(false);
@@ -316,13 +319,10 @@ export function ChatThreadView({
     };
   }, [thread?.id, session?.user?.id, syncUnreadBadge, scrollToBottom]);
 
+  /** Clears staged composer images without revoking URLs (ownership moves to sent bubbles). */
   const clearAllSelectedImages = useCallback(() => {
-    setSelectedImages((prev) => {
-      for (const image of prev) {
-        URL.revokeObjectURL(image.previewUrl);
-      }
-      return [];
-    });
+    setSelectedImages([]);
+    setSelectionError(null);
     if (imageInputRef.current) imageInputRef.current.value = "";
   }, []);
 
@@ -332,6 +332,11 @@ export function ChatThreadView({
       if (target) URL.revokeObjectURL(target.previewUrl);
       return prev.filter((image) => image.id !== id);
     });
+    setSelectionError(null);
+  }, []);
+
+  const revokeLocalImageUrl = useCallback((url: string | undefined) => {
+    if (url) URL.revokeObjectURL(url);
   }, []);
 
   async function handleSend(e: FormEvent) {
@@ -341,6 +346,8 @@ export function ChatThreadView({
     const convId = conversationIdRef.current;
     const userId = session?.user?.id;
     if ((!text && images.length === 0) || !convId || !userId || thread?.isReadOnly) return;
+
+    setSelectionError(null);
 
     if (images.length === 0) {
       const clientId = crypto.randomUUID();
@@ -430,6 +437,7 @@ export function ChatThreadView({
         file: File;
         clientId: string;
         caption: string;
+        localImageUrl: string;
       }) => {
         const uploadFormData = new FormData();
         uploadFormData.append("conversationId", convId);
@@ -468,7 +476,12 @@ export function ChatThreadView({
         setMessages((prev) =>
           prev.map((m) =>
             m.clientId === params.clientId
-              ? { ...data.message!, status: "sent" as const }
+              ? {
+                  ...data.message!,
+                  clientId: params.clientId,
+                  localImageUrl: params.localImageUrl,
+                  status: "sent" as const,
+                }
               : m,
           ),
         );
@@ -480,6 +493,7 @@ export function ChatThreadView({
             file: item.image.file,
             clientId: item.clientId,
             caption: item.body,
+            localImageUrl: item.image.previewUrl,
           }),
         ),
       );
@@ -500,7 +514,14 @@ export function ChatThreadView({
 
       if (failedClientIds.length > 0) {
         const failedSet = new Set(failedClientIds);
-        setMessages((prev) => prev.filter((m) => !m.clientId || !failedSet.has(m.clientId)));
+        setMessages((prev) => {
+          for (const m of prev) {
+            if (m.clientId && failedSet.has(m.clientId)) {
+              revokeLocalImageUrl(m.localImageUrl);
+            }
+          }
+          return prev.filter((m) => !m.clientId || !failedSet.has(m.clientId));
+        });
         if (failedClientIds.length === images.length) {
           setDraft(text);
         }
@@ -508,13 +529,17 @@ export function ChatThreadView({
       }
     } catch (err) {
       const failedSet = new Set(optimisticItems.map((item) => item.clientId));
-      setMessages((prev) => prev.filter((m) => !m.clientId || !failedSet.has(m.clientId)));
+      setMessages((prev) => {
+        for (const m of prev) {
+          if (m.clientId && failedSet.has(m.clientId)) {
+            revokeLocalImageUrl(m.localImageUrl);
+          }
+        }
+        return prev.filter((m) => !m.clientId || !failedSet.has(m.clientId));
+      });
       setDraft(text);
       setError(err instanceof Error ? err.message : "Failed to send images");
     } finally {
-      for (const item of images) {
-        URL.revokeObjectURL(item.previewUrl);
-      }
       setPendingSendCount((n) => Math.max(0, n - images.length));
     }
   }
@@ -557,7 +582,9 @@ export function ChatThreadView({
     if (selectedImages.length + incoming.length > MAX_IMAGES_PER_SEND) {
       messages.push(`You can send up to ${MAX_IMAGES_PER_SEND} images at once`);
     }
-    setError(messages.length > 0 ? `Some files skipped: ${messages.join(", ")}` : null);
+    setSelectionError(
+      messages.length > 0 ? `Some files skipped: ${messages.join(", ")}` : null,
+    );
   }
 
   useEffect(() => {
@@ -565,9 +592,16 @@ export function ChatThreadView({
   }, [selectedImages]);
 
   useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
     return () => {
       for (const image of selectedImagesRef.current) {
         URL.revokeObjectURL(image.previewUrl);
+      }
+      for (const m of messagesRef.current) {
+        if (m.localImageUrl) URL.revokeObjectURL(m.localImageUrl);
       }
     };
   }, []);
@@ -647,9 +681,12 @@ export function ChatThreadView({
               No messages yet. Say hello to start the conversation.
             </p>
           )}
-          {messages.map((m) => (
+          {messages.map((m) => {
+            const messageKey = m.clientId ?? m.id;
+            const imageFailed = imageLoadFailed.has(messageKey);
+            return (
             <div
-              key={m.clientId ?? m.id}
+              key={messageKey}
               className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
             >
               <div
@@ -661,25 +698,36 @@ export function ChatThreadView({
               >
                 {m.messageType === "image" ? (
                   <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={
-                        m.status === "pending" && m.localImageUrl
-                          ? m.localImageUrl
-                          : `/api/chat/image/${m.id}`
-                      }
-                      alt="Shared image"
-                      className="max-h-64 w-auto rounded-xl object-contain"
-                      onError={(e) => {
-                        const target = e.currentTarget;
-                        target.style.display = "none";
-                        const fallback = target.nextElementSibling;
-                        if (fallback instanceof HTMLElement) fallback.style.display = "block";
-                      }}
-                    />
-                    <p className="hidden italic opacity-70" aria-hidden>
-                      Image failed to load
-                    </p>
+                    {!imageFailed ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={
+                          m.localImageUrl
+                            ? m.localImageUrl
+                            : `/api/chat/image/${m.id}`
+                        }
+                        alt="Shared image"
+                        className="max-h-64 w-auto rounded-xl object-contain"
+                        onError={() => {
+                          setImageLoadFailed((prev) => {
+                            if (prev.has(messageKey)) return prev;
+                            const next = new Set(prev);
+                            next.add(messageKey);
+                            return next;
+                          });
+                        }}
+                        onLoad={() => {
+                          setImageLoadFailed((prev) => {
+                            if (!prev.has(messageKey)) return prev;
+                            const next = new Set(prev);
+                            next.delete(messageKey);
+                            return next;
+                          });
+                        }}
+                      />
+                    ) : (
+                      <p className="italic opacity-70">Image failed to load</p>
+                    )}
                     {m.body.trim() && (
                       <p className="mt-2 whitespace-pre-wrap wrap-break-word">{m.body}</p>
                     )}
@@ -696,7 +744,8 @@ export function ChatThreadView({
                 </p>
               </div>
             </div>
-          ))}
+            );
+          })}
           <div ref={bottomRef} />
         </div>
 
@@ -713,9 +762,9 @@ export function ChatThreadView({
         )}
       </div>
 
-      {error && (
+      {(selectionError ?? error) && (
         <p className="shrink-0 px-4 pb-2 font-montserrat text-xs text-[#b42318]">
-          {error}
+          {selectionError ?? error}
         </p>
       )}
 
