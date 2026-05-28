@@ -94,7 +94,6 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
           !medicine.name.trim() ||
           !medicine.dosage.trim() ||
           !medicine.frequency.trim() ||
-          !medicine.instructions.trim() ||
           !Number.isFinite(duration) ||
           duration <= 0
         );
@@ -119,7 +118,9 @@ export function PrescriptionForm({ appointmentId }: { appointmentId: string }) {
   async function handleSubmit() {
     setError(null);
     if (medicines.length === 0 || hasInvalidMedicine) {
-      setError("Please fill all medicine fields and provide valid duration days.");
+      setError(
+        "Please fill medicine name, dosage, frequency, and valid duration days.",
+      );
       return;
     }
 

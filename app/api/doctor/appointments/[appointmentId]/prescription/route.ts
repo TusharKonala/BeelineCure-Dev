@@ -53,7 +53,6 @@ function sanitizeMedicines(input: unknown): MedicinePayload[] | null {
       !name ||
       !dosage ||
       !frequency ||
-      !instructions ||
       !Number.isInteger(durationDays) ||
       durationDays <= 0
     ) {
