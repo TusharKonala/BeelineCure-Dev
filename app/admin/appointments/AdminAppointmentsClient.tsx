@@ -723,16 +723,48 @@ export default function AdminAppointmentsClient() {
                   ) : (
                     <>
                       <p className="font-montserrat text-sm font-semibold text-[#111111]">
-                        Refund eligibility: {refundPreview.title}
+                        Refund eligibility: {tab === "upcoming" ? "Full refund" : refundPreview.title}
                       </p>
                       <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                        {refundPreview.description}
+                        {tab === "upcoming"
+                          ? "Admin-initiated cancellation is eligible for a full refund."
+                          : refundPreview.description}
                       </p>
                       {typeof refundPreview.originalPaidAmountCents ===
                         "number" &&
                         typeof refundPreview.eligibleRefundAmountCents ===
                           "number" &&
-                        (refundPreview.percentage === 0 ? (
+                        (tab === "upcoming" ? (
+                          <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                            Patient paid{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}
+                            . Eligible refund:{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}{" "}
+                            {typeof refundPreview.equivalentAmountCents ===
+                              "number" &&
+                            refundPreview.equivalentCurrency &&
+                            normaliseCurrencyCode(refundPreview.currency) !==
+                              normaliseCurrencyCode(
+                                refundPreview.equivalentCurrency,
+                              ) ? (
+                              <>
+                                (
+                                {formatRefundCents(
+                                  refundPreview.originalPaidAmountCents,
+                                  refundPreview.equivalentCurrency,
+                                )}
+                                )
+                              </>
+                            ) : null}{" "}
+                            (100%).
+                          </p>
+                        ) : refundPreview.percentage === 0 ? (
                           <p className="mt-1 font-montserrat text-sm text-[#333333]">
                             Patient paid{" "}
                             {formatRefundCents(
