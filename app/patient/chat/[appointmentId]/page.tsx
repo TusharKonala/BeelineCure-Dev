@@ -16,7 +16,7 @@ export default async function PatientChatThreadPage({ params }: PageProps) {
   const { appointmentId } = await params;
 
   return (
-    <div className="flex h-[calc(100dvh-4rem)] w-full flex-col overflow-hidden bg-[#fafafa] p-3 sm:p-4 lg:p-5">
+    <div className="flex h-[calc(100dvh-7rem)] w-full flex-col overflow-hidden bg-[#fafafa] p-3 sm:p-4 lg:h-[calc(100dvh-5.5rem)] lg:p-5">
       <div className="flex h-full min-h-0 w-full flex-col">
         <ChatThreadView
           appointmentId={appointmentId}
