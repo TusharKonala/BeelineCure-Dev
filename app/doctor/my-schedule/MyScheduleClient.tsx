@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { ViewSchedulePanel } from "./ViewSchedulePanel";
 import { SetAvailabilityCalendar } from "./SetAvailabilityCalendar";
 import {
+  SlotSummaryDeletePicker,
   SlotSummaryFromDetails,
   type SlotDetail,
 } from "./scheduleDaySlots";
@@ -1303,47 +1304,39 @@ export function MyScheduleClient() {
                 </button>
               </div>
               {deleteMode ? (
-                <div className="mt-3 space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    {currentDaySlotDetails.map((slot) => {
-                      const isBooked = slot.booked;
-                      const isChecked = slotsToDelete.has(slot.startTime);
-                      return (
-                        <label
-                          key={slot.startTime}
-                          className={cn(
-                            "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-montserrat text-xs transition-colors",
-                            isBooked
-                              ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700 opacity-70"
-                              : isChecked
-                                ? "cursor-pointer border-red-300 bg-red-50 text-red-700"
-                                : "cursor-pointer border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#f5f5f5]",
-                          )}
-                        >
-                          {!isBooked ? (
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {
-                                setSlotsToDelete((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(slot.startTime))
-                                    next.delete(slot.startTime);
-                                  else next.add(slot.startTime);
-                                  return next;
-                                });
-                              }}
-                              className="accent-red-600"
-                            />
-                          ) : null}
-                          <span>
-                            {slot.startTime}
-                            {isBooked ? " (Booked)" : ""}
-                          </span>
-                        </label>
+                <div className="mt-3 space-y-3">
+                  <SlotSummaryDeletePicker
+                    slots={currentDaySlotDetails}
+                    selectedStarts={slotsToDelete}
+                    onToggleSlot={(startTime) => {
+                      const slot = currentDaySlotDetails.find(
+                        (s) => s.startTime === startTime,
                       );
-                    })}
-                  </div>
+                      if (slot?.booked) return;
+                      setSlotsToDelete((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(startTime)) next.delete(startTime);
+                        else next.add(startTime);
+                        return next;
+                      });
+                    }}
+                    onSetGroupSelection={(startTimes, selected) => {
+                      const bookedStarts = new Set(
+                        currentDaySlotDetails
+                          .filter((s) => s.booked)
+                          .map((s) => s.startTime),
+                      );
+                      setSlotsToDelete((prev) => {
+                        const next = new Set(prev);
+                        for (const t of startTimes) {
+                          if (bookedStarts.has(t)) continue;
+                          if (selected) next.add(t);
+                          else next.delete(t);
+                        }
+                        return next;
+                      });
+                    }}
+                  />
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       type="button"
@@ -1353,7 +1346,7 @@ export function MyScheduleClient() {
                     >
                       {deleting
                         ? "Deleting…"
-                        : `Delete Selected (${slotsToDelete.size})`}
+                        : `Delete selected (${slotsToDelete.size})`}
                     </button>
                     {deleteError ? (
                       <p className="font-montserrat text-xs text-red-600">
