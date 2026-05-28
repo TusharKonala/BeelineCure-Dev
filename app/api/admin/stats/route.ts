@@ -56,25 +56,6 @@ export async function GET(request: NextRequest) {
   const monthStart = new Date();
   monthStart.setDate(1);
   monthStart.setHours(0, 0, 0, 0);
-  const now = new Date();
-  const todayDateOnly = new Date(now);
-  todayDateOnly.setHours(0, 0, 0, 0);
-  const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}`;
-
-  const pastDateFilter = {
-    OR: [
-      { date: { lt: todayDateOnly } },
-      {
-        AND: [
-          { date: todayDateOnly },
-          { time: { lte: nowTime } },
-        ],
-      },
-    ],
-  };
-
   const revenueBaseSelect = {
     priceCentsAtBooking: true,
     currencyAtBooking: true,
@@ -122,7 +103,6 @@ export async function GET(request: NextRequest) {
               { paymentMethod: null, stripePaymentId: { not: null } },
             ],
           },
-          pastDateFilter,
         ],
       },
       select: revenueBaseSelect,
@@ -141,7 +121,6 @@ export async function GET(request: NextRequest) {
               { paymentMethod: null, stripePaymentId: null },
             ],
           },
-          pastDateFilter,
         ],
       },
       select: revenueBaseSelect,
