@@ -98,6 +98,7 @@ export function EmailTemplate({
           <p style={{ margin: "0.25rem 0", color: "#111111" }}>
             <strong>Price:</strong> {priceLabel}
             {approxLocalPriceLabel ? ` ${approxLocalPriceLabel}` : ""}
+            {" (Paid)"}
           </p>
         ) : null}
       </div>
