@@ -129,11 +129,6 @@ export default function DoctorAppointmentsClient() {
       setRefundPreviewLoading(false);
       return;
     }
-    if (cancelTarget.consultationType !== "ONLINE") {
-      setRefundPreview(null);
-      setRefundPreviewLoading(false);
-      return;
-    }
 
     let cancelled = false;
     setRefundPreviewLoading(true);
@@ -586,62 +581,74 @@ export default function DoctorAppointmentsClient() {
                 This will cancel the appointment for{" "}
                 <span className="font-medium text-[#333333]">{cancelTarget.patientName}</span>.
               </p>
-              {cancelTarget.consultationType === "ONLINE" && (
-                <div className="mt-4 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-3">
-                  {refundPreviewLoading ? (
-                    <p className="font-montserrat text-sm text-[#5E5E5E]">
-                      Checking refund eligibility…
+              <div className="mt-4 rounded-lg border border-[#e5e5e5] bg-[#fafafa] p-3">
+                {refundPreviewLoading ? (
+                  <p className="font-montserrat text-sm text-[#5E5E5E]">
+                    Checking refund eligibility…
+                  </p>
+                ) : refundPreview ? (
+                  cancelReason === "patient_no_show" ? (
+                    <p className="font-montserrat text-sm text-[#333333]">
+                      No refund: cancelled as patient no-show.
                     </p>
-                  ) : refundPreview ? (
-                    cancelReason === "patient_no_show" ? (
-                      <p className="font-montserrat text-sm text-[#333333]">
-                        No refund: cancelled as patient no-show.
-                      </p>
-                    ) : (
-                      <>
-                        <p className="font-montserrat text-sm font-semibold text-[#111111]">
-                          Refund eligibility: {refundPreview.title}
-                        </p>
-                        <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-                          {refundPreview.description}
-                        </p>
-                        {typeof refundPreview.originalPaidAmountCents ===
-                          "number" &&
-                          typeof refundPreview.eligibleRefundAmountCents ===
-                            "number" &&
-                          (refundPreview.percentage === 0 ? (
-                            <p className="mt-1 font-montserrat text-sm text-[#333333]">
-                              Patient paid{" "}
-                              {formatRefundCents(
-                                refundPreview.originalPaidAmountCents,
-                                refundPreview.currency,
-                              )}
-                              . No refund will be issued.
-                            </p>
-                          ) : (
-                            <p className="mt-1 font-montserrat text-sm text-[#333333]">
-                              Patient paid{" "}
-                              {formatRefundCents(
-                                refundPreview.originalPaidAmountCents,
-                                refundPreview.currency,
-                              )}
-                              . Eligible refund:{" "}
-                              {formatRefundCents(
-                                refundPreview.eligibleRefundAmountCents,
-                                refundPreview.currency,
-                              )}{" "}
-                              ({refundPreview.percentage}%).
-                            </p>
-                          ))}
-                      </>
-                    )
                   ) : (
-                    <p className="font-montserrat text-sm text-[#5E5E5E]">
-                      No refund applies (appointment was not paid online).
-                    </p>
-                  )}
-                </div>
-              )}
+                    <>
+                      <p className="font-montserrat text-sm font-semibold text-[#111111]">
+                        Refund eligibility: {tab === "upcoming" ? "Full refund" : refundPreview.title}
+                      </p>
+                      <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                        {tab === "upcoming"
+                          ? "Doctor-initiated cancellation is eligible for a full refund."
+                          : refundPreview.description}
+                      </p>
+                      {typeof refundPreview.originalPaidAmountCents === "number" &&
+                        typeof refundPreview.eligibleRefundAmountCents === "number" &&
+                        (tab === "upcoming" ? (
+                          <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                            Patient paid{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}
+                            . Eligible refund:{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}{" "}
+                            (100%).
+                          </p>
+                        ) : refundPreview.percentage === 0 ? (
+                          <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                            Patient paid{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}
+                            . No refund will be issued.
+                          </p>
+                        ) : (
+                          <p className="mt-1 font-montserrat text-sm text-[#333333]">
+                            Patient paid{" "}
+                            {formatRefundCents(
+                              refundPreview.originalPaidAmountCents,
+                              refundPreview.currency,
+                            )}
+                            . Eligible refund:{" "}
+                            {formatRefundCents(
+                              refundPreview.eligibleRefundAmountCents,
+                              refundPreview.currency,
+                            )}{" "}
+                            ({refundPreview.percentage}%).
+                          </p>
+                        ))}
+                    </>
+                  )
+                ) : (
+                  <p className="font-montserrat text-sm text-[#5E5E5E]">
+                    No refund applies (appointment was not paid).
+                  </p>
+                )}
+              </div>
               <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
                 <button
                   type="button"
@@ -652,8 +659,7 @@ export default function DoctorAppointmentsClient() {
                   }}
                   disabled={
                     isCanceling ||
-                    (cancelTarget.consultationType === "ONLINE" &&
-                      refundPreviewLoading)
+                    refundPreviewLoading
                   }
                 >
                   Keep appointment
@@ -664,8 +670,7 @@ export default function DoctorAppointmentsClient() {
                   onClick={() => void confirmCancelAppointment()}
                   disabled={
                     isCanceling ||
-                    (cancelTarget.consultationType === "ONLINE" &&
-                      refundPreviewLoading)
+                    refundPreviewLoading
                   }
                 >
                   {isCanceling ? "Cancelling..." : "Confirm cancel"}
