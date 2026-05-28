@@ -31,7 +31,14 @@ type ChatMessage = {
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES_PER_SEND = 10;
 const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+type SelectedImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
 
 type ThreadMeta = {
   id: string;
@@ -64,15 +71,12 @@ export function ChatThreadView({
   const [pendingSendCount, setPendingSendCount] = useState(0);
   const [hasNewMessagesBelow, setHasNewMessagesBelow] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
-  const [selectedImagePreviewUrl, setSelectedImagePreviewUrl] = useState<string | null>(
-    null,
-  );
+  const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const selectedImagePreviewRef = useRef<string | null>(null);
+  const selectedImagesRef = useRef<SelectedImage[]>([]);
   const conversationIdRef = useRef<string | null>(null);
   const scrollRestoreRef = useRef<{ height: number; top: number } | null>(null);
   const loadingMoreRef = useRef(false);
@@ -312,55 +316,124 @@ export function ChatThreadView({
     };
   }, [thread?.id, session?.user?.id, syncUnreadBadge, scrollToBottom]);
 
-  const clearSelectedImage = useCallback(() => {
-    setSelectedImageFile(null);
-    setSelectedImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+  const clearAllSelectedImages = useCallback(() => {
+    setSelectedImages((prev) => {
+      for (const image of prev) {
+        URL.revokeObjectURL(image.previewUrl);
+      }
+      return [];
     });
     if (imageInputRef.current) imageInputRef.current.value = "";
+  }, []);
+
+  const removeSelectedImage = useCallback((id: string) => {
+    setSelectedImages((prev) => {
+      const target = prev.find((image) => image.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((image) => image.id !== id);
+    });
   }, []);
 
   async function handleSend(e: FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    const imageFile = selectedImageFile;
-    const imagePreviewUrl = selectedImagePreviewUrl;
+    const images = selectedImages;
     const convId = conversationIdRef.current;
     const userId = session?.user?.id;
-    if ((!text && !imageFile) || !convId || !userId || thread?.isReadOnly) return;
+    if ((!text && images.length === 0) || !convId || !userId || thread?.isReadOnly) return;
 
-    const clientId = crypto.randomUUID();
-    const optimistic: ChatMessage = {
-      id: clientId,
-      clientId,
-      body: text,
+    if (images.length === 0) {
+      const clientId = crypto.randomUUID();
+      const optimistic: ChatMessage = {
+        id: clientId,
+        clientId,
+        body: text,
+        senderUserId: userId,
+        senderRole: "",
+        isOwn: true,
+        createdAt: new Date().toISOString(),
+        status: "pending",
+        messageType: "text",
+      };
+
+      setMessages((prev) => [...prev, optimistic]);
+      setDraft("");
+      setPendingSendCount((n) => n + 1);
+      setError(null);
+      requestAnimationFrame(() => scrollToBottom("smooth"));
+
+      try {
+        const res = await fetch(
+          `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ body: text }),
+          },
+        );
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string };
+          throw new Error(data?.error ?? "Send failed");
+        }
+        const data = (await res.json()) as { message?: ChatMessage };
+        if (data.message) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.clientId === clientId
+                ? { ...data.message!, status: "sent" as const }
+                : m,
+            ),
+          );
+        }
+        void syncUnreadBadge();
+      } catch (err) {
+        setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
+        setDraft(text);
+        setError(err instanceof Error ? err.message : "Failed to send");
+      } finally {
+        setPendingSendCount((n) => Math.max(0, n - 1));
+      }
+      return;
+    }
+
+    const optimisticItems = images.map((image, index) => {
+      const clientId = crypto.randomUUID();
+      return {
+        image,
+        clientId,
+        body: index === images.length - 1 ? text : "",
+      };
+    });
+
+    const optimisticMessages: ChatMessage[] = optimisticItems.map((item) => ({
+      id: item.clientId,
+      clientId: item.clientId,
+      body: item.body,
       senderUserId: userId,
       senderRole: "",
       isOwn: true,
       createdAt: new Date().toISOString(),
       status: "pending",
-      messageType: imageFile ? "image" : "text",
-      localImageUrl: imageFile ? imagePreviewUrl ?? undefined : undefined,
-    };
+      messageType: "image",
+      localImageUrl: item.image.previewUrl,
+    }));
 
-    setMessages((prev) => [...prev, optimistic]);
+    setMessages((prev) => [...prev, ...optimisticMessages]);
     setDraft("");
-    if (imageFile) {
-      setSelectedImageFile(null);
-      setSelectedImagePreviewUrl(null);
-      if (imageInputRef.current) imageInputRef.current.value = "";
-    }
-    setPendingSendCount((n) => n + 1);
+    clearAllSelectedImages();
+    setPendingSendCount((n) => n + images.length);
     setError(null);
     requestAnimationFrame(() => scrollToBottom("smooth"));
 
     try {
-      let imageKey: string | undefined;
-      if (imageFile) {
+      const sendOneImage = async (params: {
+        file: File;
+        clientId: string;
+        caption: string;
+      }) => {
         const uploadFormData = new FormData();
         uploadFormData.append("conversationId", convId);
-        uploadFormData.append("file", imageFile);
+        uploadFormData.append("file", params.file);
         const uploadRes = await fetch("/api/chat/upload-image", {
           method: "POST",
           body: uploadFormData,
@@ -370,85 +443,131 @@ export function ChatThreadView({
           throw new Error(d?.error ?? "Failed to upload image");
         }
         const uploadData = (await uploadRes.json()) as { key: string };
-        imageKey = uploadData.key;
-      }
+        const imageKey = uploadData.key;
 
-      const res = await fetch(
-        `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(
-            imageFile
-              ? {
-                  body: text,
-                  messageType: "image",
-                  imageKey,
-                }
-              : { body: text },
-          ),
-        },
-      );
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string };
-        throw new Error(data?.error ?? "Send failed");
-      }
-      const data = (await res.json()) as { message?: ChatMessage };
-      if (data.message) {
+        const res = await fetch(
+          `/api/chat/threads/${encodeURIComponent(convId)}/messages`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              body: params.caption,
+              messageType: "image",
+              imageKey,
+            }),
+          },
+        );
+        if (!res.ok) {
+          const d = (await res.json().catch(() => null)) as { error?: string };
+          throw new Error(d?.error ?? "Failed to send image message");
+        }
+        const data = (await res.json()) as { message?: ChatMessage };
+        if (!data.message) {
+          throw new Error("Missing message response");
+        }
         setMessages((prev) =>
           prev.map((m) =>
-            m.clientId === clientId
+            m.clientId === params.clientId
               ? { ...data.message!, status: "sent" as const }
               : m,
           ),
         );
-      }
-      void syncUnreadBadge();
-    } catch (err) {
-      setMessages((prev) => prev.filter((m) => m.clientId !== clientId));
-      setDraft(text);
-      if (imageFile) {
-        setSelectedImageFile(imageFile);
-        setSelectedImagePreviewUrl(imagePreviewUrl ?? URL.createObjectURL(imageFile));
-      }
-      setError(
-        err instanceof Error
-          ? err.message
-          : imageFile
-            ? "Failed to send image"
-            : "Failed to send",
+      };
+
+      const results = await Promise.allSettled(
+        optimisticItems.map((item) =>
+          sendOneImage({
+            file: item.image.file,
+            clientId: item.clientId,
+            caption: item.body,
+          }),
+        ),
       );
+
+      const failedClientIds: string[] = [];
+      let successCount = 0;
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          failedClientIds.push(optimisticItems[index]!.clientId);
+        } else {
+          successCount += 1;
+        }
+      });
+
+      if (successCount > 0) {
+        void syncUnreadBadge();
+      }
+
+      if (failedClientIds.length > 0) {
+        const failedSet = new Set(failedClientIds);
+        setMessages((prev) => prev.filter((m) => !m.clientId || !failedSet.has(m.clientId)));
+        if (failedClientIds.length === images.length) {
+          setDraft(text);
+        }
+        setError(`Failed to send ${failedClientIds.length} of ${images.length} images`);
+      }
+    } catch (err) {
+      const failedSet = new Set(optimisticItems.map((item) => item.clientId));
+      setMessages((prev) => prev.filter((m) => !m.clientId || !failedSet.has(m.clientId)));
+      setDraft(text);
+      setError(err instanceof Error ? err.message : "Failed to send images");
     } finally {
-      setPendingSendCount((n) => Math.max(0, n - 1));
+      for (const item of images) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      setPendingSendCount((n) => Math.max(0, n - images.length));
     }
   }
 
-  function handleImageSelect(file: File) {
-    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-      setError("Only JPEG, PNG, and WebP images are allowed.");
-      return;
-    }
-    if (file.size > MAX_IMAGE_BYTES) {
-      setError("Image must be 10MB or smaller.");
-      return;
-    }
+  function handleImagesSelect(fileList: FileList | File[]) {
+    const incoming = Array.from(fileList);
+    if (incoming.length === 0) return;
 
-    setSelectedImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+    let invalidTypeCount = 0;
+    let oversizeCount = 0;
+
+    setSelectedImages((prev) => {
+      const availableSlots = Math.max(0, MAX_IMAGES_PER_SEND - prev.length);
+      const accepted: SelectedImage[] = [];
+      for (const file of incoming) {
+        if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+          invalidTypeCount += 1;
+          continue;
+        }
+        if (file.size > MAX_IMAGE_BYTES) {
+          oversizeCount += 1;
+          continue;
+        }
+        if (accepted.length < availableSlots) {
+          accepted.push({
+            id: crypto.randomUUID(),
+            file,
+            previewUrl: URL.createObjectURL(file),
+          });
+        }
+      }
+      return [...prev, ...accepted];
     });
-    setSelectedImageFile(file);
-    setError(null);
+
+    if (imageInputRef.current) imageInputRef.current.value = "";
+
+    const messages: string[] = [];
+    if (invalidTypeCount > 0) messages.push(`${invalidTypeCount} invalid type`);
+    if (oversizeCount > 0) messages.push(`${oversizeCount} too large`);
+    if (selectedImages.length + incoming.length > MAX_IMAGES_PER_SEND) {
+      messages.push(`You can send up to ${MAX_IMAGES_PER_SEND} images at once`);
+    }
+    setError(messages.length > 0 ? `Some files skipped: ${messages.join(", ")}` : null);
   }
 
   useEffect(() => {
-    selectedImagePreviewRef.current = selectedImagePreviewUrl;
-  }, [selectedImagePreviewUrl]);
+    selectedImagesRef.current = selectedImages;
+  }, [selectedImages]);
 
   useEffect(() => {
     return () => {
-      if (selectedImagePreviewRef.current) {
-        URL.revokeObjectURL(selectedImagePreviewRef.current);
+      for (const image of selectedImagesRef.current) {
+        URL.revokeObjectURL(image.previewUrl);
       }
     };
   }, []);
@@ -604,36 +723,38 @@ export function ChatThreadView({
         onSubmit={handleSend}
         className="shrink-0 border-t border-[#e5e5e5] p-2 sm:p-4"
       >
-        {selectedImagePreviewUrl && (
-          <div className="mb-2 flex items-start">
-            <div className="relative inline-flex">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={selectedImagePreviewUrl}
-                alt="Selected image preview"
-                className="h-14 w-14 rounded-lg border border-[#e5e5e5] object-cover"
-              />
-              <button
-                type="button"
-                onClick={clearSelectedImage}
-                disabled={inputDisabled}
-                className="absolute -right-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#5E5E5E] shadow-sm hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Remove selected image"
-              >
-                <X className="size-3" />
-              </button>
-            </div>
+        {selectedImages.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {selectedImages.map((image) => (
+              <div key={image.id} className="relative inline-flex">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={image.previewUrl}
+                  alt="Selected image preview"
+                  className="h-14 w-14 rounded-lg border border-[#e5e5e5] object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeSelectedImage(image.id)}
+                  disabled={inputDisabled}
+                  className="absolute -right-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#5E5E5E] shadow-sm hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-60"
+                  aria-label="Remove selected image"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
         <div className="flex items-center gap-1.5 sm:gap-2">
         <input
           ref={imageInputRef}
           type="file"
+          multiple
           accept="image/jpeg,image/png,image/webp"
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleImageSelect(file);
+            if (e.target.files) handleImagesSelect(e.target.files);
           }}
         />
         <button
@@ -656,7 +777,7 @@ export function ChatThreadView({
         />
         <button
           type="submit"
-          disabled={inputDisabled || (!draft.trim() && !selectedImageFile)}
+          disabled={inputDisabled || (!draft.trim() && selectedImages.length === 0)}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50 sm:h-10 sm:w-10"
           aria-label="Send message"
         >
