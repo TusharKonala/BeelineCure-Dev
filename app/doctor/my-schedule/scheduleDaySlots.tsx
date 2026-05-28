@@ -306,7 +306,7 @@ function GroupSelectAllRow({
         type="checkbox"
         checked={allSelected}
         onChange={() => onSetGroupSelection(groupStartTimes, !allSelected)}
-        className="accent-red-600"
+        className="cursor-pointer accent-red-600"
       />
       Select all
     </label>
