@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
 
   const limit = parseLimit(request.nextUrl.searchParams.get("limit"));
   const cursor = parseCursor(request.nextUrl.searchParams.get("cursor"));
+  const archivedOnly = request.nextUrl.searchParams.get("archived") === "true";
 
   const unread = await getUnreadCountsForUser(userId, email ?? null);
 
@@ -144,6 +145,7 @@ export async function GET(request: NextRequest) {
       where: {
         doctorUserId: userId,
         NOT: { hiddenFor: { has: userId } },
+        isArchivedByDoctor: archivedOnly,
         messages: { some: { senderRole: ChatSenderRole.PATIENT } },
         ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
@@ -192,6 +194,7 @@ export async function GET(request: NextRequest) {
         unreadCount: unread.byConversationId[c.id] ?? 0,
         isReadOnly: isChatLocked(c.completedAt, c.lockedAt),
         isReady: true,
+        isArchived: archivedOnly,
         sortFallbackAt: c.createdAt.toISOString(),
       };
     });
