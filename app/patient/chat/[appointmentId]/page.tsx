@@ -9,7 +9,7 @@ type PageProps = {
 };
 
 const chatHeightClass =
-  "h-[calc(100dvh-8rem)] md:h-[calc(100dvh-11rem)] lg:h-[calc(100dvh-9.5rem)] w-full";
+  "h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)] lg:h-[calc(100dvh-9.5rem)] w-full";
 
 export default async function PatientChatThreadPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
@@ -20,7 +20,7 @@ export default async function PatientChatThreadPage({ params }: PageProps) {
   const { appointmentId } = await params;
 
   return (
-    <div className="w-full bg-[#fafafa] py-6 md:py-8">
+    <div className="w-full bg-[#fafafa] pb-6 -mb-8 md:mb-0 md:py-4 lg:py-8">
       <Container>
         <ChatThreadView
           appointmentId={appointmentId}
