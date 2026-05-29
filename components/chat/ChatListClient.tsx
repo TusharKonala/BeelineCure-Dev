@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
-import { Loader2, MessageCircle, MoreVertical } from "lucide-react";
+import { Archive, Loader2, MessageCircle, MoreVertical } from "lucide-react";
 import type { ChatInboxUpdatePayload } from "@/lib/chat-realtime-types";
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
 import { formatListMessageTime } from "@/components/chat/format-chat-time";
@@ -23,6 +23,7 @@ type ChatThread = {
   unreadCount: number;
   isReadOnly: boolean;
   isReady: boolean;
+  isArchived?: boolean;
 };
 
 type ChatListClientProps = {
@@ -74,14 +75,19 @@ function applyUnreadCounts(
 }
 
 export function ChatListClient({ basePath }: ChatListClientProps) {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
+  const isDoctor = session?.user?.role === "DOCTOR";
   const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [archivedThreads, setArchivedThreads] = useState<ChatThread[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hideTarget, setHideTarget] = useState<ChatThread | null>(null);
-  const [hidingConversation, setHidingConversation] = useState(false);
+  const [actionTarget, setActionTarget] = useState<ChatThread | null>(null);
+  const [actionPending, setActionPending] = useState(false);
+  const [showArchivedSection, setShowArchivedSection] = useState(false);
+  const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [archivedLoading, setArchivedLoading] = useState(false);
 
   const handleInboxUpdate = useCallback((payload: ChatInboxUpdatePayload) => {
     setThreads((prev) => {
@@ -156,6 +162,24 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
     [fetchGlobalUnread],
   );
 
+  const fetchArchivedThreads = useCallback(async () => {
+    setArchivedLoading(true);
+    try {
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        archived: "true",
+      });
+      const res = await fetch(`/api/chat/threads?${params}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { threads?: ChatThread[] };
+      const list = Array.isArray(data.threads) ? data.threads : [];
+      setArchivedThreads(sortThreadsByActivity(list));
+      setArchivedLoaded(true);
+    } finally {
+      setArchivedLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (status !== "authenticated") return;
     let cancelled = false;
@@ -194,6 +218,192 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
     disabled: loading || !hasMore,
   });
 
+  async function handleHideConversation() {
+    if (!actionTarget || actionTarget.id.startsWith("pending-") || actionPending) {
+      return;
+    }
+    setActionPending(true);
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(actionTarget.id)}/hide`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        throw new Error(data?.error ?? "Failed to delete conversation");
+      }
+      setThreads((prev) => prev.filter((t) => t.id !== actionTarget.id));
+      setActionTarget(null);
+    } catch {
+      setActionTarget(null);
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleArchiveConversation() {
+    if (!actionTarget || actionTarget.id.startsWith("pending-") || actionPending) {
+      return;
+    }
+    setActionPending(true);
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(actionTarget.id)}/archive`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        throw new Error(data?.error ?? "Failed to archive conversation");
+      }
+      const archived = { ...actionTarget, isArchived: true };
+      setThreads((prev) => prev.filter((t) => t.id !== actionTarget.id));
+      if (archivedLoaded) {
+        setArchivedThreads((prev) =>
+          sortThreadsByActivity([archived, ...prev.filter((t) => t.id !== archived.id)]),
+        );
+      }
+      setActionTarget(null);
+    } catch {
+      setActionTarget(null);
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function handleUnarchiveConversation(thread: ChatThread) {
+    if (thread.id.startsWith("pending-") || actionPending) return;
+    setActionPending(true);
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(thread.id)}/unarchive`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        throw new Error(data?.error ?? "Failed to unarchive conversation");
+      }
+      const restored = { ...thread, isArchived: false };
+      setArchivedThreads((prev) => prev.filter((t) => t.id !== thread.id));
+      setThreads((prev) =>
+        sortThreadsByActivity([restored, ...prev.filter((t) => t.id !== restored.id)]),
+      );
+    } catch {
+      // best-effort
+    } finally {
+      setActionPending(false);
+    }
+  }
+
+  async function toggleArchivedSection() {
+    const next = !showArchivedSection;
+    setShowArchivedSection(next);
+    if (next && !archivedLoaded) {
+      await fetchArchivedThreads();
+    }
+  }
+
+  function renderThreadRow(thread: ChatThread, archived = false) {
+    const timeLabel = formatListMessageTime(thread.lastMessageAt);
+    const canManage = thread.isReady && !thread.id.startsWith("pending-");
+    return (
+      <li
+        key={thread.appointmentId}
+        className={`relative ${archived ? "opacity-60" : ""}`}
+      >
+        <Link
+          href={`${basePath}/${encodeURIComponent(thread.appointmentId)}`}
+          className={`flex items-center gap-3 rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 pr-10 transition-colors hover:bg-[#fafcff] ${
+            archived ? "text-[#9A9A9A]" : ""
+          }`}
+        >
+          {thread.peerPhotoUrl ? (
+            <Image
+              src={thread.peerPhotoUrl}
+              alt=""
+              width={44}
+              height={44}
+              className="size-11 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f5f8ff] font-montserrat text-sm font-semibold text-[#2555F3]">
+              {thread.peerName.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p
+                className={`truncate font-montserrat text-sm font-semibold ${
+                  archived ? "text-[#9A9A9A]" : "text-[#333333]"
+                }`}
+              >
+                {thread.peerName}
+              </p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                {timeLabel && (
+                  <span className="font-montserrat text-[10px] text-[#9A9A9A]">
+                    {timeLabel}
+                  </span>
+                )}
+                {!archived && thread.unreadCount > 0 && (
+                  <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
+                    {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
+                  </span>
+                )}
+              </div>
+            </div>
+            {thread.peerSubtitle && (
+              <p className="truncate font-montserrat text-xs text-[#9A9A9A]">
+                {thread.peerSubtitle}
+              </p>
+            )}
+            {thread.lastMessagePreview ? (
+              <p className="mt-0.5 truncate font-montserrat text-xs text-[#5E5E5E]">
+                {thread.lastMessagePreview}
+              </p>
+            ) : (
+              <p className="mt-0.5 font-montserrat text-xs text-[#9A9A9A]">
+                {thread.isReady ? "Start a conversation" : "Setting up chat…"}
+              </p>
+            )}
+            {thread.isReadOnly && (
+              <p className="mt-0.5 font-montserrat text-[10px] text-[#9A9A9A]">
+                Read-only
+              </p>
+            )}
+          </div>
+        </Link>
+        {canManage && !archived && (
+          <button
+            type="button"
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f0f0f0]"
+            aria-label={isDoctor ? "Archive conversation" : "Delete conversation"}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setActionTarget(thread);
+            }}
+          >
+            <MoreVertical className="size-4" />
+          </button>
+        )}
+        {canManage && archived && (
+          <button
+            type="button"
+            disabled={actionPending}
+            className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded-lg border border-[#e5e5e5] px-2.5 py-1 font-montserrat text-[11px] font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void handleUnarchiveConversation(thread);
+            }}
+          >
+            Unarchive
+          </button>
+        )}
+      </li>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[200px] items-center justify-center">
@@ -202,7 +412,7 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
     );
   }
 
-  if (threads.length === 0) {
+  if (threads.length === 0 && !isDoctor) {
     return (
       <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-white px-6 py-12 text-center">
         <MessageCircle className="mx-auto size-10 text-[#9A9A9A]" strokeWidth={1.5} />
@@ -210,134 +420,78 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
           No chats yet
         </p>
         <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-          {basePath === "/patient/chat"
-            ? "Chats open after you complete an appointment with a doctor."
-            : "Patients who message you will appear here."}
+          Chats open after you complete an appointment with a doctor.
         </p>
       </div>
     );
   }
 
-  async function handleHideConversation() {
-    if (!hideTarget || hideTarget.id.startsWith("pending-") || hidingConversation) {
-      return;
-    }
-    setHidingConversation(true);
-    try {
-      const res = await fetch(
-        `/api/chat/threads/${encodeURIComponent(hideTarget.id)}/hide`,
-        { method: "POST" },
-      );
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string };
-        throw new Error(data?.error ?? "Failed to delete conversation");
-      }
-      setThreads((prev) => prev.filter((t) => t.id !== hideTarget.id));
-      setHideTarget(null);
-    } catch {
-      // best-effort; list refresh on next load
-      setHideTarget(null);
-    } finally {
-      setHidingConversation(false);
-    }
-  }
-
   return (
     <>
-    <ul className="space-y-2">
-      {threads.map((thread) => {
-        const timeLabel = formatListMessageTime(thread.lastMessageAt);
-        const canHide = thread.isReady && !thread.id.startsWith("pending-");
-        return (
-          <li key={thread.appointmentId} className="relative">
-            <Link
-              href={`${basePath}/${encodeURIComponent(thread.appointmentId)}`}
-              className="flex items-center gap-3 rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 pr-10 transition-colors hover:bg-[#fafcff]"
-            >
-              {thread.peerPhotoUrl ? (
-                <Image
-                  src={thread.peerPhotoUrl}
-                  alt=""
-                  width={44}
-                  height={44}
-                  className="size-11 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-[#f5f8ff] font-montserrat text-sm font-semibold text-[#2555F3]">
-                  {thread.peerName.charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate font-montserrat text-sm font-semibold text-[#333333]">
-                    {thread.peerName}
-                  </p>
-                  <div className="flex shrink-0 items-center gap-1.5">
-                    {timeLabel && (
-                      <span className="font-montserrat text-[10px] text-[#9A9A9A]">
-                        {timeLabel}
-                      </span>
-                    )}
-                    {thread.unreadCount > 0 && (
-                      <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#2555F3] px-1.5 py-0.5 text-[11px] font-semibold text-white">
-                        {thread.unreadCount > 99 ? "99+" : thread.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {thread.peerSubtitle && (
-                  <p className="truncate font-montserrat text-xs text-[#9A9A9A]">
-                    {thread.peerSubtitle}
-                  </p>
-                )}
-                {thread.lastMessagePreview ? (
-                  <p className="mt-0.5 truncate font-montserrat text-xs text-[#5E5E5E]">
-                    {thread.lastMessagePreview}
-                  </p>
-                ) : (
-                  <p className="mt-0.5 font-montserrat text-xs text-[#9A9A9A]">
-                    {thread.isReady ? "Start a conversation" : "Setting up chat…"}
-                  </p>
-                )}
-                {thread.isReadOnly && (
-                  <p className="mt-0.5 font-montserrat text-[10px] text-[#9A9A9A]">
-                    Read-only
-                  </p>
-                )}
-              </div>
-            </Link>
-            {canHide && (
-              <button
-                type="button"
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f0f0f0]"
-                aria-label="Delete conversation"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setHideTarget(thread);
-                }}
-              >
-                <MoreVertical className="size-4" />
-              </button>
-            )}
-          </li>
-        );
-      })}
-      {hasMore && (
-        <li ref={infiniteRef} className="flex justify-center py-4">
-          {loadingMore && (
-            <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
-          )}
-        </li>
+      {threads.length === 0 && isDoctor && (
+        <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-white px-6 py-8 text-center">
+          <MessageCircle className="mx-auto size-10 text-[#9A9A9A]" strokeWidth={1.5} />
+          <p className="mt-3 font-montserrat text-sm font-medium text-[#333333]">
+            No active chats
+          </p>
+          <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+            Patients who message you will appear here.
+          </p>
+        </div>
       )}
-    </ul>
-    <DeleteConversationDialog
-      open={hideTarget !== null}
-      onClose={() => {
-        if (!hidingConversation) setHideTarget(null);
-      }}
-      onConfirm={handleHideConversation}
-    />
+
+      {threads.length > 0 && (
+        <ul className="space-y-2">
+          {threads.map((thread) => renderThreadRow(thread))}
+          {hasMore && (
+            <li ref={infiniteRef} className="flex justify-center py-4">
+              {loadingMore && (
+                <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
+              )}
+            </li>
+          )}
+        </ul>
+      )}
+
+      {isDoctor && (
+        <div className="mt-4 border-t border-[#e5e5e5] pt-4">
+          <button
+            type="button"
+            onClick={() => void toggleArchivedSection()}
+            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-2.5 font-montserrat text-sm font-medium text-[#5E5E5E] transition-colors hover:bg-[#f0f0f0]"
+          >
+            <Archive className="size-4" />
+            {showArchivedSection ? "Hide archived" : "View archived"}
+          </button>
+
+          {showArchivedSection && (
+            <div className="mt-3">
+              {archivedLoading ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="size-6 animate-spin text-[#2555F3]" />
+                </div>
+              ) : archivedThreads.length === 0 ? (
+                <p className="py-4 text-center font-montserrat text-sm text-[#9A9A9A]">
+                  No archived conversations
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {archivedThreads.map((thread) => renderThreadRow(thread, true))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <DeleteConversationDialog
+        open={actionTarget !== null}
+        mode={isDoctor ? "archive" : "delete"}
+        onClose={() => {
+          if (!actionPending) setActionTarget(null);
+        }}
+        onConfirm={isDoctor ? handleArchiveConversation : handleHideConversation}
+      />
     </>
   );
 }

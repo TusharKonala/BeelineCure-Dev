@@ -8,15 +8,18 @@ type DeleteConversationDialogProps = {
   open: boolean;
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
+  mode?: "delete" | "archive";
 };
 
 export function DeleteConversationDialog({
   open,
   onClose,
   onConfirm,
+  mode = "delete",
 }: DeleteConversationDialogProps) {
   const [mounted, setMounted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const isArchive = mode === "archive";
 
   useEffect(() => {
     setMounted(true);
@@ -68,11 +71,12 @@ export function DeleteConversationDialog({
           id="delete-conversation-title"
           className="font-montserrat text-base font-semibold text-[#333333]"
         >
-          Delete conversation?
+          {isArchive ? "Archive conversation?" : "Delete conversation?"}
         </h2>
         <p className="mt-2 font-montserrat text-sm text-[#5E5E5E]">
-          This conversation will be removed from your chat list. The other person
-          will not be notified.
+          {isArchive
+            ? "This will move the conversation to your archived section. You can restore it anytime."
+            : "This will remove the conversation from your chat list. The doctor will not be notified."}
         </p>
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -87,10 +91,14 @@ export function DeleteConversationDialog({
             type="button"
             disabled={submitting}
             onClick={() => void handleConfirm()}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#b42318] px-4 py-2 font-montserrat text-sm font-medium text-white hover:bg-[#912018] disabled:cursor-not-allowed disabled:opacity-50"
+            className={`inline-flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2 font-montserrat text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${
+              isArchive
+                ? "bg-[#2555F3] hover:bg-[#1e44c7]"
+                : "bg-[#b42318] hover:bg-[#912018]"
+            }`}
           >
             {submitting && <Loader2 className="size-4 animate-spin" />}
-            Delete
+            {isArchive ? "Archive" : "Delete"}
           </button>
         </div>
       </div>
