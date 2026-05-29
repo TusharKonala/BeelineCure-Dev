@@ -40,6 +40,15 @@ type ChatMessage = {
   isDeletedForEveryone?: boolean;
 };
 
+function canDeleteMessage(m: ChatMessage) {
+  return (
+    m.isOwn &&
+    m.status !== "pending" &&
+    m.status !== "failed" &&
+    !m.isDeletedForEveryone
+  );
+}
+
 type DeleteMenuTarget = {
   messageId: string;
   createdAt: string;
@@ -801,7 +810,7 @@ export function ChatThreadView({
               imageLoadFailed={imageLoadFailed}
               setImageLoadFailed={setImageLoadFailed}
               onOpenDeleteMenu={(coords) => {
-                if (!m.isOwn || m.status !== "sent" || m.isDeletedForEveryone) return;
+                if (!canDeleteMessage(m)) return;
                 setDeleteMenuTarget({
                   messageId: m.id,
                   createdAt: m.createdAt,
@@ -942,8 +951,7 @@ function ChatMessageBubble({
 }: ChatMessageBubbleProps) {
   const messageKey = m.clientId ?? m.id;
   const imageFailed = imageLoadFailed.has(messageKey);
-  const canOpenDelete =
-    m.isOwn && m.status === "sent" && !m.isDeletedForEveryone;
+  const canOpenDelete = canDeleteMessage(m);
 
   const longPress = useLongPress((coords) => {
     if (canOpenDelete) onOpenDeleteMenu(coords);
