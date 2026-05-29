@@ -498,6 +498,36 @@ export async function hideConversationForUser(
   });
 }
 
+export async function archiveConversationForDoctor(
+  conversationId: string,
+  userId: string,
+  role: UserRole,
+) {
+  const conversation = await assertConversationAccess(conversationId, userId, role);
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { isArchivedByDoctor: true },
+  });
+}
+
+export async function unarchiveConversationForDoctor(
+  conversationId: string,
+  userId: string,
+  role: UserRole,
+) {
+  const conversation = await assertConversationAccess(conversationId, userId, role);
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { isArchivedByDoctor: false },
+  });
+}
+
 export type DeleteMessageScope = "everyone" | "me";
 
 export async function deleteChatMessage(params: {
