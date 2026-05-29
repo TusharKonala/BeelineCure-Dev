@@ -1,11 +1,15 @@
 import { getServerSession } from "next-auth/next";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { Container } from "@/components/layout/Container";
 import { ChatThreadView } from "@/components/chat/ChatThreadView";
 
 type PageProps = {
   params: Promise<{ appointmentId: string }>;
 };
+
+const chatHeightClass =
+  "h-[calc(100dvh-10rem)] md:h-[calc(100dvh-11rem)] lg:h-[calc(100dvh-9.5rem)] w-full";
 
 export default async function PatientChatThreadPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
@@ -16,15 +20,15 @@ export default async function PatientChatThreadPage({ params }: PageProps) {
   const { appointmentId } = await params;
 
   return (
-    <div className="flex h-[calc(100dvh-5rem)] w-full flex-col overflow-hidden bg-[#fafafa] px-3 pt-3 -mb-8 sm:px-4 sm:pt-4 lg:-mb-8 lg:h-[calc(100dvh-3.5rem)] lg:px-5 lg:pt-5">
-      <div className="flex h-full min-h-0 w-full flex-col">
+    <div className="w-full bg-[#fafafa] py-6 md:py-8">
+      <Container>
         <ChatThreadView
           appointmentId={appointmentId}
           backHref="/patient/chat"
           backLabel="All chats"
-          className="h-full w-full"
+          className={chatHeightClass}
         />
-      </div>
+      </Container>
     </div>
   );
 }
