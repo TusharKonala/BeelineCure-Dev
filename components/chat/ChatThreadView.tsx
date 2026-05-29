@@ -411,25 +411,38 @@ export function ChatThreadView({
   const handleHideConversation = useCallback(async () => {
     const convId = conversationIdRef.current;
     if (!convId || hidingConversation) return;
+    const isDoctor = session?.user?.role === "DOCTOR";
     setHidingConversation(true);
     try {
+      const endpoint = isDoctor ? "archive" : "hide";
       const res = await fetch(
-        `/api/chat/threads/${encodeURIComponent(convId)}/hide`,
+        `/api/chat/threads/${encodeURIComponent(convId)}/${endpoint}`,
         { method: "POST" },
       );
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string };
-        throw new Error(data?.error ?? "Failed to delete conversation");
+        throw new Error(
+          data?.error ??
+            (isDoctor
+              ? "Failed to archive conversation"
+              : "Failed to delete conversation"),
+        );
       }
       setShowDeleteConversation(false);
       router.push(backHref);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete conversation");
+      setError(
+        err instanceof Error
+          ? err.message
+          : session?.user?.role === "DOCTOR"
+            ? "Failed to archive conversation"
+            : "Failed to delete conversation",
+      );
       setShowDeleteConversation(false);
     } finally {
       setHidingConversation(false);
     }
-  }, [backHref, hidingConversation, router]);
+  }, [backHref, hidingConversation, router, session?.user?.role]);
 
   /** Clears staged composer images without revoking URLs (ownership moves to sent bubbles). */
   const clearAllSelectedImages = useCallback(() => {
@@ -760,7 +773,11 @@ export function ChatThreadView({
             type="button"
             onClick={() => setShowDeleteConversation(true)}
             className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f5f5f5]"
-            aria-label="Conversation options"
+            aria-label={
+              session?.user?.role === "DOCTOR"
+                ? "Archive conversation"
+                : "Delete conversation"
+            }
           >
             <MoreVertical className="size-4" />
           </button>
@@ -927,6 +944,7 @@ export function ChatThreadView({
 
       <DeleteConversationDialog
         open={showDeleteConversation}
+        mode={session?.user?.role === "DOCTOR" ? "archive" : "delete"}
         onClose={() => {
           if (!hidingConversation) setShowDeleteConversation(false);
         }}
