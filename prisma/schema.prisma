@@ -333,6 +333,7 @@ model ChatConversation {
   completedAt           DateTime
   lockedAt              DateTime?
   hiddenFor             String[]  @default([])
+  isArchivedByDoctor    Boolean   @default(false)
   createdAt             DateTime  @default(now())
 
   messages   ChatMessage[]
