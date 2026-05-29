@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, MoreVertical } from "lucide-react";
 import type { ChatInboxUpdatePayload } from "@/lib/chat-realtime-types";
+import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
 import { formatListMessageTime } from "@/components/chat/format-chat-time";
 import { subscribeChatInbox } from "@/components/chat/chat-inbox-bus";
 import { refreshUnreadFromServer } from "@/components/chat/useChatInboxPusher";
@@ -79,6 +80,8 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [hideTarget, setHideTarget] = useState<ChatThread | null>(null);
+  const [hidingConversation, setHidingConversation] = useState(false);
 
   const handleInboxUpdate = useCallback((payload: ChatInboxUpdatePayload) => {
     setThreads((prev) => {
@@ -215,15 +218,41 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
     );
   }
 
+  async function handleHideConversation() {
+    if (!hideTarget || hideTarget.id.startsWith("pending-") || hidingConversation) {
+      return;
+    }
+    setHidingConversation(true);
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(hideTarget.id)}/hide`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        throw new Error(data?.error ?? "Failed to delete conversation");
+      }
+      setThreads((prev) => prev.filter((t) => t.id !== hideTarget.id));
+      setHideTarget(null);
+    } catch {
+      // best-effort; list refresh on next load
+      setHideTarget(null);
+    } finally {
+      setHidingConversation(false);
+    }
+  }
+
   return (
+    <>
     <ul className="space-y-2">
       {threads.map((thread) => {
         const timeLabel = formatListMessageTime(thread.lastMessageAt);
+        const canHide = thread.isReady && !thread.id.startsWith("pending-");
         return (
-          <li key={thread.appointmentId}>
+          <li key={thread.appointmentId} className="relative">
             <Link
               href={`${basePath}/${encodeURIComponent(thread.appointmentId)}`}
-              className="flex items-center gap-3 rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 transition-colors hover:bg-[#fafcff]"
+              className="flex items-center gap-3 rounded-xl border border-[#e5e5e5] bg-white px-4 py-3 pr-10 transition-colors hover:bg-[#fafcff]"
             >
               {thread.peerPhotoUrl ? (
                 <Image
@@ -277,6 +306,20 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
                 )}
               </div>
             </Link>
+            {canHide && (
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f0f0f0]"
+                aria-label="Delete conversation"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setHideTarget(thread);
+                }}
+              >
+                <MoreVertical className="size-4" />
+              </button>
+            )}
           </li>
         );
       })}
@@ -288,5 +331,13 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
         </li>
       )}
     </ul>
+    <DeleteConversationDialog
+      open={hideTarget !== null}
+      onClose={() => {
+        if (!hidingConversation) setHideTarget(null);
+      }}
+      onConfirm={handleHideConversation}
+    />
+    </>
   );
 }

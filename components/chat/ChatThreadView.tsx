@@ -7,13 +7,22 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type Dispatch,
+  type MouseEvent,
+  type SetStateAction,
 } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Pusher from "pusher-js";
-import { ImageIcon, Loader2, Send, X } from "lucide-react";
+import { ImageIcon, Loader2, MoreVertical, Send, X } from "lucide-react";
+import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
+import { MessageDeleteMenu } from "@/components/chat/MessageDeleteMenu";
 import { formatMessageTime } from "@/components/chat/format-chat-time";
+import { useLongPress } from "@/components/chat/useLongPress";
 import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
+
+const DELETED_MESSAGE_PLACEHOLDER = "This message was deleted";
 
 const SCROLL_NEAR_BOTTOM_PX = 80;
 
@@ -27,6 +36,15 @@ type ChatMessage = {
   createdAt: string;
   status?: "pending" | "sent" | "failed";
   messageType?: string;
+  localImageUrl?: string;
+  isDeletedForEveryone?: boolean;
+};
+
+type DeleteMenuTarget = {
+  messageId: string;
+  createdAt: string;
+  anchorX: number;
+  anchorY: number;
   localImageUrl?: string;
 };
 
@@ -61,6 +79,7 @@ export function ChatThreadView({
   backLabel = "Back to chat",
   className = "",
 }: ChatThreadViewProps) {
+  const router = useRouter();
   const { data: session, status } = useSession();
   const [thread, setThread] = useState<ThreadMeta | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -74,6 +93,11 @@ export function ChatThreadView({
   const [selectionError, setSelectionError] = useState<string | null>(null);
   const [imageLoadFailed, setImageLoadFailed] = useState<Set<string>>(() => new Set());
   const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([]);
+  const [deleteMenuTarget, setDeleteMenuTarget] = useState<DeleteMenuTarget | null>(
+    null,
+  );
+  const [showDeleteConversation, setShowDeleteConversation] = useState(false);
+  const [hidingConversation, setHidingConversation] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -310,14 +334,93 @@ export function ChatThreadView({
       }
     };
 
+    const onMessageDeleted = (payload: {
+      id: string;
+      isDeletedForEveryone: boolean;
+    }) => {
+      if (!payload.isDeletedForEveryone) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === payload.id
+            ? { ...m, isDeletedForEveryone: true, body: "" }
+            : m,
+        ),
+      );
+    };
+
     channel.bind("new-message", onNewMessage);
+    channel.bind("message-deleted", onMessageDeleted);
 
     return () => {
       channel.unbind("new-message", onNewMessage);
+      channel.unbind("message-deleted", onMessageDeleted);
       pusher.unsubscribe(`conversation-${conversationId}`);
       pusher.disconnect();
     };
   }, [thread?.id, session?.user?.id, syncUnreadBadge, scrollToBottom]);
+
+  const handleDeleteMessage = useCallback(
+    async (scope: "everyone" | "me") => {
+      const convId = conversationIdRef.current;
+      const target = deleteMenuTarget;
+      if (!convId || !target) return;
+
+      try {
+        const res = await fetch(
+          `/api/chat/threads/${encodeURIComponent(convId)}/messages/${encodeURIComponent(target.messageId)}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scope }),
+          },
+        );
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string };
+          throw new Error(data?.error ?? "Failed to delete message");
+        }
+
+        if (scope === "me") {
+          if (target.localImageUrl) URL.revokeObjectURL(target.localImageUrl);
+          setMessages((prev) => prev.filter((m) => m.id !== target.messageId));
+        } else {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === target.messageId
+                ? { ...m, isDeletedForEveryone: true, body: "" }
+                : m,
+            ),
+          );
+        }
+        setDeleteMenuTarget(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to delete message");
+      }
+    },
+    [deleteMenuTarget],
+  );
+
+  const handleHideConversation = useCallback(async () => {
+    const convId = conversationIdRef.current;
+    if (!convId || hidingConversation) return;
+    setHidingConversation(true);
+    try {
+      const res = await fetch(
+        `/api/chat/threads/${encodeURIComponent(convId)}/hide`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string };
+        throw new Error(data?.error ?? "Failed to delete conversation");
+      }
+      setShowDeleteConversation(false);
+      router.push(backHref);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete conversation");
+      setShowDeleteConversation(false);
+    } finally {
+      setHidingConversation(false);
+    }
+  }, [backHref, hidingConversation, router]);
 
   /** Clears staged composer images without revoking URLs (ownership moves to sent bubbles). */
   const clearAllSelectedImages = useCallback(() => {
@@ -643,6 +746,16 @@ export function ChatThreadView({
         <h1 className="flex-1 truncate font-montserrat text-sm font-semibold text-[#333333]">
           {thread?.peerName}
         </h1>
+        {thread && (
+          <button
+            type="button"
+            onClick={() => setShowDeleteConversation(true)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f5f5f5]"
+            aria-label="Conversation options"
+          >
+            <MoreVertical className="size-4" />
+          </button>
+        )}
       </div>
 
       {thread?.isReadOnly && (
@@ -681,71 +794,24 @@ export function ChatThreadView({
               No messages yet. Say hello to start the conversation.
             </p>
           )}
-          {messages.map((m) => {
-            const messageKey = m.clientId ?? m.id;
-            const imageFailed = imageLoadFailed.has(messageKey);
-            return (
-            <div
-              key={messageKey}
-              className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
-                  m.isOwn
-                    ? `bg-[#2555F3] text-white${m.status === "pending" ? " opacity-80" : ""}`
-                    : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
-                }`}
-              >
-                {m.messageType === "image" ? (
-                  <>
-                    {!imageFailed ? (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img
-                        src={
-                          m.localImageUrl
-                            ? m.localImageUrl
-                            : `/api/chat/image/${m.id}`
-                        }
-                        alt="Shared image"
-                        className="max-h-64 w-auto rounded-xl object-contain"
-                        onError={() => {
-                          setImageLoadFailed((prev) => {
-                            if (prev.has(messageKey)) return prev;
-                            const next = new Set(prev);
-                            next.add(messageKey);
-                            return next;
-                          });
-                        }}
-                        onLoad={() => {
-                          setImageLoadFailed((prev) => {
-                            if (!prev.has(messageKey)) return prev;
-                            const next = new Set(prev);
-                            next.delete(messageKey);
-                            return next;
-                          });
-                        }}
-                      />
-                    ) : (
-                      <p className="italic opacity-70">Image failed to load</p>
-                    )}
-                    {m.body.trim() && (
-                      <p className="mt-2 whitespace-pre-wrap wrap-break-word">{m.body}</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
-                )}
-                <p
-                  className={`mt-1 text-[10px] ${
-                    m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
-                  }`}
-                >
-                  {formatMessageTime(m.createdAt)}
-                </p>
-              </div>
-            </div>
-            );
-          })}
+          {messages.map((m) => (
+            <ChatMessageBubble
+              key={m.clientId ?? m.id}
+              message={m}
+              imageLoadFailed={imageLoadFailed}
+              setImageLoadFailed={setImageLoadFailed}
+              onOpenDeleteMenu={(coords) => {
+                if (!m.isOwn || m.status !== "sent" || m.isDeletedForEveryone) return;
+                setDeleteMenuTarget({
+                  messageId: m.id,
+                  createdAt: m.createdAt,
+                  anchorX: coords.clientX,
+                  anchorY: coords.clientY,
+                  localImageUrl: m.localImageUrl,
+                });
+              }}
+            />
+          ))}
           <div ref={bottomRef} />
         </div>
 
@@ -838,6 +904,125 @@ export function ChatThreadView({
         </button>
         </div>
       </form>
+
+      {deleteMenuTarget && (
+        <MessageDeleteMenu
+          anchorX={deleteMenuTarget.anchorX}
+          anchorY={deleteMenuTarget.anchorY}
+          messageCreatedAt={deleteMenuTarget.createdAt}
+          onDeleteForEveryone={() => void handleDeleteMessage("everyone")}
+          onDeleteForMe={() => void handleDeleteMessage("me")}
+          onClose={() => setDeleteMenuTarget(null)}
+        />
+      )}
+
+      <DeleteConversationDialog
+        open={showDeleteConversation}
+        onClose={() => {
+          if (!hidingConversation) setShowDeleteConversation(false);
+        }}
+        onConfirm={handleHideConversation}
+      />
+    </div>
+  );
+}
+
+type ChatMessageBubbleProps = {
+  message: ChatMessage;
+  imageLoadFailed: Set<string>;
+  setImageLoadFailed: Dispatch<SetStateAction<Set<string>>>;
+  onOpenDeleteMenu: (coords: { clientX: number; clientY: number }) => void;
+};
+
+function ChatMessageBubble({
+  message: m,
+  imageLoadFailed,
+  setImageLoadFailed,
+  onOpenDeleteMenu,
+}: ChatMessageBubbleProps) {
+  const messageKey = m.clientId ?? m.id;
+  const imageFailed = imageLoadFailed.has(messageKey);
+  const canOpenDelete =
+    m.isOwn && m.status === "sent" && !m.isDeletedForEveryone;
+
+  const longPress = useLongPress((coords) => {
+    if (canOpenDelete) onOpenDeleteMenu(coords);
+  });
+
+  return (
+    <div
+      className={`flex ${m.isOwn ? "justify-end pr-4" : "justify-start pl-4"}`}
+    >
+      <div
+        className={`max-w-[85%] rounded-2xl px-4 py-2 font-montserrat text-sm lg:max-w-[min(75%,42rem)] ${
+          m.isOwn
+            ? `bg-[#2555F3] text-white${m.status === "pending" ? " opacity-80" : ""}`
+            : "border border-[#e5e5e5] bg-[#fafafa] text-[#333333]"
+        } ${canOpenDelete ? "select-none" : ""}`}
+        {...(canOpenDelete
+          ? {
+              ...longPress.pointerHandlers,
+              ...longPress.touchHandlers,
+              onContextMenu: (e: MouseEvent) => {
+                if (!canOpenDelete) return;
+                longPress.contextMenuHandler(e);
+              },
+            }
+          : {})}
+      >
+        {m.isDeletedForEveryone ? (
+          <p
+            className={`italic ${m.isOwn ? "text-white/80" : "text-[#9A9A9A]"}`}
+          >
+            {DELETED_MESSAGE_PLACEHOLDER}
+          </p>
+        ) : m.messageType === "image" ? (
+                  <>
+                    {!imageFailed ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={
+                          m.localImageUrl
+                            ? m.localImageUrl
+                            : `/api/chat/image/${m.id}`
+                        }
+                        alt="Shared image"
+                        className="max-h-64 w-auto rounded-xl object-contain"
+                        onError={() => {
+                          setImageLoadFailed((prev) => {
+                            if (prev.has(messageKey)) return prev;
+                            const next = new Set(prev);
+                            next.add(messageKey);
+                            return next;
+                          });
+                        }}
+                        onLoad={() => {
+                          setImageLoadFailed((prev) => {
+                            if (!prev.has(messageKey)) return prev;
+                            const next = new Set(prev);
+                            next.delete(messageKey);
+                            return next;
+                          });
+                        }}
+                      />
+                    ) : (
+                      <p className="italic opacity-70">Image failed to load</p>
+                    )}
+                    {m.body.trim() && (
+                      <p className="mt-2 whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
+                )}
+        <p
+          className={`mt-1 text-[10px] ${
+            m.isOwn ? "text-white/80" : "text-[#9A9A9A]"
+          }`}
+        >
+          {formatMessageTime(m.createdAt)}
+        </p>
+      </div>
     </div>
   );
 }
