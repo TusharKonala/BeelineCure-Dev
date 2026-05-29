@@ -756,7 +756,7 @@ export function ChatThreadView({
 
   return (
     <div
-      className={`flex h-full w-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-sm ${className}`}
+      className={`flex w-full min-h-0 flex-col overflow-hidden rounded-xl border border-[#e5e5e5] bg-white shadow-sm ${className}`}
     >
       <div className="flex shrink-0 items-center gap-3 border-b border-[#e5e5e5] px-4 py-3">
         <Link
