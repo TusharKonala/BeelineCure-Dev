@@ -361,7 +361,7 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
                 {thread.peerName}
               </p>
               <div className="flex shrink-0 items-center gap-1.5">
-                {timeLabel && (
+                {timeLabel && !archived && (
                   <span className="font-montserrat text-[10px] text-[#9A9A9A]">
                     {timeLabel}
                   </span>
@@ -409,18 +409,25 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
           </button>
         )}
         {canManage && archived && (
-          <button
-            type="button"
-            disabled={actionPending}
-            className="absolute right-2 bottom-3 cursor-pointer rounded-lg border border-[#e5e5e5] px-2.5 py-1 font-montserrat text-[11px] font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              void handleUnarchiveConversation(thread);
-            }}
-          >
-            Unarchive
-          </button>
+          <div className="absolute right-2 top-3 flex flex-col items-end gap-2">
+            {timeLabel && (
+              <span className="font-montserrat text-[10px] text-[#9A9A9A]">
+                {timeLabel}
+              </span>
+            )}
+            <button
+              type="button"
+              disabled={actionPending}
+              className="cursor-pointer rounded-lg border border-[#e5e5e5] px-2.5 py-1 font-montserrat text-[11px] font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleUnarchiveConversation(thread);
+              }}
+            >
+              Unarchive
+            </button>
+          </div>
         )}
       </li>
     );
