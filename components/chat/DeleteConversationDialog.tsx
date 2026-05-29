@@ -52,7 +52,7 @@ export function DeleteConversationDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 bg-black/40"
+        className="absolute inset-0 cursor-pointer bg-black/40"
         aria-label="Close"
         onClick={() => {
           if (!submitting) onClose();
@@ -79,7 +79,7 @@ export function DeleteConversationDialog({
             type="button"
             disabled={submitting}
             onClick={onClose}
-            className="rounded-lg border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:opacity-50"
+            className="cursor-pointer rounded-lg border border-[#e5e5e5] px-4 py-2 font-montserrat text-sm font-medium text-[#333333] hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel
           </button>
@@ -87,7 +87,7 @@ export function DeleteConversationDialog({
             type="button"
             disabled={submitting}
             onClick={() => void handleConfirm()}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#b42318] px-4 py-2 font-montserrat text-sm font-medium text-white hover:bg-[#912018] disabled:opacity-50"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#b42318] px-4 py-2 font-montserrat text-sm font-medium text-white hover:bg-[#912018] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting && <Loader2 className="size-4 animate-spin" />}
             Delete

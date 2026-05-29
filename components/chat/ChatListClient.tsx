@@ -309,7 +309,7 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
             {canHide && (
               <button
                 type="button"
-                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f0f0f0]"
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f0f0f0]"
                 aria-label="Delete conversation"
                 onClick={(e) => {
                   e.preventDefault();

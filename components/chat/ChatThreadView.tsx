@@ -750,7 +750,7 @@ export function ChatThreadView({
           <button
             type="button"
             onClick={() => setShowDeleteConversation(true)}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f5f5f5]"
+            className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[#5E5E5E] hover:bg-[#f5f5f5]"
             aria-label="Conversation options"
           >
             <MoreVertical className="size-4" />
