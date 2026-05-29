@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import useInfiniteScroll from "react-infinite-scroll-hook";
-import { Archive, Loader2, MessageCircle, MoreVertical } from "lucide-react";
+import { Loader2, MessageCircle, MoreVertical } from "lucide-react";
 import type { ChatInboxUpdatePayload } from "@/lib/chat-realtime-types";
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
 import { formatListMessageTime } from "@/components/chat/format-chat-time";
@@ -29,6 +29,8 @@ type ChatThread = {
 type ChatListClientProps = {
   basePath: "/patient/chat" | "/doctor/chat";
 };
+
+type DoctorListTab = "active" | "archived";
 
 const PAGE_SIZE = 5;
 
@@ -85,9 +87,12 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [actionTarget, setActionTarget] = useState<ChatThread | null>(null);
   const [actionPending, setActionPending] = useState(false);
-  const [showArchivedSection, setShowArchivedSection] = useState(false);
+  const [doctorTab, setDoctorTab] = useState<DoctorListTab>("active");
   const [archivedLoaded, setArchivedLoaded] = useState(false);
+  const [archivedNextCursor, setArchivedNextCursor] = useState<string | null>(null);
+  const [archivedHasMore, setArchivedHasMore] = useState(false);
   const [archivedLoading, setArchivedLoading] = useState(false);
+  const [archivedLoadingMore, setArchivedLoadingMore] = useState(false);
 
   const handleInboxUpdate = useCallback((payload: ChatInboxUpdatePayload) => {
     setThreads((prev) => {
@@ -127,58 +132,63 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
   }, []);
 
   const fetchThreads = useCallback(
-    async (cursor: string | null, append: boolean) => {
+    async (cursor: string | null, append: boolean, archived = false) => {
+      if (archived && !append) setArchivedLoading(true);
+
       const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (cursor) params.set("cursor", cursor);
+      if (archived) params.set("archived", "true");
 
-      const res = await fetch(`/api/chat/threads?${params}`, { cache: "no-store" });
-      if (!res.ok) return null;
+      try {
+        const res = await fetch(`/api/chat/threads?${params}`, { cache: "no-store" });
+        if (!res.ok) return null;
 
-      const data = (await res.json()) as {
-        threads?: ChatThread[];
-        nextCursor?: string | null;
-      };
-      const list = Array.isArray(data.threads) ? data.threads : [];
-      const next = data.nextCursor ?? null;
+        const data = (await res.json()) as {
+          threads?: ChatThread[];
+          nextCursor?: string | null;
+        };
+        const list = Array.isArray(data.threads) ? data.threads : [];
+        const next = data.nextCursor ?? null;
 
-      if (append) {
-        setThreads((prev) => {
-          const seen = new Set(prev.map((t) => t.appointmentId));
-          const merged = sortThreadsByActivity([
-            ...prev,
-            ...list.filter((t) => !seen.has(t.appointmentId)),
-          ]);
-          return merged;
-        });
-      } else {
-        setThreads(sortThreadsByActivity(list));
+        if (archived) {
+          if (append) {
+            setArchivedThreads((prev) => {
+              const seen = new Set(prev.map((t) => t.appointmentId));
+              return sortThreadsByActivity([
+                ...prev,
+                ...list.filter((t) => !seen.has(t.appointmentId)),
+              ]);
+            });
+          } else {
+            setArchivedThreads(sortThreadsByActivity(list));
+          }
+          setArchivedNextCursor(next);
+          setArchivedHasMore(Boolean(next));
+          setArchivedLoaded(true);
+        } else {
+          if (append) {
+            setThreads((prev) => {
+              const seen = new Set(prev.map((t) => t.appointmentId));
+              return sortThreadsByActivity([
+                ...prev,
+                ...list.filter((t) => !seen.has(t.appointmentId)),
+              ]);
+            });
+          } else {
+            setThreads(sortThreadsByActivity(list));
+          }
+          setNextCursor(next);
+          setHasMore(Boolean(next));
+          void fetchGlobalUnread();
+        }
+
+        return list;
+      } finally {
+        if (archived && !append) setArchivedLoading(false);
       }
-
-      setNextCursor(next);
-      setHasMore(Boolean(next));
-      void fetchGlobalUnread();
-      return list;
     },
     [fetchGlobalUnread],
   );
-
-  const fetchArchivedThreads = useCallback(async () => {
-    setArchivedLoading(true);
-    try {
-      const params = new URLSearchParams({
-        limit: String(PAGE_SIZE),
-        archived: "true",
-      });
-      const res = await fetch(`/api/chat/threads?${params}`, { cache: "no-store" });
-      if (!res.ok) return;
-      const data = (await res.json()) as { threads?: ChatThread[] };
-      const list = Array.isArray(data.threads) ? data.threads : [];
-      setArchivedThreads(sortThreadsByActivity(list));
-      setArchivedLoaded(true);
-    } finally {
-      setArchivedLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -205,18 +215,38 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
     if (!hasMore || !nextCursor || loadingMore) return;
     setLoadingMore(true);
     try {
-      await fetchThreads(nextCursor, true);
+      await fetchThreads(nextCursor, true, false);
     } finally {
       setLoadingMore(false);
     }
   }, [hasMore, nextCursor, loadingMore, fetchThreads]);
 
+  const loadMoreArchived = useCallback(async () => {
+    if (!archivedHasMore || !archivedNextCursor || archivedLoadingMore) return;
+    setArchivedLoadingMore(true);
+    try {
+      await fetchThreads(archivedNextCursor, true, true);
+    } finally {
+      setArchivedLoadingMore(false);
+    }
+  }, [archivedHasMore, archivedNextCursor, archivedLoadingMore, fetchThreads]);
+
+  const isArchivedTab = isDoctor && doctorTab === "archived";
+
   const [infiniteRef] = useInfiniteScroll({
-    loading: loadingMore,
-    hasNextPage: hasMore,
-    onLoadMore: loadMore,
-    disabled: loading || !hasMore,
+    loading: isArchivedTab ? archivedLoadingMore : loadingMore,
+    hasNextPage: isArchivedTab ? archivedHasMore : hasMore,
+    onLoadMore: isArchivedTab ? loadMoreArchived : loadMore,
+    disabled:
+      loading || (isArchivedTab ? !archivedHasMore : !hasMore),
   });
+
+  function selectDoctorTab(tab: DoctorListTab) {
+    setDoctorTab(tab);
+    if (tab === "archived" && !archivedLoaded) {
+      void fetchThreads(null, false, true);
+    }
+  }
 
   async function handleHideConversation() {
     if (!actionTarget || actionTarget.id.startsWith("pending-") || actionPending) {
@@ -291,14 +321,6 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
       // best-effort
     } finally {
       setActionPending(false);
-    }
-  }
-
-  async function toggleArchivedSection() {
-    const next = !showArchivedSection;
-    setShowArchivedSection(next);
-    if (next && !archivedLoaded) {
-      await fetchArchivedThreads();
     }
   }
 
@@ -428,60 +450,85 @@ export function ChatListClient({ basePath }: ChatListClientProps) {
 
   return (
     <>
-      {threads.length === 0 && isDoctor && (
-        <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-white px-6 py-8 text-center">
-          <MessageCircle className="mx-auto size-10 text-[#9A9A9A]" strokeWidth={1.5} />
-          <p className="mt-3 font-montserrat text-sm font-medium text-[#333333]">
-            No active chats
-          </p>
-          <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
-            Patients who message you will appear here.
-          </p>
-        </div>
-      )}
-
-      {threads.length > 0 && (
-        <ul className="space-y-2">
-          {threads.map((thread) => renderThreadRow(thread))}
-          {hasMore && (
-            <li ref={infiniteRef} className="flex justify-center py-4">
-              {loadingMore && (
-                <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
-              )}
-            </li>
-          )}
-        </ul>
-      )}
-
       {isDoctor && (
-        <div className="mt-4 border-t border-[#e5e5e5] pt-4">
+        <div className="mb-4 flex gap-2">
           <button
             type="button"
-            onClick={() => void toggleArchivedSection()}
-            className="flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-2.5 font-montserrat text-sm font-medium text-[#5E5E5E] transition-colors hover:bg-[#f0f0f0]"
+            onClick={() => selectDoctorTab("active")}
+            className={`cursor-pointer rounded-xl px-4 py-2 font-montserrat text-sm font-medium transition-colors ${
+              doctorTab === "active"
+                ? "bg-[#2555F3] text-white"
+                : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+            }`}
           >
-            <Archive className="size-4" />
-            {showArchivedSection ? "Hide archived" : "View archived"}
+            Active
           </button>
+          <button
+            type="button"
+            onClick={() => selectDoctorTab("archived")}
+            className={`cursor-pointer rounded-xl px-4 py-2 font-montserrat text-sm font-medium transition-colors ${
+              doctorTab === "archived"
+                ? "bg-[#2555F3] text-white"
+                : "border border-[#e5e5e5] bg-white text-[#333333] hover:bg-[#fafafa]"
+            }`}
+          >
+            Archived
+          </button>
+        </div>
+      )}
 
-          {showArchivedSection && (
-            <div className="mt-3">
-              {archivedLoading ? (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="size-6 animate-spin text-[#2555F3]" />
-                </div>
-              ) : archivedThreads.length === 0 ? (
-                <p className="py-4 text-center font-montserrat text-sm text-[#9A9A9A]">
-                  No archived conversations
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {archivedThreads.map((thread) => renderThreadRow(thread, true))}
-                </ul>
-              )}
+      {(!isDoctor || doctorTab === "active") && (
+        <>
+          {threads.length === 0 && isDoctor && (
+            <div className="rounded-xl border border-dashed border-[#e5e5e5] bg-white px-6 py-8 text-center">
+              <MessageCircle className="mx-auto size-10 text-[#9A9A9A]" strokeWidth={1.5} />
+              <p className="mt-3 font-montserrat text-sm font-medium text-[#333333]">
+                No active chats
+              </p>
+              <p className="mt-1 font-montserrat text-sm text-[#5E5E5E]">
+                Patients who message you will appear here.
+              </p>
             </div>
           )}
-        </div>
+
+          {threads.length > 0 && (
+            <ul className="space-y-2">
+              {threads.map((thread) => renderThreadRow(thread))}
+              {hasMore && (
+                <li ref={infiniteRef} className="flex justify-center py-4">
+                  {loadingMore && (
+                    <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
+                  )}
+                </li>
+              )}
+            </ul>
+          )}
+        </>
+      )}
+
+      {isDoctor && doctorTab === "archived" && (
+        <>
+          {archivedLoading ? (
+            <div className="flex justify-center py-6">
+              <Loader2 className="size-6 animate-spin text-[#2555F3]" />
+            </div>
+          ) : archivedThreads.length === 0 ? (
+            <p className="py-4 text-center font-montserrat text-sm text-[#9A9A9A]">
+              No archived conversations
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {archivedThreads.map((thread) => renderThreadRow(thread, true))}
+              {archivedHasMore && (
+                <li ref={infiniteRef} className="flex justify-center py-4">
+                  {archivedLoadingMore && (
+                    <Loader2 className="size-6 animate-spin text-[#2555F3]" aria-hidden />
+                  )}
+                </li>
+              )}
+            </ul>
+          )}
+        </>
       )}
 
       <DeleteConversationDialog
