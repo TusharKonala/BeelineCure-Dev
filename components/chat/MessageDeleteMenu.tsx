@@ -52,7 +52,7 @@ export function MessageDeleteMenu({
           <button
             type="button"
             role="menuitem"
-            className="block w-full px-4 py-2.5 text-left font-montserrat text-sm text-[#b42318] hover:bg-[#fff1f1]"
+            className="block w-full cursor-pointer px-4 py-2.5 text-left font-montserrat text-sm text-[#b42318] hover:bg-[#fff1f1]"
             onClick={() => {
               onDeleteForEveryone();
               onClose();
@@ -64,7 +64,7 @@ export function MessageDeleteMenu({
         <button
           type="button"
           role="menuitem"
-          className="block w-full px-4 py-2.5 text-left font-montserrat text-sm text-[#333333] hover:bg-[#f5f5f5]"
+          className="block w-full cursor-pointer px-4 py-2.5 text-left font-montserrat text-sm text-[#333333] hover:bg-[#f5f5f5]"
           onClick={() => {
             onDeleteForMe();
             onClose();
