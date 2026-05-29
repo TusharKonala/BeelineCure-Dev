@@ -5,6 +5,8 @@ import { inngest } from "@/inngest/client";
 
 const CHAT_LOCK_MS = 48 * 60 * 60 * 1000;
 const PUSH_DELAY_MS = 30 * 1000;
+export const MESSAGE_DELETE_FOR_EVERYONE_MS = 15 * 60 * 1000;
+export const DELETED_MESSAGE_PREVIEW = "This message was deleted";
 
 export function chatLockAtFromCompletedAt(completedAt: Date): Date {
   return new Date(completedAt.getTime() + CHAT_LOCK_MS);
@@ -160,6 +162,8 @@ export async function getUnreadCountsForUser(
       OR (${email} <> '' AND LOWER(a.email) = ${email})
     )
       AND m."senderUserId" != ${userId}
+      AND m."isDeletedForEveryone" = false
+      AND NOT (${userId} = ANY(m."deletedFor"))
       AND m."createdAt" > COALESCE(rs."lastReadAt", TIMESTAMP '1970-01-01')
     GROUP BY m."conversationId"
   `;
@@ -351,6 +355,7 @@ export type ChatMessageForClient = {
   isOwn: boolean;
   createdAt: string;
   messageType: string;
+  isDeletedForEveryone?: boolean;
 };
 
 export type ChatMessagesPage = {
@@ -368,29 +373,203 @@ const messageListSelect = {
   messageType: true,
   imageKey: true,
   createdAt: true,
+  isDeletedForEveryone: true,
+  deletedFor: true,
 } as const;
 
-function mapDbMessagesToClient(
-  dbMessages: {
-    id: string;
-    senderUserId: string;
-    senderRole: ChatSenderRole;
-    body: string;
-    messageType: string;
-    imageKey: string | null;
-    createdAt: Date;
-  }[],
+type DbMessageRow = {
+  id: string;
+  senderUserId: string;
+  senderRole: ChatSenderRole;
+  body: string;
+  messageType: string;
+  imageKey: string | null;
+  createdAt: Date;
+  isDeletedForEveryone: boolean;
+  deletedFor: string[];
+};
+
+export function canDeleteForEveryone(createdAt: Date): boolean {
+  return Date.now() - createdAt.getTime() <= MESSAGE_DELETE_FOR_EVERYONE_MS;
+}
+
+export function messageHiddenForUser(
+  msg: { deletedFor: string[] },
   userId: string,
-): ChatMessageForClient[] {
-  return [...dbMessages].reverse().map((m) => ({
+): boolean {
+  return msg.deletedFor.includes(userId);
+}
+
+export function deriveLastMessagePreview(message?: {
+  body?: string | null;
+  messageType?: string | null;
+  imageKey?: string | null;
+  isDeletedForEveryone?: boolean;
+}): string | null {
+  if (!message) return null;
+  if (message.isDeletedForEveryone) return DELETED_MESSAGE_PREVIEW;
+  const body = message.body?.trim() ?? "";
+  if (body.length > 0) return body;
+  if (message.imageKey || message.messageType === "image") return "Image";
+  return null;
+}
+
+function mapDbMessageToClient(m: DbMessageRow, userId: string): ChatMessageForClient {
+  return {
     id: m.id,
-    body: m.body,
+    body: m.isDeletedForEveryone ? "" : m.body,
     senderUserId: m.senderUserId,
     senderRole: m.senderRole,
     isOwn: m.senderUserId === userId,
     createdAt: m.createdAt.toISOString(),
     messageType: m.messageType,
-  }));
+    isDeletedForEveryone: m.isDeletedForEveryone,
+  };
+}
+
+function mapDbMessagesToClient(
+  dbMessages: DbMessageRow[],
+  userId: string,
+): ChatMessageForClient[] {
+  return [...dbMessages]
+    .filter((m) => !messageHiddenForUser(m, userId))
+    .reverse()
+    .map((m) => mapDbMessageToClient(m, userId));
+}
+
+function messagesVisibleWhere(userId: string) {
+  return {
+    NOT: { deletedFor: { has: userId } },
+  };
+}
+
+export async function getLastVisibleMessageForPreview(
+  conversationId: string,
+  userId: string,
+) {
+  const rows = await prisma.chatMessage.findMany({
+    where: { conversationId, ...messagesVisibleWhere(userId) },
+    orderBy: { createdAt: "desc" },
+    take: 1,
+    select: {
+      body: true,
+      createdAt: true,
+      messageType: true,
+      imageKey: true,
+      isDeletedForEveryone: true,
+    },
+  });
+  return rows[0] ?? null;
+}
+
+export async function unhideConversationForUser(
+  conversationId: string,
+  userId: string,
+) {
+  const conv = await prisma.chatConversation.findUnique({
+    where: { id: conversationId },
+    select: { hiddenFor: true },
+  });
+  if (!conv?.hiddenFor.includes(userId)) return;
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { hiddenFor: conv.hiddenFor.filter((id) => id !== userId) },
+  });
+}
+
+export async function hideConversationForUser(
+  conversationId: string,
+  userId: string,
+  role: UserRole,
+) {
+  const conversation = await assertConversationAccess(conversationId, userId, role);
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+  const row = await prisma.chatConversation.findUnique({
+    where: { id: conversationId },
+    select: { hiddenFor: true },
+  });
+  if (!row) throw new Error("Conversation not found");
+  if (row.hiddenFor.includes(userId)) return;
+  await prisma.chatConversation.update({
+    where: { id: conversationId },
+    data: { hiddenFor: [...row.hiddenFor, userId] },
+  });
+}
+
+export type DeleteMessageScope = "everyone" | "me";
+
+export async function deleteChatMessage(params: {
+  conversationId: string;
+  messageId: string;
+  userId: string;
+  role: UserRole;
+  scope: DeleteMessageScope;
+}): Promise<{ message: ChatMessageForClient; broadcastEveryone: boolean }> {
+  const message = await prisma.chatMessage.findFirst({
+    where: {
+      id: params.messageId,
+      conversationId: params.conversationId,
+    },
+    select: messageListSelect,
+  });
+
+  if (!message) {
+    throw new Error("Message not found");
+  }
+
+  const conversation = await assertConversationAccess(
+    params.conversationId,
+    params.userId,
+    params.role,
+  );
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
+
+  if (message.senderUserId !== params.userId) {
+    throw new Error("Forbidden");
+  }
+
+  if (messageHiddenForUser(message, params.userId)) {
+    throw new Error("Message not found");
+  }
+
+  if (params.scope === "everyone") {
+    if (message.isDeletedForEveryone) {
+      return {
+        message: mapDbMessageToClient(message, params.userId),
+        broadcastEveryone: false,
+      };
+    }
+    if (!canDeleteForEveryone(message.createdAt)) {
+      throw new Error("Delete for everyone is only available within 15 minutes");
+    }
+    const updated = await prisma.chatMessage.update({
+      where: { id: params.messageId },
+      data: { isDeletedForEveryone: true },
+      select: messageListSelect,
+    });
+    return {
+      message: mapDbMessageToClient(updated, params.userId),
+      broadcastEveryone: true,
+    };
+  }
+
+  if (message.deletedFor.includes(params.userId)) {
+    throw new Error("Message already deleted");
+  }
+
+  await prisma.chatMessage.update({
+    where: { id: params.messageId },
+    data: { deletedFor: [...message.deletedFor, params.userId] },
+  });
+
+  return {
+    message: mapDbMessageToClient(message, params.userId),
+    broadcastEveryone: false,
+  };
 }
 
 /** Latest N messages (desc from DB), returned oldest → newest for the UI. */
@@ -400,7 +579,7 @@ export async function fetchRecentMessagesForConversation(
   limit = CHAT_MESSAGE_PAGE_SIZE,
 ): Promise<ChatMessagesPage> {
   const dbMessages = await prisma.chatMessage.findMany({
-    where: { conversationId },
+    where: { conversationId, ...messagesVisibleWhere(userId) },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     select: messageListSelect,
@@ -423,7 +602,11 @@ export async function fetchOlderMessagesForConversation(
   limit = CHAT_MESSAGE_PAGE_SIZE,
 ): Promise<ChatMessagesPage> {
   const dbMessages = await prisma.chatMessage.findMany({
-    where: { conversationId, createdAt: { lt: before } },
+    where: {
+      conversationId,
+      createdAt: { lt: before },
+      ...messagesVisibleWhere(userId),
+    },
     orderBy: { createdAt: "desc" },
     take: limit + 1,
     select: messageListSelect,
@@ -511,6 +694,15 @@ export async function sendChatMessage(params: {
       createdAt: true,
     },
   });
+
+  const recipientUserId =
+    params.senderRole === ChatSenderRole.DOCTOR
+      ? conversation.patientUserId
+      : conversation.doctorUserId;
+
+  if (recipientUserId && recipientUserId !== params.userId) {
+    await unhideConversationForUser(params.conversationId, recipientUserId);
+  }
 
   return {
     message,

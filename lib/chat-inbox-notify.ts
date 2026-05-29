@@ -1,5 +1,5 @@
 import { ChatSenderRole } from "@/generated/prisma/client";
-import { isChatLocked } from "@/lib/chat";
+import { deriveLastMessagePreview, isChatLocked } from "@/lib/chat";
 import { prisma } from "@/lib/db";
 import type { ChatInboxUpdatePayload } from "@/lib/chat-realtime-types";
 import { triggerChatInboxUpdate } from "@/lib/pusher-server";
@@ -80,9 +80,11 @@ export async function notifyChatInboxAfterMessage(params: {
       conversationId: params.conversationId,
       appointmentId: params.appointmentId,
       lastMessagePreview:
-        params.messageType === "image" && !params.messageBody
-          ? "Image"
-          : params.messageBody,
+        deriveLastMessagePreview({
+          body: params.messageBody,
+          messageType: params.messageType,
+          imageKey: params.messageType === "image" ? "x" : null,
+        }) ?? params.messageBody,
       lastMessageAt,
       senderUserId: params.senderUserId,
       peerName,
