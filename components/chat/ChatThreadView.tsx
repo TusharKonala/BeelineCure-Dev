@@ -829,7 +829,7 @@ export function ChatThreadView({
             <button
               type="button"
               onClick={() => scrollToBottom("smooth")}
-              className="pointer-events-auto rounded-full border border-[#e5e5e5] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] shadow-md transition-colors hover:bg-[#f5f8ff]"
+              className="pointer-events-auto cursor-pointer rounded-full border border-[#e5e5e5] bg-white px-4 py-2 font-montserrat text-sm font-medium text-[#2555F3] shadow-md transition-colors hover:bg-[#f5f8ff]"
             >
               New message ↓
             </button>
