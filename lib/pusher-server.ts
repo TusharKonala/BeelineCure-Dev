@@ -1,10 +1,15 @@
 import Pusher from "pusher";
 import type {
   ChatInboxUpdatePayload,
+  ChatMessageDeletedPayload,
   ChatMessagePushPayload,
 } from "@/lib/chat-realtime-types";
 
-export type { ChatInboxUpdatePayload, ChatMessagePushPayload };
+export type {
+  ChatInboxUpdatePayload,
+  ChatMessageDeletedPayload,
+  ChatMessagePushPayload,
+};
 
 let pusherServer: Pusher | null = null;
 
@@ -43,6 +48,14 @@ export async function triggerNewChatMessage(
 ) {
   const pusher = getPusherServer();
   await pusher.trigger(`conversation-${conversationId}`, "new-message", message);
+}
+
+export async function triggerMessageDeleted(
+  conversationId: string,
+  payload: ChatMessageDeletedPayload,
+) {
+  const pusher = getPusherServer();
+  await pusher.trigger(`conversation-${conversationId}`, "message-deleted", payload);
 }
 
 export async function triggerChatInboxUpdate(

@@ -9,6 +9,11 @@ export type ChatMessagePushPayload = {
   messageType?: string;
 };
 
+export type ChatMessageDeletedPayload = {
+  id: string;
+  isDeletedForEveryone: boolean;
+};
+
 export type ChatInboxUpdatePayload = {
   type: "message" | "thread";
   conversationId: string;
