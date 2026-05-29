@@ -6,7 +6,11 @@ import {
   UserRole,
 } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
-import { getUnreadCountsForUser, isChatLocked } from "@/lib/chat";
+import {
+  deriveLastMessagePreview,
+  getUnreadCountsForUser,
+  isChatLocked,
+} from "@/lib/chat";
 import { prisma } from "@/lib/db";
 
 function parseLimit(raw: string | null): number {
@@ -35,18 +39,6 @@ function sortThreadsByActivity<
   });
 }
 
-function deriveLastMessagePreview(message?: {
-  body?: string | null;
-  messageType?: string | null;
-  imageKey?: string | null;
-}): string | null {
-  if (!message) return null;
-  const body = message.body?.trim() ?? "";
-  if (body.length > 0) return body;
-  if (message.imageKey || message.messageType === "image") return "Image";
-  return null;
-}
-
 export async function GET(request: NextRequest) {
   const session = await getServerSession(authOptions);
   const userId = session?.user?.id;
@@ -67,6 +59,11 @@ export async function GET(request: NextRequest) {
       where: {
         email,
         status: AppointmentStatus.COMPLETED,
+        NOT: {
+          chatConversation: {
+            is: { hiddenFor: { has: userId } },
+          },
+        },
         ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
       orderBy: { createdAt: "desc" },
@@ -87,9 +84,16 @@ export async function GET(request: NextRequest) {
             completedAt: true,
             lockedAt: true,
             messages: {
+              where: { NOT: { deletedFor: { has: userId } } },
               orderBy: { createdAt: "desc" },
               take: 1,
-              select: { body: true, createdAt: true, messageType: true, imageKey: true },
+              select: {
+                body: true,
+                createdAt: true,
+                messageType: true,
+                imageKey: true,
+                isDeletedForEveryone: true,
+              },
             },
           },
         },
@@ -139,6 +143,7 @@ export async function GET(request: NextRequest) {
     const conversations = await prisma.chatConversation.findMany({
       where: {
         doctorUserId: userId,
+        NOT: { hiddenFor: { has: userId } },
         messages: { some: { senderRole: ChatSenderRole.PATIENT } },
         ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
@@ -156,9 +161,16 @@ export async function GET(request: NextRequest) {
           },
         },
         messages: {
+          where: { NOT: { deletedFor: { has: userId } } },
           orderBy: { createdAt: "desc" },
           take: 1,
-          select: { body: true, createdAt: true, messageType: true, imageKey: true },
+          select: {
+            body: true,
+            createdAt: true,
+            messageType: true,
+            imageKey: true,
+            isDeletedForEveryone: true,
+          },
         },
       },
     });
