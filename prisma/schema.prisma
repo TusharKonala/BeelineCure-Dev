@@ -332,6 +332,7 @@ model ChatConversation {
   patientUserId         String?
   completedAt           DateTime
   lockedAt              DateTime?
+  hiddenFor             String[]  @default([])
   createdAt             DateTime  @default(now())
 
   messages   ChatMessage[]
@@ -350,8 +351,10 @@ model ChatMessage {
   senderRole       ChatSenderRole
   body             String         @db.Text
   messageType      String         @default("text")
-  imageKey         String?
-  createdAt        DateTime       @default(now())
+  imageKey               String?
+  isDeletedForEveryone   Boolean        @default(false)
+  deletedFor             String[]       @default([])
+  createdAt              DateTime       @default(now())
 
   @@index([conversationId, createdAt(sort: Desc)])
   @@index([senderUserId])
