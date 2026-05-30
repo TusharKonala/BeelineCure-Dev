@@ -10,6 +10,7 @@ import {
   type Dispatch,
   type MouseEvent,
   type SetStateAction,
+  type TouchEvent,
 } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -1013,6 +1014,37 @@ function ChatMessageBubble({
     ? m.localImageUrl
     : `/api/chat/image/${m.id}`;
 
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchHandledRef = useRef(false);
+  const TAP_MOVE_THRESHOLD = 10;
+
+  const handleImageTouchStart = (e: TouchEvent<HTMLImageElement>) => {
+    const t = e.touches[0];
+    if (!t) return;
+    touchStartRef.current = { x: t.clientX, y: t.clientY };
+  };
+
+  const handleImageTouchEnd = (e: TouchEvent<HTMLImageElement>) => {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    const t = e.changedTouches[0];
+    if (!start || !t) return;
+    touchHandledRef.current = true;
+    const movedX = Math.abs(t.clientX - start.x);
+    const movedY = Math.abs(t.clientY - start.y);
+    if (movedX <= TAP_MOVE_THRESHOLD && movedY <= TAP_MOVE_THRESHOLD) {
+      onOpenImage(imageSrc);
+    }
+  };
+
+  const handleImageClick = () => {
+    if (touchHandledRef.current) {
+      touchHandledRef.current = false;
+      return;
+    }
+    onOpenImage(imageSrc);
+  };
+
   const longPress = useLongPress((coords) => {
     if (canOpenDelete) onOpenDeleteMenu(coords);
   });
@@ -1052,7 +1084,9 @@ function ChatMessageBubble({
                         src={imageSrc}
                         alt="Shared image"
                         className="max-h-[300px] w-full cursor-pointer rounded-xl object-cover"
-                        onClick={() => onOpenImage(imageSrc)}
+                        onClick={handleImageClick}
+                        onTouchStart={handleImageTouchStart}
+                        onTouchEnd={handleImageTouchEnd}
                         onError={() => {
                           setImageLoadFailed((prev) => {
                             if (prev.has(messageKey)) return prev;
