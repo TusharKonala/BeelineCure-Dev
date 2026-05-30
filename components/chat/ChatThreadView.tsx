@@ -107,6 +107,7 @@ export function ChatThreadView({
   );
   const [showDeleteConversation, setShowDeleteConversation] = useState(false);
   const [hidingConversation, setHidingConversation] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
@@ -731,6 +732,15 @@ export function ChatThreadView({
     };
   }, []);
 
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightboxSrc(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxSrc]);
+
   const inputDisabled = loadingInitial || !thread || thread.isReadOnly;
 
   if (loadingInitial && !thread) {
@@ -826,6 +836,7 @@ export function ChatThreadView({
               message={m}
               imageLoadFailed={imageLoadFailed}
               setImageLoadFailed={setImageLoadFailed}
+              onOpenImage={setLightboxSrc}
               onOpenDeleteMenu={(coords) => {
                 if (!canDeleteMessage(m)) return;
                 setDeleteMenuTarget({
@@ -950,6 +961,31 @@ export function ChatThreadView({
         }}
         onConfirm={handleHideConversation}
       />
+
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxSrc(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            onClick={() => setLightboxSrc(null)}
+            className="absolute right-4 top-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+            aria-label="Close image"
+          >
+            <X className="size-5" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxSrc}
+            alt="Shared image"
+            className="max-h-[90vh] max-w-[90vw] object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -958,6 +994,7 @@ type ChatMessageBubbleProps = {
   message: ChatMessage;
   imageLoadFailed: Set<string>;
   setImageLoadFailed: Dispatch<SetStateAction<Set<string>>>;
+  onOpenImage: (src: string) => void;
   onOpenDeleteMenu: (coords: { clientX: number; clientY: number }) => void;
 };
 
@@ -965,11 +1002,15 @@ function ChatMessageBubble({
   message: m,
   imageLoadFailed,
   setImageLoadFailed,
+  onOpenImage,
   onOpenDeleteMenu,
 }: ChatMessageBubbleProps) {
   const messageKey = m.clientId ?? m.id;
   const imageFailed = imageLoadFailed.has(messageKey);
   const canOpenDelete = canDeleteMessage(m);
+  const imageSrc = m.localImageUrl
+    ? m.localImageUrl
+    : `/api/chat/image/${m.id}`;
 
   const longPress = useLongPress((coords) => {
     if (canOpenDelete) onOpenDeleteMenu(coords);
@@ -1007,13 +1048,10 @@ function ChatMessageBubble({
                     {!imageFailed ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
-                        src={
-                          m.localImageUrl
-                            ? m.localImageUrl
-                            : `/api/chat/image/${m.id}`
-                        }
+                        src={imageSrc}
                         alt="Shared image"
-                        className="max-h-64 w-auto rounded-xl object-contain"
+                        className="max-h-[300px] w-full cursor-pointer rounded-xl object-cover"
+                        onClick={() => onOpenImage(imageSrc)}
                         onError={() => {
                           setImageLoadFailed((prev) => {
                             if (prev.has(messageKey)) return prev;
