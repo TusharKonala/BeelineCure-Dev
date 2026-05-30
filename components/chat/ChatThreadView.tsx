@@ -146,7 +146,8 @@ export function ChatThreadView({
   }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    bottomRef.current?.scrollIntoView({ behavior });
+    const el = scrollContainerRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior });
     isNearBottomRef.current = true;
     setHasNewMessagesBelow(false);
   }, []);
@@ -264,11 +265,11 @@ export function ChatThreadView({
     updateNearBottom();
   }, [messages, updateNearBottom]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (loadingInitial || didInitialScrollRef.current) return;
     if (messages.length === 0) return;
     didInitialScrollRef.current = true;
-    requestAnimationFrame(() => scrollToBottom("auto"));
+    scrollToBottom("auto");
   }, [loadingInitial, messages.length, scrollToBottom]);
 
   useEffect(() => {
