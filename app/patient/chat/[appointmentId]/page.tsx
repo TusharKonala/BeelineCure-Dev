@@ -9,7 +9,7 @@ type PageProps = {
 };
 
 const chatHeightClass =
-  "h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-9rem)] lg:h-[calc(100dvh-8rem)] w-full";
+  "h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-8rem)] lg:h-[calc(100dvh-8rem)] w-full";
 
 export default async function PatientChatThreadPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
