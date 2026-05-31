@@ -16,7 +16,12 @@ export async function POST(request: NextRequest) {
 
   const reason = body?.reason;
 
-  if (reason === "installed") {
+  if (reason === "reset") {
+    await prisma.user.update({
+      where: { id: userId },
+      data: { pwaDismissedAt: null },
+    });
+  } else if (reason === "installed") {
     // No-op: install visibility is driven by beforeinstallprompt, not DB.
   } else {
     await prisma.user.update({

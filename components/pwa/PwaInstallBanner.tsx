@@ -4,8 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 
-export const PWA_BANNER_DISMISS_KEY = "pwa-banner-dismissed";
-
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -47,9 +45,7 @@ export function PwaInstallBanner() {
         if (!res.ok) return;
         const data = (await res.json()) as { showBanner?: boolean };
         if (cancelled) return;
-        const sessionDismissed =
-          sessionStorage.getItem(PWA_BANNER_DISMISS_KEY) === "1";
-        if (data.showBanner && !sessionDismissed) {
+        if (data.showBanner) {
           dismissedPermanentlyRef.current = false;
           // iOS has no beforeinstallprompt; show banner when dismiss allows.
           if (ios) setVisible(true);
@@ -108,17 +104,6 @@ export function PwaInstallBanner() {
     }
   }
 
-  function handleSessionDismiss() {
-    try {
-      sessionStorage.setItem(PWA_BANNER_DISMISS_KEY, "1");
-    } catch {
-      // best-effort; still hide for this render
-    }
-    dismissedPermanentlyRef.current = true;
-    setVisible(false);
-    setDeferredPrompt(null);
-  }
-
   async function handleInstall() {
     if (!deferredPrompt) return;
     setInstalling(true);
@@ -129,7 +114,7 @@ export function PwaInstallBanner() {
         setVisible(false);
         setDeferredPrompt(null);
       } else {
-        handleSessionDismiss();
+        await handleDismiss();
       }
     } finally {
       setInstalling(false);
@@ -163,13 +148,6 @@ export function PwaInstallBanner() {
         <button
           type="button"
           onClick={() => void handleDismiss()}
-          className="shrink-0 font-montserrat text-xs text-[#9A9A9A] underline-offset-2 transition-colors hover:text-[#5E5E5E] hover:underline"
-        >
-          Don&apos;t ask again
-        </button>
-        <button
-          type="button"
-          onClick={handleSessionDismiss}
           className="shrink-0 rounded-lg border border-[#e5e5e5] px-3 py-1.5 font-montserrat text-xs font-medium text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5]"
         >
           Not now

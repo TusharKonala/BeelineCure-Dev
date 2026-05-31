@@ -10,13 +10,15 @@ import {
   NavLink,
   NavigationProvider,
 } from "@/components/nav/NavigationIndicator";
-import { PWA_BANNER_DISMISS_KEY } from "@/components/pwa/PwaInstallBanner";
-
-function handleSignOut() {
+async function handleSignOut() {
   try {
-    sessionStorage.removeItem(PWA_BANNER_DISMISS_KEY);
+    await fetch("/api/pwa/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: "reset" }),
+    });
   } catch {
-    // best-effort
+    // best-effort; still sign out
   }
   void signOut({ callbackUrl: "/" });
 }
