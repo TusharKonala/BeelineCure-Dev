@@ -1,10 +1,6 @@
 import { getServerSession } from "next-auth/next";
 import { NextRequest, NextResponse } from "next/server";
-import {
-  AppointmentStatus,
-  ChatSenderRole,
-  UserRole,
-} from "@/generated/prisma/client";
+import { AppointmentStatus, UserRole } from "@/generated/prisma/client";
 import { authOptions } from "@/lib/auth";
 import {
   deriveLastMessagePreview,
@@ -146,7 +142,6 @@ export async function GET(request: NextRequest) {
         doctorUserId: userId,
         NOT: { hiddenFor: { has: userId } },
         isArchivedByDoctor: archivedOnly,
-        messages: { some: { senderRole: ChatSenderRole.PATIENT } },
         ...(cursor ? { createdAt: { lt: cursor } } : {}),
       },
       orderBy: { createdAt: "desc" },
