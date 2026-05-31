@@ -9,6 +9,15 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+let globalDeferredPrompt: BeforeInstallPromptEvent | null = null;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    globalDeferredPrompt = e as BeforeInstallPromptEvent;
+  });
+}
+
 export function PwaInstallBanner() {
   const pathname = usePathname();
   const { status } = useSession();
@@ -55,7 +64,10 @@ export function PwaInstallBanner() {
         if (cancelled) return;
         if (data.showBanner) {
           dismissedPermanentlyRef.current = false;
-          if (queuedPrompt) {
+          if (globalDeferredPrompt) {
+            showFromPrompt(globalDeferredPrompt);
+            globalDeferredPrompt = null;
+          } else if (queuedPrompt) {
             showFromPrompt(queuedPrompt);
             queuedPrompt = null;
           } else if (ios) {
