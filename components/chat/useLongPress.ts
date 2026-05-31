@@ -6,7 +6,8 @@ import {
   type TouchEvent,
 } from "react";
 
-const DEFAULT_MS = 500;
+export const LONG_PRESS_MS = 500;
+const DEFAULT_MS = LONG_PRESS_MS;
 
 export function useLongPress(
   onLongPress: (coords: { clientX: number; clientY: number }) => void,

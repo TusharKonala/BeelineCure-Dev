@@ -20,7 +20,7 @@ import { ImageIcon, Loader2, MoreVertical, Send, X } from "lucide-react";
 import { DeleteConversationDialog } from "@/components/chat/DeleteConversationDialog";
 import { MessageDeleteMenu } from "@/components/chat/MessageDeleteMenu";
 import { formatMessageTime } from "@/components/chat/format-chat-time";
-import { useLongPress } from "@/components/chat/useLongPress";
+import { LONG_PRESS_MS, useLongPress } from "@/components/chat/useLongPress";
 import { syncGlobalUnreadBadge } from "@/components/chat/useChatInboxPusher";
 
 const DELETED_MESSAGE_PLACEHOLDER = "This message was deleted";
@@ -1014,14 +1014,16 @@ function ChatMessageBubble({
     ? m.localImageUrl
     : `/api/chat/image/${m.id}`;
 
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(
+    null,
+  );
   const touchHandledRef = useRef(false);
   const TAP_MOVE_THRESHOLD = 10;
 
   const handleImageTouchStart = (e: TouchEvent<HTMLImageElement>) => {
     const t = e.touches[0];
     if (!t) return;
-    touchStartRef.current = { x: t.clientX, y: t.clientY };
+    touchStartRef.current = { x: t.clientX, y: t.clientY, time: Date.now() };
   };
 
   const handleImageTouchEnd = (e: TouchEvent<HTMLImageElement>) => {
@@ -1030,11 +1032,18 @@ function ChatMessageBubble({
     const t = e.changedTouches[0];
     if (!start || !t) return;
     touchHandledRef.current = true;
+    const duration = Date.now() - start.time;
+    if (duration >= LONG_PRESS_MS) return;
     const movedX = Math.abs(t.clientX - start.x);
     const movedY = Math.abs(t.clientY - start.y);
     if (movedX <= TAP_MOVE_THRESHOLD && movedY <= TAP_MOVE_THRESHOLD) {
       onOpenImage(imageSrc);
     }
+  };
+
+  const handleImageTouchCancel = () => {
+    touchStartRef.current = null;
+    touchHandledRef.current = true;
   };
 
   const handleImageClick = () => {
@@ -1087,6 +1096,7 @@ function ChatMessageBubble({
                         onClick={handleImageClick}
                         onTouchStart={handleImageTouchStart}
                         onTouchEnd={handleImageTouchEnd}
+                        onTouchCancel={handleImageTouchCancel}
                         onError={() => {
                           setImageLoadFailed((prev) => {
                             if (prev.has(messageKey)) return prev;
