@@ -10,6 +10,16 @@ import {
   NavLink,
   NavigationProvider,
 } from "@/components/nav/NavigationIndicator";
+import { PWA_BANNER_DISMISS_KEY } from "@/components/pwa/PwaInstallBanner";
+
+function handleSignOut() {
+  try {
+    sessionStorage.removeItem(PWA_BANNER_DISMISS_KEY);
+  } catch {
+    // best-effort
+  }
+  void signOut({ callbackUrl: "/" });
+}
 
 export function Navbar() {
   const { status, data: session } = useSession();
@@ -65,11 +75,7 @@ export function Navbar() {
                   <button
                     type="button"
                     className="nav-link cursor-pointer"
-                    onClick={() =>
-                      signOut({
-                        callbackUrl: "/",
-                      })
-                    }
+                    onClick={handleSignOut}
                   >
                     Sign out
                   </button>
@@ -146,7 +152,7 @@ export function Navbar() {
                     className="nav-link text-left"
                     onClick={() => {
                       setIsMobileMenuOpen(false);
-                      void signOut({ callbackUrl: "/" });
+                      handleSignOut();
                     }}
                   >
                     Sign out

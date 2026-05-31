@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { X } from "lucide-react";
+
+export const PWA_BANNER_DISMISS_KEY = "pwa-banner-dismissed";
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
@@ -45,7 +46,9 @@ export function PwaInstallBanner() {
         if (!res.ok) return;
         const data = (await res.json()) as { showBanner?: boolean };
         if (cancelled) return;
-        if (data.showBanner) {
+        const sessionDismissed =
+          sessionStorage.getItem(PWA_BANNER_DISMISS_KEY) === "1";
+        if (data.showBanner && !sessionDismissed) {
           dismissedPermanentlyRef.current = false;
           setVisible(true);
         } else {
@@ -109,6 +112,17 @@ export function PwaInstallBanner() {
     }
   }
 
+  function handleSessionDismiss() {
+    try {
+      sessionStorage.setItem(PWA_BANNER_DISMISS_KEY, "1");
+    } catch {
+      // best-effort; still hide for this render
+    }
+    dismissedPermanentlyRef.current = true;
+    setVisible(false);
+    setDeferredPrompt(null);
+  }
+
   async function handleInstall() {
     if (!deferredPrompt) return;
     setInstalling(true);
@@ -123,7 +137,7 @@ export function PwaInstallBanner() {
           // appinstalled handler will retry
         }
       } else {
-        await handleDismiss();
+        handleSessionDismiss();
       }
     } finally {
       setInstalling(false);
@@ -156,6 +170,13 @@ export function PwaInstallBanner() {
         <button
           type="button"
           onClick={() => void handleDismiss()}
+          className="shrink-0 font-montserrat text-xs text-[#9A9A9A] underline-offset-2 transition-colors hover:text-[#5E5E5E] hover:underline"
+        >
+          Don&apos;t ask again
+        </button>
+        <button
+          type="button"
+          onClick={handleSessionDismiss}
           className="shrink-0 rounded-lg border border-[#e5e5e5] px-3 py-1.5 font-montserrat text-xs font-medium text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5]"
         >
           Not now
@@ -167,14 +188,6 @@ export function PwaInstallBanner() {
           className="shrink-0 rounded-lg bg-[#2555F3] px-3 py-1.5 font-montserrat text-xs font-semibold text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-60"
         >
           {installing ? "…" : "Add"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleDismiss()}
-          className="shrink-0 rounded-lg p-1 text-[#9A9A9A] hover:bg-[#f5f5f5]"
-          aria-label="Dismiss"
-        >
-          <X className="size-4" />
         </button>
         </div>
       </div>
