@@ -51,6 +51,27 @@ function windowsOverlap(
   return aStart < bEnd && bStart < aEnd;
 }
 
+function CurrentSchedulePanelSkeleton() {
+  return (
+    <div
+      className="mt-8 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3"
+      aria-busy="true"
+      aria-label="Loading current schedule"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-7 w-24 rounded-lg" />
+      </div>
+      <div className="mt-3 space-y-2">
+        <Skeleton className="h-4 w-16" />
+        <Skeleton className="h-4 w-full max-w-md" />
+        <Skeleton className="h-4 w-full max-w-lg" />
+      </div>
+      <Skeleton className="mt-2 h-3 w-full max-w-sm" />
+    </div>
+  );
+}
+
 export function MyScheduleClient() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -1338,8 +1359,11 @@ export function MyScheduleClient() {
 
           {mode === "single" &&
           editableDateFromView === singleDate &&
-          !loadingSlots &&
-          currentDaySlotDetails.length > 0 ? (
+          loadingSlots ? (
+            <CurrentSchedulePanelSkeleton />
+          ) : mode === "single" &&
+            editableDateFromView === singleDate &&
+            currentDaySlotDetails.length > 0 ? (
             <div className="mt-8 rounded-xl border border-[#e5e5e5] bg-[#fafafa] px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-montserrat text-xs font-semibold uppercase tracking-wide text-[#5E5E5E]">
@@ -1496,67 +1520,45 @@ export function MyScheduleClient() {
                 {allSlotsSelected ? "Clear all" : "Select all"}
               </button>
             </div>
-            {mode === "single" && loadingSlots ? (
-              <div
-                className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start"
-                aria-busy="true"
-                aria-label="Loading saved slots"
-              >
-                {(displaySlots.length > 0
-                  ? displaySlots
-                  : generateSlots(
-                      DEFAULT_SLOT_WINDOW_START,
-                      DEFAULT_SLOT_WINDOW_END,
-                      slotDurationMinutes,
-                    )
-                ).map((t) => (
-                  <Skeleton
-                    key={t}
-                    className="h-10 min-w-[5.5rem] rounded-xl"
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
-                {displaySlots.length > 0 ? (
-                  displaySlots.map((t) => {
-                    const on = selected.has(t);
-                    const booked = bookedSlots.has(t);
-                    const past =
-                      scheduleIncludesToday &&
-                      isDoctorTimeInPast(meta.today, t, meta.timezone);
-                    return (
-                      <button
-                        key={t}
-                        type="button"
-                        disabled={past || booked}
-                        aria-disabled={past || booked}
-                        onClick={() => toggleSlot(t)}
-                        className={cn(
-                          "min-w-[5.5rem] rounded-xl border px-3 py-2 font-montserrat text-sm transition-colors",
-                          booked
-                            ? "cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800"
-                            : past
-                            ? "cursor-not-allowed border-[#e5e5e5] bg-[#f5f5f5] text-[#9A9A9A] opacity-70"
-                            : cn(
-                                "cursor-pointer",
-                                on
-                                  ? "border-[#2555F3] bg-[#2555F3] text-white"
-                                  : "border-[#e5e5e5] bg-[#fafafa] text-[#333333] hover:bg-[#f0f0f0]",
-                              ),
-                        )}
-                      >
-                        {booked ? `${t} (Booked)` : t}
-                      </button>
-                    );
-                  })
-                ) : (
-                  <p className="font-montserrat text-sm text-[#5E5E5E]">
-                    Add a window to see available slots.
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
+              {displaySlots.length > 0 ? (
+                displaySlots.map((t) => {
+                  const on = selected.has(t);
+                  const booked = bookedSlots.has(t);
+                  const past =
+                    scheduleIncludesToday &&
+                    isDoctorTimeInPast(meta.today, t, meta.timezone);
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      disabled={past || booked}
+                      aria-disabled={past || booked}
+                      onClick={() => toggleSlot(t)}
+                      className={cn(
+                        "min-w-[5.5rem] rounded-xl border px-3 py-2 font-montserrat text-sm transition-colors",
+                        booked
+                          ? "cursor-not-allowed border-amber-300 bg-amber-50 text-amber-800"
+                          : past
+                          ? "cursor-not-allowed border-[#e5e5e5] bg-[#f5f5f5] text-[#9A9A9A] opacity-70"
+                          : cn(
+                              "cursor-pointer",
+                              on
+                                ? "border-[#2555F3] bg-[#2555F3] text-white"
+                                : "border-[#e5e5e5] bg-[#fafafa] text-[#333333] hover:bg-[#f0f0f0]",
+                            ),
+                      )}
+                    >
+                      {booked ? `${t} (Booked)` : t}
+                    </button>
+                  );
+                })
+              ) : (
+                <p className="font-montserrat text-sm text-[#5E5E5E]">
+                  Add a window to see available slots.
+                </p>
+              )}
+            </div>
             <p className="mt-3 font-montserrat text-xs text-[#5E5E5E]">
               {mode === "range"
                 ? "Selected slots apply to every day in the range on save."
