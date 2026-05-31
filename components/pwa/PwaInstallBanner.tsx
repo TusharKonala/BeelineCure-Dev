@@ -38,6 +38,14 @@ export function PwaInstallBanner() {
     setIsIos(ios);
 
     let cancelled = false;
+    let queuedPrompt: BeforeInstallPromptEvent | null = null;
+    // Block beforeinstallprompt until dismiss state is loaded (prevents flash).
+    dismissedPermanentlyRef.current = true;
+
+    function showFromPrompt(ev: BeforeInstallPromptEvent) {
+      setDeferredPrompt(ev);
+      setVisible(true);
+    }
 
     async function checkBanner() {
       try {
@@ -47,10 +55,15 @@ export function PwaInstallBanner() {
         if (cancelled) return;
         if (data.showBanner) {
           dismissedPermanentlyRef.current = false;
-          // iOS has no beforeinstallprompt; show banner when dismiss allows.
-          if (ios) setVisible(true);
+          if (queuedPrompt) {
+            showFromPrompt(queuedPrompt);
+            queuedPrompt = null;
+          } else if (ios) {
+            setVisible(true);
+          }
         } else {
           dismissedPermanentlyRef.current = true;
+          queuedPrompt = null;
           setVisible(false);
         }
       } catch {
@@ -61,10 +74,13 @@ export function PwaInstallBanner() {
     void checkBanner();
 
     function onBeforeInstall(e: Event) {
-      if (dismissedPermanentlyRef.current) return;
       e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-      setVisible(true);
+      const ev = e as BeforeInstallPromptEvent;
+      if (dismissedPermanentlyRef.current) {
+        queuedPrompt = ev;
+        return;
+      }
+      showFromPrompt(ev);
     }
 
     function onInstalled() {
