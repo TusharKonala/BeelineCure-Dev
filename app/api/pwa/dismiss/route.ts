@@ -15,17 +15,13 @@ export async function POST(request: NextRequest) {
   } | null;
 
   const reason = body?.reason;
-  const now = new Date();
 
   if (reason === "installed") {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { pwaInstalledAt: now },
-    });
+    // No-op: install visibility is driven by beforeinstallprompt, not DB.
   } else {
     await prisma.user.update({
       where: { id: userId },
-      data: { pwaDismissedAt: now },
+      data: { pwaDismissedAt: new Date() },
     });
   }
 
@@ -41,9 +37,9 @@ export async function GET() {
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { pwaInstalledAt: true, pwaDismissedAt: true },
+    select: { pwaDismissedAt: true },
   });
 
-  const showBanner = !user?.pwaInstalledAt && !user?.pwaDismissedAt;
+  const showBanner = !user?.pwaDismissedAt;
   return NextResponse.json({ showBanner });
 }

@@ -36,7 +36,8 @@ export function PwaInstallBanner() {
     if (!isMobile || isStandalone) return;
 
     const ua = navigator.userAgent;
-    setIsIos(/iPhone|iPad|iPod/i.test(ua));
+    const ios = /iPhone|iPad|iPod/i.test(ua);
+    setIsIos(ios);
 
     let cancelled = false;
 
@@ -50,7 +51,8 @@ export function PwaInstallBanner() {
           sessionStorage.getItem(PWA_BANNER_DISMISS_KEY) === "1";
         if (data.showBanner && !sessionDismissed) {
           dismissedPermanentlyRef.current = false;
-          setVisible(true);
+          // iOS has no beforeinstallprompt; show banner when dismiss allows.
+          if (ios) setVisible(true);
         } else {
           dismissedPermanentlyRef.current = true;
           setVisible(false);
@@ -71,13 +73,7 @@ export function PwaInstallBanner() {
 
     function onInstalled() {
       setVisible(false);
-      dismissedPermanentlyRef.current = true;
       setDeferredPrompt(null);
-      void fetch("/api/pwa/dismiss", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: "installed" }),
-      });
     }
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
@@ -90,11 +86,11 @@ export function PwaInstallBanner() {
     };
   }, [status, pathname]);
 
-  async function persistDismiss(reason: "dismissed" | "installed") {
+  async function persistDismiss() {
     const res = await fetch("/api/pwa/dismiss", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason }),
+      body: JSON.stringify({ reason: "dismissed" }),
     });
     if (!res.ok) {
       throw new Error("Failed to save dismiss state");
@@ -104,7 +100,7 @@ export function PwaInstallBanner() {
 
   async function handleDismiss() {
     try {
-      await persistDismiss("dismissed");
+      await persistDismiss();
       setVisible(false);
       setDeferredPrompt(null);
     } catch {
@@ -131,11 +127,7 @@ export function PwaInstallBanner() {
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === "accepted") {
         setVisible(false);
-        try {
-          await persistDismiss("installed");
-        } catch {
-          // appinstalled handler will retry
-        }
+        setDeferredPrompt(null);
       } else {
         handleSessionDismiss();
       }
@@ -155,8 +147,9 @@ export function PwaInstallBanner() {
       <div className="mx-auto flex max-w-lg flex-col gap-2 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <p className="font-montserrat text-xs leading-snug text-[#5E5E5E]">
-            <span className="font-semibold text-[#333333]">Add to Home Screen</span>{" "}
-            for reliable notifications, even when the browser is closed.
+            <span className="font-semibold text-[#333333]">Install App</span>{" "}
+            Install Clinivo for reliable notifications, even when the browser is
+            closed.
           </p>
           {isIos && (
             <p className="mt-1 font-montserrat text-[11px] leading-snug text-[#9A9A9A]">
