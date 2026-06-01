@@ -142,12 +142,7 @@ model User {
   doctor        Doctor?
   notifications Notification[]
   patientReviews Review[] @relation("PatientReviews")
-  pushSubscriptions PushSubscription[]
   chatReadStates    ChatReadState[]
-  /// Set when the user installs the PWA to the home screen (hides install banner).
-  pwaInstalledAt DateTime?
-  /// Set when the user dismisses the mobile install banner without installing.
-  pwaDismissedAt DateTime?
 }
 
 model HealthProfile {
@@ -369,20 +364,6 @@ model ChatReadState {
   lastReadAt     DateTime
 
   @@id([conversationId, userId])
-}
-
-model PushSubscription {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  endpoint   String   @unique
-  p256dh     String
-  auth       String
-  userAgent  String?
-  createdAt  DateTime @default(now())
-  lastSeenAt DateTime @default(now())
-
-  @@index([userId])
 }
 
 model Prescription {
