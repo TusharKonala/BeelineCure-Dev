@@ -1038,17 +1038,16 @@ export const chatUnreadEmailNotify = inngest.createFunction(
       recipientUserId = conversation.patientUserId;
       recipientEmail = conversation.appointment.email.trim();
       recipientName = conversation.appointment.patientName;
-      senderName =
-        conversation.appointment.doctor.user?.name?.trim() ||
-        conversation.appointment.doctor.name;
+      senderName = formatDoctorDisplayName(conversation.appointment.doctor.name);
       recipientType = "patient";
     } else if (recipientRole === UserRole.DOCTOR) {
       recipientUserId = conversation.doctorUserId;
       recipientEmail =
         conversation.appointment.doctor.user?.email?.trim() ?? null;
       recipientName =
+        conversation.appointment.doctor.name.trim() ||
         conversation.appointment.doctor.user?.name?.trim() ||
-        conversation.appointment.doctor.name;
+        "Doctor";
       senderName = conversation.appointment.patientName;
       recipientType = "doctor";
     } else {
