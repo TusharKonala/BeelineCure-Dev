@@ -983,25 +983,48 @@ export const chatUnreadEmailNotify = inngest.createFunction(
       return { skipped: true, reason: "invalid_payload" };
     }
 
-    const message = await prisma.chatMessage.findUnique({
+    const messageSelect = {
+      id: true,
+      body: true,
+      messageType: true,
+      imageKey: true,
+      createdAt: true,
+      isDeletedForEveryone: true,
+      conversationId: true,
+      senderRole: true,
+    } as const;
+
+    const anchorMessage = await prisma.chatMessage.findUnique({
       where: { id: messageId },
-      select: {
-        id: true,
-        body: true,
-        messageType: true,
-        imageKey: true,
-        createdAt: true,
-        isDeletedForEveryone: true,
-        conversationId: true,
-      },
+      select: messageSelect,
     });
 
-    if (
-      !message ||
-      message.conversationId !== conversationId ||
-      message.isDeletedForEveryone
-    ) {
+    if (!anchorMessage || anchorMessage.conversationId !== conversationId) {
       return { skipped: true, reason: "message_not_found" };
+    }
+
+    let effectiveMessage = anchorMessage;
+
+    if (anchorMessage.isDeletedForEveryone) {
+      const ONE_MINUTE_MS = 60_000;
+      const windowStart = new Date(
+        anchorMessage.createdAt.getTime() - ONE_MINUTE_MS,
+      );
+      const fallback = await prisma.chatMessage.findFirst({
+        where: {
+          conversationId,
+          isDeletedForEveryone: false,
+          senderRole: anchorMessage.senderRole,
+          createdAt: { gte: windowStart, lte: anchorMessage.createdAt },
+        },
+        orderBy: { createdAt: "desc" },
+        select: messageSelect,
+      });
+
+      if (!fallback) {
+        return { skipped: true, reason: "no_fallback_message" };
+      }
+      effectiveMessage = fallback;
     }
 
     const conversation = await prisma.chatConversation.findUnique({
@@ -1069,7 +1092,7 @@ export const chatUnreadEmailNotify = inngest.createFunction(
         select: { lastReadAt: true },
       });
 
-      if (readState && readState.lastReadAt >= message.createdAt) {
+      if (readState && readState.lastReadAt >= effectiveMessage.createdAt) {
         return { skipped: true, reason: "already_read" };
       }
     }
@@ -1077,11 +1100,11 @@ export const chatUnreadEmailNotify = inngest.createFunction(
     const chatUrl = chatThreadUrlForRole(recipientRole, conversation.appointmentId);
     const preview =
       deriveLastMessagePreview({
-        body: message.body,
-        messageType: message.messageType,
-        imageKey: message.imageKey,
-        isDeletedForEveryone: message.isDeletedForEveryone,
-      }) ?? message.body;
+        body: effectiveMessage.body,
+        messageType: effectiveMessage.messageType,
+        imageKey: effectiveMessage.imageKey,
+        isDeletedForEveryone: effectiveMessage.isDeletedForEveryone,
+      }) ?? effectiveMessage.body;
     const messagePreview =
       preview.length > 200 ? `${preview.slice(0, 197).trim()}…` : preview;
 
@@ -1108,7 +1131,7 @@ export const chatUnreadEmailNotify = inngest.createFunction(
       throw new Error(error.message);
     }
 
-    return { sent: true, messageId: message.id, recipientEmail };
+    return { sent: true, messageId: effectiveMessage.id, recipientEmail };
   },
 );
 
