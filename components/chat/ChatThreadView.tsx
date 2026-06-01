@@ -758,7 +758,10 @@ export function ChatThreadView({
       <div className="rounded-xl border border-[#ffd9d9] bg-[#fff1f1] px-4 py-6 text-center font-montserrat text-sm text-[#b42318]">
         {error}
         <div className="mt-4">
-          <Link href={backHref} className="font-medium text-[#2555F3]">
+          <Link
+            href={backHref}
+            className="touch-target -ml-2 font-medium text-[#2555F3]"
+          >
             {backLabel}
           </Link>
         </div>
@@ -773,7 +776,7 @@ export function ChatThreadView({
       <div className="flex shrink-0 items-center gap-3 border-b border-[#e5e5e5] px-4 py-3">
         <Link
           href={backHref}
-          className="font-montserrat text-sm font-medium text-[#2555F3] hover:text-[#1e44c7]"
+          className="touch-target -ml-2 font-montserrat text-sm font-medium text-[#2555F3] hover:text-[#1e44c7]"
         >
           ← {backLabel}
         </Link>
@@ -915,10 +918,10 @@ export function ChatThreadView({
           type="button"
           disabled={inputDisabled}
           onClick={() => imageInputRef.current?.click()}
-          className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50 sm:h-10 sm:w-10"
+          className="flex h-9 w-9 max-sm:h-10 max-sm:w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#e5e5e5] text-[#5E5E5E] transition-colors hover:bg-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Send image"
         >
-          <ImageIcon className="size-3.5 sm:size-4" />
+          <ImageIcon className="size-4" />
         </button>
         <input
           type="text"
@@ -932,13 +935,13 @@ export function ChatThreadView({
         <button
           type="submit"
           disabled={inputDisabled || (!draft.trim() && selectedImages.length === 0)}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50 sm:h-10 sm:w-10"
+          className="flex h-9 w-9 max-sm:h-10 max-sm:w-10 shrink-0 items-center justify-center rounded-xl bg-[#2555F3] text-white transition-colors hover:bg-[#1e44c7] disabled:opacity-50"
           aria-label="Send message"
         >
           {pendingSendCount > 0 ? (
-            <Loader2 className="size-3.5 animate-spin sm:size-4" />
+            <Loader2 className="size-4 animate-spin" />
           ) : (
-            <Send className="size-3.5 sm:size-4" />
+            <Send className="size-4" />
           )}
         </button>
         </div>

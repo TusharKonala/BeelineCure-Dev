@@ -296,7 +296,7 @@ export function DoctorShell({
           <div className="flex h-14 items-center justify-between">
             <Link
               href="/"
-              className="inline-flex items-center gap-0.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:text-[#2555F3] md:text-base"
+              className="touch-target -ml-2 inline-flex items-center gap-0.5 font-montserrat text-sm font-medium text-[#333333] transition-colors hover:text-[#2555F3] md:text-base"
             >
               <span aria-hidden className="mr-1">
                 ←

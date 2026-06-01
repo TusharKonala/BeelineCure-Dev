@@ -101,31 +101,31 @@ export function Navbar() {
 
           {isMobileMenuOpen && (
             <div className="absolute inset-x-0 top-16 z-50 border-b bg-white px-10 pb-4 pt-3 lg:hidden">
-              <div className="flex flex-col gap-3 font-medium">
+              <div className="flex flex-col gap-1 font-medium">
                 <NavLink
                   href="/"
-                  className="nav-link"
+                  className="nav-link block max-sm:py-3"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Home
                 </NavLink>
                 <NavLink
                   href="/about"
-                  className="nav-link"
+                  className="nav-link block max-sm:py-3"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   About
                 </NavLink>
                 <NavLink
                   href="/notice-board"
-                  className="nav-link"
+                  className="nav-link block max-sm:py-3"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Notice Board
                 </NavLink>
                 <NavLink
                   href="/careers"
-                  className="nav-link"
+                  className="nav-link block max-sm:py-3"
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   Careers
@@ -133,7 +133,7 @@ export function Navbar() {
                 {!isAuthenticated && (
                   <NavLink
                     href="/auth/signin"
-                    className="nav-link"
+                    className="nav-link block max-sm:py-3"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Sign in
@@ -142,7 +142,7 @@ export function Navbar() {
                 {isAuthenticated && (
                   <button
                     type="button"
-                    className="nav-link text-left"
+                    className="nav-link block max-sm:py-3 text-left"
                     onClick={() => {
                       setIsMobileMenuOpen(false);
                       handleSignOut();
@@ -154,7 +154,7 @@ export function Navbar() {
                 {isAuthenticated && (
                   <NavLink
                     href={dashboardHref}
-                    className="nav-link text-left"
+                    className="nav-link block max-sm:py-3 text-left"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     Dashboard

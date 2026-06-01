@@ -147,4 +147,10 @@
     text-decoration: underline;
     text-shadow: none !important;
   }
+
+  @media (max-width: 639px) {
+    .touch-target {
+      @apply inline-flex min-h-11 items-center rounded-lg px-3 py-2;
+    }
+  }
 }
