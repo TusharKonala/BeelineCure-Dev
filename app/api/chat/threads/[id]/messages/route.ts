@@ -8,7 +8,7 @@ import {
   fetchRecentMessagesForConversation,
   linkPatientUserOnConversation,
   markRead,
-  scheduleChatMessagePush,
+  scheduleChatUnreadEmail,
   sendChatMessage,
 } from "@/lib/chat";
 import { notifyChatInboxAfterMessage } from "@/lib/chat-inbox-notify";
@@ -159,7 +159,7 @@ export async function POST(
             messageType: message.messageType,
             messageCreatedAt: message.createdAt,
           }),
-          scheduleChatMessagePush({
+          scheduleChatUnreadEmail({
             message,
             conversation: conv,
             senderRole,
