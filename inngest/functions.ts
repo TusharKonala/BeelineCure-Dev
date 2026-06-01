@@ -952,29 +952,56 @@ export const lockChatAfter48h = inngest.createFunction(
   },
 );
 
-export const chatPushAfter5m = inngest.createFunction(
+export const chatUnreadEmailNotify = inngest.createFunction(
   {
-    id: "chat-push-after-delay",
+    id: "chat-unread-email-notify",
     retries: 2,
-    triggers: [{ event: "chat/message.sent" }],
+    triggers: [{ event: "chat/unread-email.scheduled" }],
+    cancelOn: [
+      {
+        event: "chat/unread-email.cancelled",
+        if: "event.data.conversationId == async.data.conversationId && event.data.recipientRole == async.data.recipientRole",
+      },
+    ],
   },
   async ({ event }) => {
-    const { conversationId: eventConversationId, messageId } = event.data as {
+    const { UserRole } = await import("@/generated/prisma/client");
+    const { deriveLastMessagePreview, chatThreadUrlForRole } = await import(
+      "@/lib/chat"
+    );
+    const { ChatUnreadMessageEmailTemplate } = await import(
+      "@/components/chat-unread-message-email-template"
+    );
+
+    const { conversationId, messageId, recipientRole } = event.data as {
       conversationId?: string;
       messageId?: string;
+      recipientRole?: (typeof UserRole)[keyof typeof UserRole];
     };
 
-    let conversationId = eventConversationId;
-    if (!conversationId && messageId) {
-      const row = await prisma.chatMessage.findUnique({
-        where: { id: messageId },
-        select: { conversationId: true },
-      });
-      conversationId = row?.conversationId;
+    if (!conversationId || !messageId || !recipientRole) {
+      return { skipped: true, reason: "invalid_payload" };
     }
 
-    if (!conversationId) {
-      return { skipped: true, reason: "no_conversation" };
+    const message = await prisma.chatMessage.findUnique({
+      where: { id: messageId },
+      select: {
+        id: true,
+        body: true,
+        messageType: true,
+        imageKey: true,
+        createdAt: true,
+        isDeletedForEveryone: true,
+        conversationId: true,
+      },
+    });
+
+    if (
+      !message ||
+      message.conversationId !== conversationId ||
+      message.isDeletedForEveryone
+    ) {
+      return { skipped: true, reason: "message_not_found" };
     }
 
     const conversation = await prisma.chatConversation.findUnique({
@@ -986,8 +1013,14 @@ export const chatPushAfter5m = inngest.createFunction(
         patientUserId: true,
         appointment: {
           select: {
+            email: true,
             patientName: true,
-            doctor: { select: { name: true, user: { select: { name: true } } } },
+            doctor: {
+              select: {
+                name: true,
+                user: { select: { email: true, name: true } },
+              },
+            },
           },
         },
       },
@@ -995,76 +1028,88 @@ export const chatPushAfter5m = inngest.createFunction(
 
     if (!conversation) return { skipped: true, reason: "not_found" };
 
-    const { UserRole, ChatSenderRole } = await import("@/generated/prisma/client");
+    let recipientUserId: string | null = null;
+    let recipientEmail: string | null = null;
+    let recipientName = "";
+    let senderName = "";
+    let recipientType: "patient" | "doctor";
 
-    const latestMessage = await prisma.chatMessage.findFirst({
-      where: { conversationId },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        body: true,
-        senderRole: true,
-        createdAt: true,
-      },
-    });
-
-    if (!latestMessage) {
-      return { skipped: true, reason: "no_messages" };
+    if (recipientRole === UserRole.PATIENT) {
+      recipientUserId = conversation.patientUserId;
+      recipientEmail = conversation.appointment.email.trim();
+      recipientName = conversation.appointment.patientName;
+      senderName =
+        conversation.appointment.doctor.user?.name?.trim() ||
+        conversation.appointment.doctor.name;
+      recipientType = "patient";
+    } else if (recipientRole === UserRole.DOCTOR) {
+      recipientUserId = conversation.doctorUserId;
+      recipientEmail =
+        conversation.appointment.doctor.user?.email?.trim() ?? null;
+      recipientName =
+        conversation.appointment.doctor.user?.name?.trim() ||
+        conversation.appointment.doctor.name;
+      senderName = conversation.appointment.patientName;
+      recipientType = "doctor";
+    } else {
+      return { skipped: true, reason: "invalid_recipient_role" };
     }
 
-    const recipientUserId =
-      latestMessage.senderRole === ChatSenderRole.DOCTOR
-        ? conversation.patientUserId
-        : conversation.doctorUserId;
-
-    if (!recipientUserId) {
-      return { skipped: true, reason: "no_recipient" };
+    if (!recipientEmail) {
+      return { skipped: true, reason: "no_recipient_email" };
     }
 
-    const readState = await prisma.chatReadState.findUnique({
-      where: {
-        conversationId_userId: {
-          conversationId,
-          userId: recipientUserId,
+    if (recipientUserId) {
+      const readState = await prisma.chatReadState.findUnique({
+        where: {
+          conversationId_userId: {
+            conversationId,
+            userId: recipientUserId,
+          },
         },
-      },
-      select: { lastReadAt: true },
-    });
+        select: { lastReadAt: true },
+      });
 
-    if (readState && readState.lastReadAt >= latestMessage.createdAt) {
-      return { skipped: true, reason: "already_read" };
+      if (readState && readState.lastReadAt >= message.createdAt) {
+        return { skipped: true, reason: "already_read" };
+      }
     }
 
-    const recipientRole =
-      latestMessage.senderRole === ChatSenderRole.DOCTOR
-        ? UserRole.PATIENT
-        : UserRole.DOCTOR;
+    const chatUrl = chatThreadUrlForRole(recipientRole, conversation.appointmentId);
+    const preview =
+      deriveLastMessagePreview({
+        body: message.body,
+        messageType: message.messageType,
+        imageKey: message.imageKey,
+        isDeletedForEveryone: message.isDeletedForEveryone,
+      }) ?? message.body;
+    const messagePreview =
+      preview.length > 200 ? `${preview.slice(0, 197).trim()}…` : preview;
 
-    const senderName =
-      latestMessage.senderRole === ChatSenderRole.PATIENT
-        ? conversation.appointment.patientName
-        : conversation.appointment.doctor.user?.name?.trim() ||
-          conversation.appointment.doctor.name;
+    const subject =
+      recipientType === "patient"
+        ? `New message from ${senderName}`
+        : `Unread message from ${senderName}`;
 
-    const { chatThreadUrlForRole } = await import("@/lib/chat");
-    const { sendPushToUser } = await import("@/lib/web-push");
-
-    const url = chatThreadUrlForRole(recipientRole, conversation.appointmentId);
-
-    const result = await sendPushToUser(recipientUserId, {
-      title: `New message from ${senderName}`,
-      body:
-        latestMessage.body.length > 120
-          ? `${latestMessage.body.slice(0, 117).trim()}…`
-          : latestMessage.body,
-      url,
+    const { error } = await resend.emails.send({
+      from: "Clinic Appointments <onboarding@resend.dev>",
+      to: recipientEmail,
+      subject,
+      react: ChatUnreadMessageEmailTemplate({
+        recipientName,
+        senderName,
+        messagePreview,
+        chatUrl,
+        recipientType,
+      }),
     });
 
-    return {
-      sent: result.sent,
-      messageId: latestMessage.id,
-      recipientUserId,
-    };
+    if (error) {
+      console.error("[chat-unread-email] Email failed:", error);
+      throw new Error(error.message);
+    }
+
+    return { sent: true, messageId: message.id, recipientEmail };
   },
 );
 

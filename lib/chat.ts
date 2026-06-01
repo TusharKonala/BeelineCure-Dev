@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { inngest } from "@/inngest/client";
 
 const CHAT_LOCK_MS = 48 * 60 * 60 * 1000;
-const PUSH_DELAY_MS = 30 * 1000;
+const DOCTOR_TO_PATIENT_EMAIL_DELAY_MS = 2 * 60 * 1000;
+const PATIENT_TO_DOCTOR_EMAIL_DELAY_MS = 5 * 60 * 1000;
 export const MESSAGE_DELETE_FOR_EVERYONE_MS = 15 * 60 * 1000;
 export const DELETED_MESSAGE_PREVIEW = "This message was deleted";
 
@@ -746,31 +747,39 @@ export async function sendChatMessage(params: {
   };
 }
 
-/** Schedules delayed push notification for the recipient. */
-export async function scheduleChatMessagePush(params: {
-  message: PersistedChatMessage;
-  conversation: ConversationForDelivery;
+/** Schedules delayed unread-message email for the recipient. */
+export async function scheduleChatUnreadEmail(params: {
+  message: { id: string; createdAt: Date };
+  conversation: { id: string; appointmentId: string };
   senderRole: ChatSenderRole;
 }) {
   const { message, conversation, senderRole } = params;
-
-  const recipientUserId =
+  const recipientRole =
+    senderRole === ChatSenderRole.DOCTOR ? UserRole.PATIENT : UserRole.DOCTOR;
+  const delayMs =
     senderRole === ChatSenderRole.DOCTOR
-      ? conversation.patientUserId
-      : conversation.doctorUserId;
-
-  if (!recipientUserId) return;
-
+      ? DOCTOR_TO_PATIENT_EMAIL_DELAY_MS
+      : PATIENT_TO_DOCTOR_EMAIL_DELAY_MS;
   try {
-    const slot = Math.floor(Date.now() / 30_000);
     await inngest.send({
-      id: `push-${conversation.id}-${slot}`,
-      name: "chat/message.sent",
-      data: { conversationId: conversation.id, messageId: message.id },
-      ts: Date.now() + PUSH_DELAY_MS,
+      name: "chat/unread-email.cancelled",
+      data: {
+        conversationId: conversation.id,
+        recipientRole,
+      },
+    });
+    await inngest.send({
+      id: `unread-email-${conversation.id}-${recipientRole}-${message.id}`,
+      name: "chat/unread-email.scheduled",
+      data: {
+        conversationId: conversation.id,
+        messageId: message.id,
+        recipientRole,
+      },
+      ts: Date.now() + delayMs,
     });
   } catch (err) {
-    console.error("[chat] Failed to schedule push:", err);
+    console.error("[chat] Failed to schedule unread email:", err);
   }
 }
 
