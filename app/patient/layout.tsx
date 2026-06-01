@@ -166,7 +166,7 @@ export default function PatientLayout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#fafafa]">
+    <div className="min-h-svh bg-[#fafafa]">
       <ChatInboxRealtime />
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e5e5e5] bg-white lg:block">
         <div className="px-4 py-6">

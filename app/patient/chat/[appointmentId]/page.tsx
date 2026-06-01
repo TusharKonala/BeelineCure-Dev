@@ -8,7 +8,7 @@ type PageProps = {
   params: Promise<{ appointmentId: string }>;
 };
 
-const chatHeightClass = "h-[calc(100dvh-8rem)] w-full";
+const chatHeightClass = "h-[calc(100svh-8rem)] w-full";
 
 export default async function PatientChatThreadPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
