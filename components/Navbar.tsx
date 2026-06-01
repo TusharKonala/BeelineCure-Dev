@@ -10,16 +10,7 @@ import {
   NavLink,
   NavigationProvider,
 } from "@/components/nav/NavigationIndicator";
-async function handleSignOut() {
-  try {
-    await fetch("/api/pwa/dismiss", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reason: "reset" }),
-    });
-  } catch {
-    // best-effort; still sign out
-  }
+function handleSignOut() {
   void signOut({ callbackUrl: "/" });
 }
 
