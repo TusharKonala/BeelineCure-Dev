@@ -23,10 +23,20 @@ export default async function DoctorLayout({
       redirect("/auth/doctor-deactivated");
     }
     const doctorIsActive = access.found ? access.isActive : true;
+    const initialDoctorName = access.found ? access.doctorName : "Doctor";
     return (
-      <DoctorShell doctorIsActive={doctorIsActive}>{children}</DoctorShell>
+      <DoctorShell
+        doctorIsActive={doctorIsActive}
+        initialDoctorName={initialDoctorName}
+      >
+        {children}
+      </DoctorShell>
     );
   }
 
-  return <DoctorShell doctorIsActive={true}>{children}</DoctorShell>;
+  return (
+    <DoctorShell doctorIsActive={true} initialDoctorName="Doctor">
+      {children}
+    </DoctorShell>
+  );
 }

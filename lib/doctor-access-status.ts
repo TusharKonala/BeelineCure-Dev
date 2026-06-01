@@ -6,6 +6,7 @@ export type DoctorAccessStatus =
   | {
       found: true;
       doctorId: string;
+      doctorName: string;
       isActive: boolean;
       hasRemainingAppointments: boolean;
     };
@@ -21,15 +22,17 @@ export async function getDoctorAccessStatus(
 ): Promise<DoctorAccessStatus> {
   const doctor = await prisma.doctor.findUnique({
     where: { userId },
-    select: { id: true, isActive: true },
+    select: { id: true, name: true, isActive: true },
   });
   if (!doctor) {
     return { found: false };
   }
+  const doctorName = doctor.name.trim() || "Doctor";
   if (doctor.isActive) {
     return {
       found: true,
       doctorId: doctor.id,
+      doctorName,
       isActive: true,
       hasRemainingAppointments: true,
     };
@@ -38,6 +41,7 @@ export async function getDoctorAccessStatus(
   return {
     found: true,
     doctorId: doctor.id,
+    doctorName,
     isActive: false,
     hasRemainingAppointments: remaining.length > 0,
   };

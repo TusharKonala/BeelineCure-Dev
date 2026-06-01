@@ -61,17 +61,20 @@ type DoctorShellProps = {
   children: ReactNode;
   /** When false, render the deactivation banner; the doctor still has work to wind down. */
   doctorIsActive: boolean;
+  initialDoctorName: string;
 };
 
-export function DoctorShell({ children, doctorIsActive }: DoctorShellProps) {
+export function DoctorShell({
+  children,
+  doctorIsActive,
+  initialDoctorName,
+}: DoctorShellProps) {
   const { data: session } = useSession();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
-  const [doctorDisplayName, setDoctorDisplayName] = useState(
-    session?.user?.name?.trim() || "Doctor",
-  );
+  const [doctorDisplayName, setDoctorDisplayName] = useState(initialDoctorName);
   const lastActivityPingAtRef = useRef(0);
   const doctorName = doctorDisplayName;
   const initials =
