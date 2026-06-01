@@ -5,14 +5,13 @@ type PageProps = {
   params: Promise<{ appointmentId: string }>;
 };
 
-const chatHeightClass =
-  "h-[calc(100dvh-6.5rem)] md:h-[calc(100dvh-8rem)] lg:h-[calc(100dvh-8rem)] w-full";
+const chatHeightClass = "h-[calc(100dvh-8rem)] w-full";
 
 export default async function DoctorChatThreadPage({ params }: PageProps) {
   const { appointmentId } = await params;
 
   return (
-    <div className="w-full bg-[#fafafa] pb-6 -mb-8 md:mb-0 md:py-4 lg:pt-10 lg:pb-6">
+    <div className="w-full bg-[#fafafa] pb-6 md:py-4 lg:pt-10 lg:pb-6">
       <Container>
         <ChatThreadView
           appointmentId={appointmentId}
