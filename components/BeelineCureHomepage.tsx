@@ -173,7 +173,7 @@ export default function BeelineCureHomepage() {
 
       {/* 2. HERO */}
       <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-16 md:py-32">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,85,243,0.12),transparent_70%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(37,85,243,0.18),transparent_70%)]" />
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <h1
             className={`${sectionHeading} text-3xl leading-[1.1] text-white sm:text-4xl md:text-5xl lg:text-[56px]`}
@@ -505,7 +505,7 @@ export default function BeelineCureHomepage() {
       </section>
 
       {/* 11. FOOTER */}
-      <footer className="border-t-2 border-[#2555F3] bg-[#171717] px-6 py-12">
+      <footer className="border-t-2 border-[#2555F3] bg-[#171717] px-6 py-10">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
             <div className="flex flex-col items-start">
@@ -601,8 +601,8 @@ export default function BeelineCureHomepage() {
               </div>
             </div>
           </div>
-          <p className="mt-8 border-t border-white/10 pt-8 text-center font-montserrat text-sm text-white/40">
-            © 2025 BeelineCure. All rights reserved.
+          <p className="mt-6 border-t border-white/10 pt-6 text-center font-montserrat text-sm text-white/40">
+            © 2026 BeelineCure. All rights reserved.
           </p>
         </div>
       </footer>
