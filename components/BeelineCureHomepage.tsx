@@ -19,11 +19,15 @@ function logoWidthForHeight(height: number) {
 function LogoMark({
   height,
   priority = false,
+  naturalWidth = false,
 }: {
   height: number;
   priority?: boolean;
+  naturalWidth?: boolean;
 }) {
-  const width = logoWidthForHeight(height);
+  const width = naturalWidth
+    ? Math.round(height * (LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT))
+    : logoWidthForHeight(height);
 
   return (
     <Link
@@ -208,7 +212,7 @@ export default function BeelineCureHomepage() {
       </section>
 
       {/* 4. PROBLEM 1 */}
-      <section className="border-t border-black/10 bg-white px-6 py-12 md:py-20 lg:py-24">
+      <section className="border-t border-black/10 bg-white px-6 py-10 md:py-14 lg:py-16">
         <div className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
           <div>
             <p className="mb-3 font-montserrat text-sm font-semibold uppercase tracking-wide text-[#2555F3]">
@@ -244,7 +248,7 @@ export default function BeelineCureHomepage() {
       </section>
 
       {/* 5. PROBLEM 2 */}
-      <section className="border-t border-black/10 bg-[#FAFAFA] px-6 py-12 md:py-20 lg:py-24">
+      <section className="border-t border-black/10 bg-[#FAFAFA] px-6 py-10 md:py-14 lg:py-16">
         <div className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
           <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-black/5 bg-white p-8 text-center font-montserrat text-sm text-[#5E5E5E] lg:order-1">
             [Missed call illustration]
@@ -326,7 +330,7 @@ export default function BeelineCureHomepage() {
       {/* 7. HOW IT WORKS */}
       <section
         id="how-it-works"
-        className="border-t border-black/10 bg-white px-6 py-12 md:py-20 lg:py-24"
+        className="border-t border-black/10 bg-white px-6 py-10 md:py-14 lg:py-16"
       >
         <div className="mx-auto max-w-6xl">
           <h2
@@ -400,7 +404,7 @@ export default function BeelineCureHomepage() {
       </section>
 
       {/* 9. COMPARISON TABLE */}
-      <section className="border-t border-black/10 bg-white px-6 py-12 md:py-20 lg:py-24">
+      <section className="border-t border-black/10 bg-white px-6 py-10 md:py-14 lg:py-16">
         <div className="mx-auto max-w-5xl">
           <h2
             className={`${sectionHeading} mb-12 text-center text-3xl text-[#333333] md:mb-16 md:text-[44px]`}
@@ -504,8 +508,8 @@ export default function BeelineCureHomepage() {
       <footer className="border-t-2 border-[#2555F3] bg-[#171717] px-6 py-12">
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
-            <div>
-              <LogoMark height={76} />
+            <div className="flex flex-col items-start">
+              <LogoMark height={76} naturalWidth />
               <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50">
                 Your patients. Your practice. Your terms.
               </p>
