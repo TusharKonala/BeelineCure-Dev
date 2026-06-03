@@ -36,7 +36,7 @@ export default function BeelineCureHomepage() {
       <BeelineCureMarketingNav />
 
       {/* 2. HERO */}
-      <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-16 md:py-32">
+      <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-10 md:py-20">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(37,85,243,0.18),transparent_70%)]" />
         <div className="relative z-10 mx-auto max-w-4xl text-center">
           <h1
@@ -45,18 +45,36 @@ export default function BeelineCureHomepage() {
             Stop losing patients to marketplaces and missed calls
           </h1>
           <p className="mx-auto mt-6 max-w-3xl font-montserrat text-base leading-relaxed text-white/90 md:text-xl">
-            Most patients find their doctor through Google, WhatsApp, and
-            referrals — not booking apps. But when they find you, where do they
-            land? A static website. A phone number. A missed call. A lost
-            patient. BeelineCure turns every patient who finds you into a
-            confirmed, recurring appointment — automatically.
+            Marketplaces are great for discovery. But the second visit? Patients
+            see you next to 100 other doctors and drift away. And patients who
+            find you directly via Google, WhatsApp, and other channels? They hit a
+            phone number, get no answer, and book elsewhere.
           </p>
-          <Link
-            href="/demo"
-            className={`mt-10 inline-block rounded-lg bg-[#2555F3] px-8 py-4 text-lg text-white shadow-lg shadow-[#2555F3]/20 hover:bg-[#1E44C7] ${ctaButtonClass}`}
-          >
-            Try the Demo
-          </Link>
+          <p className="mx-auto mt-4 max-w-3xl font-montserrat text-base leading-relaxed text-white/90 md:text-xl">
+            BeelineCure fixes both. After their first visit, patients get
+            redirected to your clinic&apos;s own branded booking page, only your
+            clinic&apos;s doctors, no competitors, turning one-time visitors into
+            loyal recurring patients. Find you on Google, WhatsApp, anywhere,
+            they book instantly, no call needed.
+          </p>
+          <p className="mx-auto mt-4 max-w-3xl font-montserrat text-base leading-relaxed text-white/90 md:text-xl">
+            This site is a live demo. Sign up and explore. Ready to get serious?
+            Book a call.
+          </p>
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <Link
+              href="/auth/signin"
+              className={`min-w-[200px] rounded-lg bg-[#2555F3] px-8 py-4 text-lg text-white shadow-lg shadow-[#2555F3]/20 hover:bg-[#1E44C7] ${ctaButtonClass}`}
+            >
+              Try the Demo
+            </Link>
+            <Link
+              href="/demo"
+              className={`min-w-[200px] rounded-lg border-2 border-white bg-white/10 px-8 py-4 text-lg text-white hover:bg-white/20 ${ctaButtonClass}`}
+            >
+              Book a Call
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -347,7 +365,7 @@ export default function BeelineCureHomepage() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
-              href="/demo"
+              href="/auth/signin"
               className={`min-w-[200px] rounded-lg bg-white px-8 py-4 text-lg text-[#2555F3] hover:bg-white/90 ${ctaButtonClass}`}
             >
               Try the Demo
