@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
-import { BeelineCureMarketingNav } from "@/components/beeline-cure/BeelineCureMarketingNav";
 import { LogoMark } from "@/components/beeline-cure/LogoMark";
 
 const comparisonRows = [
@@ -34,8 +33,6 @@ const ctaButtonClass = "font-montserrat font-medium transition-colors";
 export default function BeelineCureHomepage() {
   return (
     <div className="min-h-screen w-full min-w-0 font-montserrat text-[#333333]">
-      <BeelineCureMarketingNav />
-
       {/* 2. HERO */}
       <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-10 md:py-20">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(37,85,243,0.18),transparent_70%)]" />

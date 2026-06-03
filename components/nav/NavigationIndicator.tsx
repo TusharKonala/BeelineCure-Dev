@@ -17,6 +17,16 @@ type NavigationContextValue = {
 
 const NavigationContext = createContext<NavigationContextValue | null>(null);
 
+function isCurrentPath(pathname: string, href: string): boolean {
+  const norm = (p: string) => {
+    const base = p.split("?")[0].split("#")[0];
+    return base.length > 1 && base.endsWith("/")
+      ? base.slice(0, -1)
+      : base || "/";
+  };
+  return norm(pathname) === norm(href);
+}
+
 export function NavigationProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [isNavigating, setIsNavigating] = useState(false);
@@ -56,6 +66,7 @@ export function NavLink({
   children: ReactNode;
   onClick?: () => void;
 }) {
+  const pathname = usePathname();
   const ctx = useContext(NavigationContext);
 
   return (
@@ -63,7 +74,9 @@ export function NavLink({
       href={href}
       className={className}
       onClick={() => {
-        ctx?.startNavigation();
+        if (!isCurrentPath(pathname, href)) {
+          ctx?.startNavigation();
+        }
         onClick?.();
       }}
     >
