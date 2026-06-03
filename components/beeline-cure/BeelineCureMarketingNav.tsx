@@ -17,8 +17,10 @@ export function BeelineCureMarketingNav() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
-      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-        <LogoMark height={58} priority />
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-1.5">
+        <div className="max-lg:origin-left max-lg:scale-[0.88]">
+          <LogoMark height={58} priority />
+        </div>
 
         <div className="hidden items-center gap-6 lg:flex">
           <Link href="/" className={navLinkClass}>
@@ -43,15 +45,15 @@ export function BeelineCureMarketingNav() {
 
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 text-[#333333] transition-colors hover:text-[#2555F3] lg:hidden"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-black/10 text-[#333333] transition-colors hover:text-[#2555F3] lg:hidden"
           aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
           aria-expanded={mobileMenuOpen}
           onClick={() => setMobileMenuOpen((open) => !open)}
         >
           <span className="flex flex-col gap-1.5" aria-hidden>
-            <span className="block h-0.5 w-5 bg-current" />
-            <span className="block h-0.5 w-5 bg-current" />
-            <span className="block h-0.5 w-5 bg-current" />
+            <span className="block h-0.5 w-4 bg-current" />
+            <span className="block h-0.5 w-4 bg-current" />
+            <span className="block h-0.5 w-4 bg-current" />
           </span>
         </button>
       </nav>
