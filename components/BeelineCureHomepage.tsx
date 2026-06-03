@@ -1,51 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
-
-const LOGO_SRC = "/brand/BeelineCure-Logo.svg";
-const LOGO_INTRINSIC_WIDTH = 620;
-const LOGO_INTRINSIC_HEIGHT = 485;
-const LOGO_WIDTH_SCALE = 1.25;
-
-function logoWidthForHeight(height: number) {
-  return Math.round(
-    height * (LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT) * LOGO_WIDTH_SCALE,
-  );
-}
-
-function LogoMark({
-  height,
-  priority = false,
-  naturalWidth = false,
-}: {
-  height: number;
-  priority?: boolean;
-  naturalWidth?: boolean;
-}) {
-  const width = naturalWidth
-    ? Math.round(height * (LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT))
-    : logoWidthForHeight(height);
-
-  return (
-    <Link
-      href="/"
-      className="inline-flex shrink-0 items-center overflow-hidden rounded-xl transition-opacity hover:opacity-90"
-    >
-      <Image
-        src={LOGO_SRC}
-        alt="BeelineCure"
-        width={LOGO_INTRINSIC_WIDTH}
-        height={LOGO_INTRINSIC_HEIGHT}
-        className="block object-contain"
-        style={{ width, height }}
-        priority={priority}
-      />
-    </Link>
-  );
-}
+import { BeelineCureMarketingNav } from "@/components/beeline-cure/BeelineCureMarketingNav";
+import { LogoMark } from "@/components/beeline-cure/LogoMark";
 
 const comparisonRows = [
   {
@@ -72,104 +30,10 @@ const comparisonRows = [
 
 const sectionHeading = "font-montaga font-semibold leading-tight";
 const ctaButtonClass = "font-montserrat font-medium transition-colors";
-const navLinkClass =
-  "font-montserrat text-sm font-semibold text-[#5E5E5E] transition-colors hover:text-[#2555F3]";
-const navLinkMutedClass = navLinkClass;
-const navCtaClass = `rounded-lg bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7]`;
-
 export default function BeelineCureHomepage() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  const closeMobileMenu = () => setMobileMenuOpen(false);
-
   return (
     <div className="min-h-screen w-full min-w-0 font-montserrat text-[#333333]">
-      {/* 1. NAVBAR */}
-      <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-          <LogoMark height={58} priority />
-
-          <div className="hidden items-center gap-6 lg:flex">
-            <Link href="/" className={navLinkClass}>
-              Home
-            </Link>
-            <Link href="/about" className={navLinkClass}>
-              About
-            </Link>
-            <Link href="/careers" className={navLinkClass}>
-              Careers
-            </Link>
-            <Link href="/auth/signin" className={navLinkMutedClass}>
-              Sign In
-            </Link>
-            <Link href="/patient/overview" className={navLinkMutedClass}>
-              Dashboard
-            </Link>
-            <Link href="/book-appointment" className={navCtaClass}>
-              Book Appointment
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 text-[#333333] transition-colors hover:text-[#2555F3] lg:hidden"
-            aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={mobileMenuOpen}
-            onClick={() => setMobileMenuOpen((open) => !open)}
-          >
-            <span className="flex flex-col gap-1.5" aria-hidden>
-              <span className="block h-0.5 w-5 bg-current" />
-              <span className="block h-0.5 w-5 bg-current" />
-              <span className="block h-0.5 w-5 bg-current" />
-            </span>
-          </button>
-        </nav>
-
-        {mobileMenuOpen && (
-          <div className="border-t border-black/10 bg-white px-6 py-3 lg:hidden">
-            <div className="flex flex-col gap-4">
-              <Link href="/" className={navLinkClass} onClick={closeMobileMenu}>
-                Home
-              </Link>
-              <Link
-                href="/about"
-                className={navLinkClass}
-                onClick={closeMobileMenu}
-              >
-                About
-              </Link>
-              <Link
-                href="/careers"
-                className={navLinkClass}
-                onClick={closeMobileMenu}
-              >
-                Careers
-              </Link>
-              <Link
-                href="/auth/signin"
-                className={navLinkMutedClass}
-                onClick={closeMobileMenu}
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/patient/overview"
-                className={navLinkMutedClass}
-                onClick={closeMobileMenu}
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/book-appointment"
-                className={`${navCtaClass} text-center`}
-                onClick={closeMobileMenu}
-              >
-                Book Appointment
-              </Link>
-            </div>
-          </div>
-        )}
-      </header>
+      <BeelineCureMarketingNav />
 
       {/* 2. HERO */}
       <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-16 md:py-32">
@@ -188,7 +52,7 @@ export default function BeelineCureHomepage() {
             confirmed, recurring appointment — automatically.
           </p>
           <Link
-            href="/book-appointment"
+            href="/demo"
             className={`mt-10 inline-block rounded-lg bg-[#2555F3] px-8 py-4 text-lg text-white shadow-lg shadow-[#2555F3]/20 hover:bg-[#1E44C7] ${ctaButtonClass}`}
           >
             Try the Demo
@@ -483,7 +347,7 @@ export default function BeelineCureHomepage() {
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
-              href="/book-appointment"
+              href="/demo"
               className={`min-w-[200px] rounded-lg bg-white px-8 py-4 text-lg text-[#2555F3] hover:bg-white/90 ${ctaButtonClass}`}
             >
               Try the Demo
@@ -552,7 +416,7 @@ export default function BeelineCureHomepage() {
                   </li>
                   <li>
                     <Link
-                      href="/book-appointment"
+                      href="/demo"
                       className="transition-colors hover:text-white"
                     >
                       Demo
