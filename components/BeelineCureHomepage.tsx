@@ -376,12 +376,12 @@ export default function BeelineCureHomepage() {
             >
               Watch the Video
             </a>
-            <a
-              href="mailto:hello@beelinecure.com"
+            <Link
+              href="/demo"
               className={`min-w-[200px] rounded-lg border-2 border-white bg-white/10 px-8 py-4 text-lg text-white hover:bg-white/20 ${ctaButtonClass}`}
             >
               Book a Call
-            </a>
+            </Link>
           </div>
         </div>
       </section>
