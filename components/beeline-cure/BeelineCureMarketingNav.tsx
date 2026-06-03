@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { signOut, useSession } from "next-auth/react";
 import { LogoMark } from "@/components/beeline-cure/LogoMark";
 import {
   NavLink,
@@ -13,8 +14,70 @@ const navLinkMutedClass = navLinkClass;
 const navCtaClass =
   "rounded-lg bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7]";
 
+function handleSignOut() {
+  void signOut({ callbackUrl: "/" });
+}
+
+function AuthNavLinks({
+  isAuthenticated,
+  dashboardHref,
+  linkClass,
+  onCloseMenu,
+}: {
+  isAuthenticated: boolean;
+  dashboardHref: string;
+  linkClass: string;
+  onCloseMenu?: () => void;
+}) {
+  if (!isAuthenticated) {
+    return (
+      <NavLink
+        href="/auth/signin"
+        className={linkClass}
+        onClick={onCloseMenu}
+      >
+        Sign In
+      </NavLink>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${linkClass} cursor-pointer`}
+        onClick={() => {
+          onCloseMenu?.();
+          handleSignOut();
+        }}
+      >
+        Sign out
+      </button>
+      <NavLink
+        href={dashboardHref}
+        className={linkClass}
+        onClick={onCloseMenu}
+      >
+        Dashboard
+      </NavLink>
+    </>
+  );
+}
+
 export function BeelineCureMarketingNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === "authenticated";
+  const role = (session?.user as { role?: unknown } | undefined)?.role;
+  const roleKey = typeof role === "string" ? role.toLowerCase() : "";
+  const dashboardHref =
+    roleKey === "patient"
+      ? "/patient/overview"
+      : roleKey === "doctor"
+        ? "/doctor/overview"
+        : roleKey === "admin"
+          ? "/admin/dashboard"
+          : "/patient/overview";
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
 
@@ -39,12 +102,11 @@ export function BeelineCureMarketingNav() {
             <NavLink href="/careers" className={navLinkClass}>
               Careers
             </NavLink>
-            <NavLink href="/auth/signin" className={navLinkMutedClass}>
-              Sign In
-            </NavLink>
-            <NavLink href="/patient/overview" className={navLinkMutedClass}>
-              Dashboard
-            </NavLink>
+            <AuthNavLinks
+              isAuthenticated={isAuthenticated}
+              dashboardHref={dashboardHref}
+              linkClass={navLinkMutedClass}
+            />
             <NavLink href="/book-appointment" className={navCtaClass}>
               Book Appointment
             </NavLink>
@@ -85,20 +147,12 @@ export function BeelineCureMarketingNav() {
               >
                 Careers
               </NavLink>
-              <NavLink
-                href="/auth/signin"
-                className={navLinkMutedClass}
-                onClick={closeMobileMenu}
-              >
-                Sign In
-              </NavLink>
-              <NavLink
-                href="/patient/overview"
-                className={navLinkMutedClass}
-                onClick={closeMobileMenu}
-              >
-                Dashboard
-              </NavLink>
+              <AuthNavLinks
+                isAuthenticated={isAuthenticated}
+                dashboardHref={dashboardHref}
+                linkClass={navLinkMutedClass}
+                onCloseMenu={closeMobileMenu}
+              />
               <NavLink
                 href="/book-appointment"
                 className={`${navCtaClass} text-center`}

@@ -1,5 +1,12 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  isCurrentPath,
+  useNavigationStart,
+} from "@/components/nav/NavigationIndicator";
 
 const LOGO_SRC = "/brand/BeelineCure-Logo.svg";
 const LOGO_INTRINSIC_WIDTH = 620;
@@ -21,6 +28,8 @@ export function LogoMark({
   priority?: boolean;
   naturalWidth?: boolean;
 }) {
+  const pathname = usePathname();
+  const startNavigation = useNavigationStart();
   const width = naturalWidth
     ? Math.round(height * (LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT))
     : logoWidthForHeight(height);
@@ -29,6 +38,11 @@ export function LogoMark({
     <Link
       href="/"
       className="inline-flex shrink-0 items-center overflow-hidden rounded-xl leading-none transition-opacity hover:opacity-90 [&>span]:block [&>span]:leading-[0]"
+      onClick={() => {
+        if (!isCurrentPath(pathname, "/")) {
+          startNavigation();
+        }
+      }}
     >
       <Image
         src={LOGO_SRC}

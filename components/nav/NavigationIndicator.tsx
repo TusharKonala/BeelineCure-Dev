@@ -17,7 +17,7 @@ type NavigationContextValue = {
 
 const NavigationContext = createContext<NavigationContextValue | null>(null);
 
-function isCurrentPath(pathname: string, href: string): boolean {
+export function isCurrentPath(pathname: string, href: string): boolean {
   const norm = (p: string) => {
     const base = p.split("?")[0].split("#")[0];
     return base.length > 1 && base.endsWith("/")
@@ -25,6 +25,11 @@ function isCurrentPath(pathname: string, href: string): boolean {
       : base || "/";
   };
   return norm(pathname) === norm(href);
+}
+
+export function useNavigationStart() {
+  const ctx = useContext(NavigationContext);
+  return ctx?.startNavigation ?? (() => {});
 }
 
 export function NavigationProvider({ children }: { children: ReactNode }) {
