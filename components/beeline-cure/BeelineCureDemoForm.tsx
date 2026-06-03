@@ -2,27 +2,33 @@
 
 import { useState } from "react";
 
-const DEMO_ROLES = ["Clinic Owner", "Doctor", "Admin Staff"] as const;
-
 const inputClassName =
   "w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 font-montserrat text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-[#2555F3] focus:ring-[3px] focus:ring-[#2555F3]/20 md:text-base";
 
 const labelClassName =
   "mb-1.5 block font-montserrat text-sm font-medium text-white/80";
 
-/** Same chevron as app selects; white stroke for dark demo form. */
-const SELECT_CHEVRON =
-  'appearance-none bg-[url("data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20fill%3D%22none%22%20viewBox%3D%220%200%2024%2024%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E")] bg-[length:1rem_1rem] bg-[position:right_0.75rem_center] bg-no-repeat';
+const NOTES_MAX_LENGTH = 500;
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
 
 export function BeelineCureDemoForm() {
   const [fullName, setFullName] = useState("");
   const [clinicName, setClinicName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<(typeof DEMO_ROLES)[number] | "">("");
+  const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
+
+  const canSubmit =
+    !submitting &&
+    fullName.trim().length > 0 &&
+    clinicName.trim().length > 0 &&
+    isValidEmail(email);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -41,7 +47,7 @@ export function BeelineCureDemoForm() {
           clinicName: clinicName.trim(),
           phone: phone.trim(),
           email: email.trim(),
-          ...(role ? { role } : {}),
+          notes: notes.trim(),
         }),
       });
       const data = (await res.json()) as { error?: string };
@@ -123,23 +129,6 @@ export function BeelineCureDemoForm() {
         </div>
 
         <div>
-          <label htmlFor="phone" className={labelClassName}>
-            Phone Number <span className="text-[#2555F3]">*</span>
-          </label>
-          <input
-            id="phone"
-            name="phone"
-            type="tel"
-            required
-            aria-required
-            autoComplete="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className={inputClassName}
-          />
-        </div>
-
-        <div>
           <label htmlFor="email" className={labelClassName}>
             Email <span className="text-[#2555F3]">*</span>
           </label>
@@ -157,34 +146,43 @@ export function BeelineCureDemoForm() {
         </div>
 
         <div>
-          <label htmlFor="role" className={labelClassName}>
-            Role <span className="font-normal text-white/50">(optional)</span>
+          <label htmlFor="phone" className={labelClassName}>
+            Phone Number{" "}
+            <span className="font-normal text-white/50">(optional)</span>
           </label>
-          <select
-            id="role"
-            name="role"
-            value={role}
-            onChange={(e) =>
-              setRole(e.target.value as (typeof DEMO_ROLES)[number] | "")
-            }
-            className={`${inputClassName} cursor-pointer pr-10 ${SELECT_CHEVRON} ${role ? "" : "text-white/40"}`}
-          >
-            <option value="">Select your role</option>
-            {DEMO_ROLES.map((option) => (
-              <option
-                key={option}
-                value={option}
-                className="bg-[#171717] text-white"
-              >
-                {option}
-              </option>
-            ))}
-          </select>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className={inputClassName}
+          />
+        </div>
+
+        <div>
+          <label htmlFor="notes" className={labelClassName}>
+            Notes
+          </label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows={3}
+            maxLength={NOTES_MAX_LENGTH}
+            placeholder="Anything you'd like us to know before the call."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={`${inputClassName} resize-y`}
+          />
+          <p className="mt-1.5 text-right font-montserrat text-xs text-white/50">
+            {notes.length} / {NOTES_MAX_LENGTH}
+          </p>
         </div>
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={!canSubmit}
           className="w-full cursor-pointer rounded-lg bg-[#2555F3] px-6 py-3.5 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7] disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
         >
           {submitting ? "Sending…" : "Submit request"}

@@ -2,18 +2,16 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Resend } from "resend";
 
-const DEMO_ROLES = ["Clinic Owner", "Doctor", "Admin Staff"] as const;
-
 const demoRequestSchema = z.object({
   fullName: z.string().trim().min(1, "Full name is required").max(255),
   clinicName: z.string().trim().min(1, "Clinic name is required").max(255),
   phone: z
     .string()
     .trim()
-    .min(7, "Phone number is required")
-    .max(30, "Phone number is too long"),
+    .max(30, "Phone number is too long")
+    .refine((v) => !v || v.length >= 7, "Phone number is too short"),
   email: z.string().email("Please enter a valid email address"),
-  role: z.enum(DEMO_ROLES).optional(),
+  notes: z.string().trim().max(500, "Notes are too long").optional(),
 });
 
 const DEMO_INBOX = "hello@beelinecure.com";
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { fullName, clinicName, phone, email, role } = parsed.data;
+  const { fullName, clinicName, phone, email, notes } = parsed.data;
   const submittedAt = new Date().toISOString();
 
   const textBody = [
@@ -50,9 +48,9 @@ export async function POST(request: Request) {
     "",
     `Full name: ${fullName}`,
     `Clinic name: ${clinicName}`,
-    `Phone: ${phone}`,
+    `Phone: ${phone || "Not provided"}`,
     `Email: ${email}`,
-    `Role: ${role ?? "Not provided"}`,
+    `Notes: ${notes || "Not provided"}`,
     "",
     `Submitted at: ${submittedAt}`,
   ].join("\n");
