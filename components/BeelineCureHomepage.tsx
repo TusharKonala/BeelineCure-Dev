@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
 import { BeelineCureMarketingNav } from "@/components/beeline-cure/BeelineCureMarketingNav";
@@ -95,7 +96,7 @@ export default function BeelineCureHomepage() {
 
       {/* 4. PROBLEM 1 */}
       <section className="border-t border-black/10 bg-white px-6 py-10 md:py-14 lg:py-16">
-        <div className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
+        <div className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] lg:gap-12">
           <div>
             <p className="mb-3 font-montserrat text-sm font-semibold uppercase tracking-wide text-[#2555F3]">
               PROBLEM #1
@@ -123,8 +124,15 @@ export default function BeelineCureHomepage() {
               </p>
             </div>
           </div>
-          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-black/5 bg-[#FAFAFA] p-8 text-center font-montserrat text-sm text-[#5E5E5E]">
-            [Patient journey illustration]
+          <div className="relative w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5">
+            <Image
+              src="/problem1.png"
+              alt="Marketplace patient re-booking journey — patients drift to competitors"
+              width={1536}
+              height={1024}
+              className="h-auto w-full object-contain"
+              sizes="(max-width: 1024px) 100vw, 56vw"
+            />
           </div>
         </div>
       </section>
@@ -132,8 +140,15 @@ export default function BeelineCureHomepage() {
       {/* 5. PROBLEM 2 */}
       <section className="border-t border-black/10 bg-[#FAFAFA] px-6 py-10 md:py-14 lg:py-16">
         <div className="mx-auto grid max-w-5xl grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-16">
-          <div className="flex aspect-[4/3] items-center justify-center rounded-2xl border border-black/5 bg-white p-8 text-center font-montserrat text-sm text-[#5E5E5E] lg:order-1">
-            [Missed call illustration]
+          <div className="relative w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5 lg:order-1">
+            <Image
+              src="/problem2.png"
+              alt="Missed call to instant online booking"
+              width={1402}
+              height={1122}
+              className="h-auto w-full object-contain"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
           </div>
           <div className="lg:order-2">
             <p className="mb-3 font-montserrat text-sm font-semibold uppercase tracking-wide text-[#2555F3]">
