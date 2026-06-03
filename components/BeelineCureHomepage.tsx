@@ -66,11 +66,12 @@ const comparisonRows = [
   },
 ];
 
-const navLinkClass = "nav-link transition-colors hover:text-[#2555F3]";
-const navLinkMutedClass =
-  "font-montserrat text-sm font-medium text-[#5E5E5E] transition-colors hover:text-[#2555F3]";
 const sectionHeading = "font-montaga font-semibold leading-tight";
 const ctaButtonClass = "font-montserrat font-medium transition-colors";
+const navLinkClass =
+  "font-montserrat text-sm font-semibold text-[#5E5E5E] transition-colors hover:text-[#2555F3]";
+const navLinkMutedClass = navLinkClass;
+const navCtaClass = `rounded-lg bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7]`;
 
 export default function BeelineCureHomepage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -81,8 +82,8 @@ export default function BeelineCureHomepage() {
     <div className="min-h-screen w-full min-w-0 font-montserrat text-[#333333]">
       {/* 1. NAVBAR */}
       <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <LogoMark height={68} priority />
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <LogoMark height={58} priority />
 
           <div className="hidden items-center gap-6 lg:flex">
             <Link href="/" className={navLinkClass}>
@@ -100,17 +101,14 @@ export default function BeelineCureHomepage() {
             <Link href="/patient/overview" className={navLinkMutedClass}>
               Dashboard
             </Link>
-            <Link
-              href="/book-appointment"
-              className={`rounded-lg bg-[#2555F3] px-4 py-2 text-sm text-white hover:bg-[#1E44C7] ${ctaButtonClass}`}
-            >
+            <Link href="/book-appointment" className={navCtaClass}>
               Book Appointment
             </Link>
           </div>
 
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-black/10 text-[#333333] transition-colors hover:text-[#2555F3] lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-black/10 text-[#333333] transition-colors hover:text-[#2555F3] lg:hidden"
             aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((open) => !open)}
@@ -124,7 +122,7 @@ export default function BeelineCureHomepage() {
         </nav>
 
         {mobileMenuOpen && (
-          <div className="border-t border-black/10 bg-white px-6 py-4 lg:hidden">
+          <div className="border-t border-black/10 bg-white px-6 py-3 lg:hidden">
             <div className="flex flex-col gap-4">
               <Link href="/" className={navLinkClass} onClick={closeMobileMenu}>
                 Home
@@ -159,7 +157,7 @@ export default function BeelineCureHomepage() {
               </Link>
               <Link
                 href="/book-appointment"
-                className={`rounded-lg bg-[#2555F3] px-4 py-3 text-center text-sm text-white hover:bg-[#1E44C7] ${ctaButtonClass}`}
+                className={`${navCtaClass} text-center`}
                 onClick={closeMobileMenu}
               >
                 Book Appointment
