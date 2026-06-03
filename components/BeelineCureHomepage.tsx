@@ -1,23 +1,44 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
 
-function LogoMark({ showName = true }: { showName?: boolean }) {
+const LOGO_SRC = "/brand/BeelineCure-Logo.svg";
+const LOGO_INTRINSIC_WIDTH = 530;
+const LOGO_INTRINSIC_HEIGHT = 485;
+const LOGO_WIDTH_SCALE = 1.25;
+
+function logoWidthForHeight(height: number) {
+  return Math.round(
+    height * (LOGO_INTRINSIC_WIDTH / LOGO_INTRINSIC_HEIGHT) * LOGO_WIDTH_SCALE,
+  );
+}
+
+function LogoMark({
+  height,
+  priority = false,
+}: {
+  height: number;
+  priority?: boolean;
+}) {
+  const width = logoWidthForHeight(height);
+
   return (
     <Link
       href="/"
-      className="flex items-center gap-3 transition-colors hover:opacity-90"
+      className="inline-flex shrink-0 items-center transition-opacity hover:opacity-90"
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#2555F3] font-montserrat text-sm font-semibold text-white">
-        BC
-      </div>
-      {showName && (
-        <span className="font-montaga text-lg font-semibold leading-tight text-[#333333]">
-          BeelineCure
-        </span>
-      )}
+      <Image
+        src={LOGO_SRC}
+        alt="BeelineCure"
+        width={LOGO_INTRINSIC_WIDTH}
+        height={LOGO_INTRINSIC_HEIGHT}
+        className="object-contain"
+        style={{ width, height }}
+        priority={priority}
+      />
     </Link>
   );
 }
@@ -48,10 +69,8 @@ const comparisonRows = [
 const navLinkClass = "nav-link transition-colors hover:text-[#2555F3]";
 const navLinkMutedClass =
   "font-montserrat text-sm font-medium text-[#5E5E5E] transition-colors hover:text-[#2555F3]";
-const sectionHeading =
-  "font-montaga font-semibold leading-tight";
-const ctaButtonClass =
-  "font-montserrat font-medium transition-colors";
+const sectionHeading = "font-montaga font-semibold leading-tight";
+const ctaButtonClass = "font-montserrat font-medium transition-colors";
 
 export default function BeelineCureHomepage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -63,7 +82,7 @@ export default function BeelineCureHomepage() {
       {/* 1. NAVBAR */}
       <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <LogoMark />
+          <LogoMark height={72} priority />
 
           <div className="hidden items-center gap-6 lg:flex">
             <Link href="/" className={navLinkClass}>
@@ -151,12 +170,15 @@ export default function BeelineCureHomepage() {
       </header>
 
       {/* 2. HERO */}
-      <section className="border-t border-black/10 bg-[#171717] px-6 py-16 md:py-32">
-        <div className="mx-auto max-w-4xl text-center">
-          <h1 className={`${sectionHeading} text-3xl leading-[1.1] text-white sm:text-4xl md:text-5xl lg:text-[56px]`}>
+      <section className="relative flex min-h-[80vh] flex-col items-center justify-center border-t border-black/10 bg-gradient-to-br from-[#0f1623] via-[#171717] to-[#0d1f2d] px-6 py-16 md:py-32">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(37,85,243,0.12),transparent_70%)]" />
+        <div className="relative z-10 mx-auto max-w-4xl text-center">
+          <h1
+            className={`${sectionHeading} text-3xl leading-[1.1] text-white sm:text-4xl md:text-5xl lg:text-[56px]`}
+          >
             Stop losing patients to marketplaces and missed calls
           </h1>
-          <p className="mx-auto mt-6 max-w-3xl font-montserrat text-base leading-relaxed text-white/80 md:text-xl">
+          <p className="mx-auto mt-6 max-w-3xl font-montserrat text-base leading-relaxed text-white/90 md:text-xl">
             Most patients find their doctor through Google, WhatsApp, and
             referrals — not booking apps. But when they find you, where do they
             land? A static website. A phone number. A missed call. A lost
@@ -194,7 +216,9 @@ export default function BeelineCureHomepage() {
             <p className="mb-3 font-montserrat text-sm font-semibold uppercase tracking-wide text-[#2555F3]">
               PROBLEM #1
             </p>
-            <h2 className={`${sectionHeading} text-3xl text-[#333333] md:text-[40px]`}>
+            <h2
+              className={`${sectionHeading} text-3xl text-[#333333] md:text-[40px]`}
+            >
               Your marketplace patients are not really yours.
             </h2>
             <div className="mt-6 space-y-4 font-montserrat text-base leading-relaxed text-[#5E5E5E] md:text-[17px]">
@@ -206,11 +230,12 @@ export default function BeelineCureHomepage() {
               <p>
                 But next time they need a doctor, they open the app again — and
                 see you and 200 others. The marketplace promotes whoever pays
-                them more. That patient you earned? They might book someone else.
-                You cannot build a loyal patient base on someone else&apos;s
-                platform. BeelineCure fixes this — after a patient&apos;s first
-                marketplace visit, redirect them to your own branded booking
-                system. They come back to you directly, every time.
+                them more. That patient you earned? They might book someone
+                else. You cannot build a loyal patient base on someone
+                else&apos;s platform. BeelineCure fixes this — after a
+                patient&apos;s first marketplace visit, redirect them to your
+                own branded booking system. They come back to you directly,
+                every time.
               </p>
             </div>
           </div>
@@ -230,7 +255,9 @@ export default function BeelineCureHomepage() {
             <p className="mb-3 font-montserrat text-sm font-semibold uppercase tracking-wide text-[#2555F3]">
               PROBLEM #2
             </p>
-            <h2 className={`${sectionHeading} text-3xl text-[#333333] md:text-[40px]`}>
+            <h2
+              className={`${sectionHeading} text-3xl text-[#333333] md:text-[40px]`}
+            >
               You are losing patients who already found you.
             </h2>
             <div className="mt-6 space-y-4 font-montserrat text-base leading-relaxed text-[#5E5E5E] md:text-[17px]">
@@ -244,7 +271,8 @@ export default function BeelineCureHomepage() {
                 — it is a patient who already wanted you, slipping away.
                 BeelineCure gives your clinic a 24/7 online booking system.
                 Patient finds you anywhere — Google, Instagram, WhatsApp, a
-                referral — and books instantly. No call needed. No patients lost.
+                referral — and books instantly. No call needed. No patients
+                lost.
               </p>
             </div>
           </div>
@@ -257,7 +285,9 @@ export default function BeelineCureHomepage() {
         className="border-t border-white/5 bg-[#1a2332] px-6 py-16 md:py-24"
       >
         <div className="mx-auto max-w-6xl">
-          <h2 className={`${sectionHeading} mb-12 text-center text-3xl text-white md:mb-16 md:text-[44px]`}>
+          <h2
+            className={`${sectionHeading} mb-12 text-center text-3xl text-white md:mb-16 md:text-[44px]`}
+          >
             See It In Action
           </h2>
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
@@ -301,7 +331,9 @@ export default function BeelineCureHomepage() {
         className="border-t border-black/10 bg-white px-6 py-12 md:py-20 lg:py-24"
       >
         <div className="mx-auto max-w-6xl">
-          <h2 className={`${sectionHeading} text-center text-3xl text-[#333333] md:text-[44px]`}>
+          <h2
+            className={`${sectionHeading} text-center text-3xl text-[#333333] md:text-[44px]`}
+          >
             How It Works
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-center font-montserrat text-[#5E5E5E]">
@@ -335,7 +367,9 @@ export default function BeelineCureHomepage() {
                   {step.n}
                 </div>
                 <div>
-                  <h3 className={`${sectionHeading} text-lg text-[#333333] md:text-xl`}>
+                  <h3
+                    className={`${sectionHeading} text-lg text-[#333333] md:text-xl`}
+                  >
                     {step.title}
                   </h3>
                   <p className="mt-2 font-montserrat leading-relaxed text-[#5E5E5E]">
@@ -351,13 +385,15 @@ export default function BeelineCureHomepage() {
       {/* 8. WHAT YOUR CLINIC GETS */}
       <section className="border-t border-white/10 bg-[#171717] px-6 py-12 md:py-20 lg:py-24">
         <div className="mx-auto max-w-6xl">
-          <h2 className={`${sectionHeading} text-center text-3xl text-white md:text-[44px]`}>
+          <h2
+            className={`${sectionHeading} text-center text-3xl text-white md:text-[44px]`}
+          >
             What Your Clinic Gets
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-center font-montserrat text-white/70">
             Built for the people who make your clinic work
           </p>
-          <div className="mt-12 grid grid-cols-1 gap-8 md:mt-16 md:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-12 grid grid-cols-1 gap-8 md:mt-16 md:grid-cols-2 lg:grid-cols-3 [&>*:nth-child(3)]:md:col-span-2 [&>*:nth-child(3)]:md:mx-auto [&>*:nth-child(3)]:md:max-w-[calc((100%-2rem)/2)] [&>*:nth-child(3)]:lg:col-span-1 [&>*:nth-child(3)]:lg:mx-0 [&>*:nth-child(3)]:lg:max-w-none">
             <FeatureCardTeal />
             <FeatureCardSage />
             <FeatureCardTaupe />
@@ -368,7 +404,9 @@ export default function BeelineCureHomepage() {
       {/* 9. COMPARISON TABLE */}
       <section className="border-t border-black/10 bg-white px-6 py-12 md:py-20 lg:py-24">
         <div className="mx-auto max-w-5xl">
-          <h2 className={`${sectionHeading} mb-12 text-center text-3xl text-[#333333] md:mb-16 md:text-[44px]`}>
+          <h2
+            className={`${sectionHeading} mb-12 text-center text-3xl text-[#333333] md:mb-16 md:text-[44px]`}
+          >
             Why Clinics Choose BeelineCure
           </h2>
 
@@ -431,7 +469,9 @@ export default function BeelineCureHomepage() {
       {/* 10. FINAL CTA */}
       <section className="border-t border-black/10 bg-gradient-to-br from-[#6366F1] via-[#A855F7] to-[#EC4899] px-6 py-12 md:py-20 lg:py-24">
         <div className="mx-auto max-w-4xl text-center">
-          <h2 className={`${sectionHeading} text-3xl text-white md:text-[44px]`}>
+          <h2
+            className={`${sectionHeading} text-3xl text-white md:text-[44px]`}
+          >
             See It Live — No Signup Needed
           </h2>
           <p className="mx-auto mt-6 max-w-2xl font-montserrat text-lg text-white/90">
@@ -467,13 +507,13 @@ export default function BeelineCureHomepage() {
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
             <div>
-              <LogoMark />
-              <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50 lg:ml-[52px]">
+              <LogoMark height={80} />
+              <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50">
                 Your patients. Your practice. Your terms.
               </p>
               <a
                 href="mailto:hello@beelinecure.com"
-                className="mt-2 block font-montserrat text-sm text-white/50 transition-colors hover:text-white lg:ml-[52px]"
+                className="mt-2 block font-montserrat text-sm text-white/50 transition-colors hover:text-white"
               >
                 hello@beelinecure.com
               </a>
