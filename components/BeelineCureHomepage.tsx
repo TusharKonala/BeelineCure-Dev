@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
 
 const LOGO_SRC = "/brand/BeelineCure-Logo.svg";
-const LOGO_INTRINSIC_WIDTH = 530;
+const LOGO_INTRINSIC_WIDTH = 620;
 const LOGO_INTRINSIC_HEIGHT = 485;
 const LOGO_WIDTH_SCALE = 1.25;
 
@@ -28,14 +28,14 @@ function LogoMark({
   return (
     <Link
       href="/"
-      className="inline-flex shrink-0 items-center transition-opacity hover:opacity-90"
+      className="inline-flex shrink-0 items-center overflow-hidden rounded-xl transition-opacity hover:opacity-90"
     >
       <Image
         src={LOGO_SRC}
         alt="BeelineCure"
         width={LOGO_INTRINSIC_WIDTH}
         height={LOGO_INTRINSIC_HEIGHT}
-        className="object-contain"
+        className="block object-contain"
         style={{ width, height }}
         priority={priority}
       />
@@ -82,7 +82,7 @@ export default function BeelineCureHomepage() {
       {/* 1. NAVBAR */}
       <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <LogoMark height={72} priority />
+          <LogoMark height={68} priority />
 
           <div className="hidden items-center gap-6 lg:flex">
             <Link href="/" className={navLinkClass}>
@@ -507,7 +507,7 @@ export default function BeelineCureHomepage() {
         <div className="mx-auto max-w-7xl">
           <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
             <div>
-              <LogoMark height={80} />
+              <LogoMark height={76} />
               <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50">
                 Your patients. Your practice. Your terms.
               </p>
