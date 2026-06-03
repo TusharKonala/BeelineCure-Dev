@@ -72,8 +72,16 @@ export default function CareersPage() {
   });
 
   return (
-    <main className="py-12 md:py-16">
-      <Container>
+    <>
+      <div className="border-b border-[#2555F3]/10 bg-gradient-to-br from-[#F0F7FF] to-[#E6F2FF] px-6 py-3">
+        <p className="mx-auto max-w-4xl text-center font-montserrat text-xs leading-relaxed text-[#2555F3] md:text-sm">
+          This is a live demo — Apply for a role and see how the
+          candidate-facing experience works. AI screening and interview
+          scheduling happens on the clinic&apos;s end.
+        </p>
+      </div>
+      <main className="py-12 md:py-16">
+        <Container>
         <div className="max-w-3xl">
           <h1 className="font-montaga text-3xl text-[#333333] md:text-4xl">
             Careers at Clinivo
@@ -146,7 +154,8 @@ export default function CareersPage() {
             )}
           </div>
         )}
-      </Container>
-    </main>
+        </Container>
+      </main>
+    </>
   );
 }
