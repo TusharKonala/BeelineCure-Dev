@@ -18,7 +18,10 @@ export function BeelineCureMarketingNav() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-black/10 bg-white">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-1.5">
-        <div className="max-lg:origin-left max-lg:scale-[0.88]">
+        <div className="flex items-center leading-none lg:hidden">
+          <LogoMark height={51} priority />
+        </div>
+        <div className="hidden items-center leading-none lg:flex">
           <LogoMark height={58} priority />
         </div>
 

@@ -28,7 +28,7 @@ export function LogoMark({
   return (
     <Link
       href="/"
-      className="inline-flex shrink-0 items-center overflow-hidden rounded-xl transition-opacity hover:opacity-90"
+      className="inline-flex shrink-0 items-center overflow-hidden rounded-xl leading-none transition-opacity hover:opacity-90 [&>span]:block [&>span]:leading-[0]"
     >
       <Image
         src={LOGO_SRC}
@@ -36,7 +36,7 @@ export function LogoMark({
         width={LOGO_INTRINSIC_WIDTH}
         height={LOGO_INTRINSIC_HEIGHT}
         className="block object-contain"
-        style={{ width, height }}
+        style={{ width, height, display: "block" }}
         priority={priority}
       />
     </Link>
