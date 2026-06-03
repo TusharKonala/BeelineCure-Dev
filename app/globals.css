@@ -139,15 +139,6 @@
 }
 
 @layer components {
-  .nav-link {
-    @apply font-montserrat text-sm text-[#333333] whitespace-nowrap text-shadow-soft;
-  }
-
-  .nav-link:hover {
-    text-decoration: underline;
-    text-shadow: none !important;
-  }
-
   @media (max-width: 639px) {
     .touch-target {
       @apply inline-flex min-h-11 items-center rounded-lg px-3 py-2;

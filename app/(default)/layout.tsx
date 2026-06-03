@@ -1,5 +1,5 @@
+import { BeelineCureMarketingNav } from "@/components/beeline-cure/BeelineCureMarketingNav";
 import { Footer } from "@/components/Footer";
-import { Navbar } from "@/components/Navbar";
 
 export default function DefaultLayout({
   children,
@@ -8,7 +8,7 @@ export default function DefaultLayout({
 }) {
   return (
     <div className="flex min-h-screen flex-col">
-      <Navbar />
+      <BeelineCureMarketingNav />
       <div className="flex flex-1 flex-col">{children}</div>
       <Footer />
     </div>
