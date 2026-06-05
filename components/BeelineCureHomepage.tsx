@@ -279,7 +279,10 @@ export default function BeelineCureHomepage() {
       </section>
 
       {/* 8. WHAT YOUR CLINIC GETS */}
-      <section className="border-t border-white/10 bg-[#171717] px-6 py-12 md:py-20 lg:py-24">
+      <section
+        id="what-your-clinic-gets"
+        className="border-t border-white/10 bg-[#171717] px-6 py-12 md:py-20 lg:py-24"
+      >
         <div className="mx-auto max-w-6xl">
           <h2
             className={`${sectionHeading} text-center text-3xl text-white md:text-[44px]`}
@@ -422,7 +425,7 @@ export default function BeelineCureHomepage() {
                 <ul className="space-y-2 font-montserrat text-sm text-white/60">
                   <li>
                     <Link
-                      href="#"
+                      href="#what-your-clinic-gets"
                       className="font-montserrat transition-colors hover:text-white"
                     >
                       Features
@@ -434,14 +437,6 @@ export default function BeelineCureHomepage() {
                       className="transition-colors hover:text-white"
                     >
                       How It Works
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="#"
-                      className="transition-colors hover:text-white"
-                    >
-                      Pricing
                     </Link>
                   </li>
                   <li>
@@ -481,14 +476,6 @@ export default function BeelineCureHomepage() {
                       className="transition-colors hover:text-white"
                     >
                       Contact
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="#"
-                      className="transition-colors hover:text-white"
-                    >
-                      Blog
                     </Link>
                   </li>
                 </ul>
