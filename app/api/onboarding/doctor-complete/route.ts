@@ -149,7 +149,7 @@ export async function POST(request: Request) {
   if (adminEmails.length > 0 && process.env.RESEND_API_KEY) {
     try {
       await resend.emails.send({
-        from: "Clinivo <onboarding@resend.dev>",
+        from: "BeelineCure <onboarding@resend.dev>",
         to: adminEmails,
         subject: "New doctor registration pending approval",
         text: [

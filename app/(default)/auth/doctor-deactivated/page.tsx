@@ -14,7 +14,7 @@ export default function DoctorDeactivatedPage() {
               Your doctor account has been deactivated by an administrator and
               has no remaining pending or upcoming appointments. Dashboard
               access is no longer available. If you believe this is a mistake,
-              please contact the Clinivo team.
+              please contact the BeelineCure team.
             </p>
             <div className="mt-6">
               <Link

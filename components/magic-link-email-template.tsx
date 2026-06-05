@@ -18,7 +18,7 @@ export function MagicLinkEmailTemplate({
         color: "#111111",
       }}
     >
-      <h1 style={{ marginBottom: "1rem" }}>Sign in to Clinivo</h1>
+      <h1 style={{ marginBottom: "1rem" }}>Sign in to BeelineCure</h1>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>Hello {recipientName},</p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         Click the button below to sign in. This link expires in 15 minutes and can

@@ -67,11 +67,11 @@ export async function generateMetadata(props: PageProps): Promise<Metadata> {
   });
 
   if (!doctor) {
-    return { title: "Doctor not found · Clinivo" };
+    return { title: "Doctor not found · BeelineCure" };
   }
 
   const displayName = formatDoctorDisplayName(doctor.name);
-  const title = `${displayName} — ${doctor.specialization} · Clinivo`;
+  const title = `${displayName} — ${doctor.specialization} · BeelineCure`;
   const description = `Book an appointment with ${displayName}, ${doctor.specialization}.`;
 
   const urlPath = `/doctors/${slug}`;

@@ -276,7 +276,7 @@ export async function createMeetEventForOnlineAppointment(
       conferenceDataVersion: 1,
       requestBody: {
         summary: `Online: ${appointment.patientName} — ${appointment.doctor.name}`,
-        description: `Clinivo online consultation (appointment ${appointment.id})`,
+        description: `BeelineCure online consultation (appointment ${appointment.id})`,
         start: {
           dateTime: start.toISOString(),
           timeZone: appointment.timezone,
@@ -290,7 +290,7 @@ export async function createMeetEventForOnlineAppointment(
           createRequest: {
             requestId:
               appointment.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40) ||
-              "clinivo-meet",
+              "beelinecure-meet",
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         },
@@ -474,7 +474,7 @@ export async function createMeetEventForInterviewRound(
       conferenceDataVersion: 1,
       requestBody: {
         summary: `Interview: ${round.application.name} — ${round.application.jobPosting.title} (Round ${round.roundNumber})`,
-        description: `Clinivo careers interview (round ${round.id})`,
+        description: `BeelineCure careers interview (round ${round.id})`,
         start: {
           dateTime: start.toISOString(),
           timeZone,
@@ -488,7 +488,7 @@ export async function createMeetEventForInterviewRound(
           createRequest: {
             requestId:
               round.id.replace(/[^a-zA-Z0-9]/g, "").slice(0, 40) ||
-              "clinivo-interview",
+              "beelinecure-interview",
             conferenceSolutionKey: { type: "hangoutsMeet" },
           },
         },

@@ -84,7 +84,7 @@ export default function CareersPage() {
         <Container>
         <div className="max-w-3xl">
           <h1 className="font-montaga text-3xl text-[#333333] md:text-4xl">
-            Careers at Clinivo
+            Careers at BeelineCure
           </h1>
           <p className="mt-3 font-montserrat text-base text-[#5e5e5e]">
             Join our team and help make healthcare more accessible.

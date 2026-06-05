@@ -301,7 +301,7 @@ export function DoctorShell({
               <span aria-hidden className="mr-1">
                 ←
               </span>
-              Clinivo Care
+              BeelineCure
             </Link>
             <div className="flex items-center gap-3">
               <button

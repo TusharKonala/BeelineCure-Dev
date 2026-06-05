@@ -161,12 +161,12 @@ export async function PATCH(request: Request) {
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const from = process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+    const from = process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 
     const { error } = await resend.emails.send({
       from,
       to: nextEmail,
-      subject: "Confirm your new Clinivo admin email",
+      subject: "Confirm your new BeelineCure admin email",
       react: AdminEmailChangeTemplate({
         recipientName: name || "there",
         confirmUrl,

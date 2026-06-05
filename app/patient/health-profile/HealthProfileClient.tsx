@@ -96,7 +96,7 @@ function toFormDefaults(p: HealthProfileDto | null): FormValues {
   };
 }
 
-const UNIT_SYSTEM_STORAGE_KEY = "clinivo:health-units";
+const UNIT_SYSTEM_STORAGE_KEY = "beelinecure:health-units";
 type UnitSystem = "metric" | "imperial";
 
 const KG_PER_LB = 0.45359237;

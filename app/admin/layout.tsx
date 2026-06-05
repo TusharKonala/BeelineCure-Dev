@@ -89,7 +89,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               <span aria-hidden className="mr-1">
                 ←
               </span>
-              Clinivo Care
+              BeelineCure
             </Link>
             <div className="flex items-center gap-3">
               <button

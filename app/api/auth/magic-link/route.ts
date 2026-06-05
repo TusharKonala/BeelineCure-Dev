@@ -99,7 +99,7 @@ export async function POST(request: Request) {
 
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const from = process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+    const from = process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 
     const { error } = await resend.emails.send({
       from,

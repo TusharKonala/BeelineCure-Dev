@@ -25,7 +25,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const TOKEN_EXPIRY_MS = 48 * 60 * 60 * 1000;
 
 function emailFrom() {
-  return process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+  return process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 }
 
 export function resolveJobDescription(

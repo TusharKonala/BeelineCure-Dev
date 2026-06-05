@@ -872,7 +872,7 @@ async function sendInterviewReminderEmail(params: {
   }
 
   const from =
-    process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+    process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 
   const { error } = await resend.emails.send({
     from,

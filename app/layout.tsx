@@ -29,7 +29,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Clinivo Care",
+  title: "BeelineCure",
   description: "Patient and doctor care platform",
 };
 

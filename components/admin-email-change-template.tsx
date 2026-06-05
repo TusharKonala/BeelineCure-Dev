@@ -25,7 +25,7 @@ export function AdminEmailChangeTemplate({
         Hello {recipientName},
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
-        You requested to change the email on your Clinivo admin account. Until
+        You requested to change the email on your BeelineCure admin account. Until
         you confirm, you can still sign in with{" "}
         <strong>{currentEmail}</strong>.
       </p>

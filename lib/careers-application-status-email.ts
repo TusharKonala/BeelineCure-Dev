@@ -6,7 +6,7 @@ import { ApplicationStatus } from "@/generated/prisma/client";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 function emailFrom() {
-  return process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+  return process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 }
 
 export async function sendApplicationStatusChangeEmail(params: {

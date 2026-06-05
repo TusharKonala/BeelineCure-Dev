@@ -48,7 +48,7 @@ async function main() {
   }
 
   for (let i = 1; i <= patientCount; i += 1) {
-    const email = `patient-seed-${String(i).padStart(2, "0")}@clinivo.test`;
+    const email = `patient-seed-${String(i).padStart(2, "0")}@beelinecure.test`;
     await prisma.user.upsert({
       where: { email },
       update: {
@@ -103,7 +103,7 @@ async function main() {
     `Inserted ${reviewCount} reviews without wiping existing data.`,
   );
   console.log(
-    `Seed patients ensured: patient-seed-01@clinivo.test to patient-seed-${String(patientCount).padStart(2, "0")}@clinivo.test`,
+    `Seed patients ensured: patient-seed-01@beelinecure.test to patient-seed-${String(patientCount).padStart(2, "0")}@beelinecure.test`,
   );
 }
 

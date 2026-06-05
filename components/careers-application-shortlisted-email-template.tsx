@@ -21,7 +21,7 @@ export function CareersApplicationShortlistedEmailTemplate({
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         Thank you for applying for the <strong>{jobTitle}</strong> role at
-        Clinivo. We were impressed with your application and have shortlisted
+        BeelineCure. We were impressed with your application and have shortlisted
         you for the next stage.
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>

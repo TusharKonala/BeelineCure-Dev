@@ -162,7 +162,7 @@ export async function POST(request: Request) {
   )}`;
 
   try {
-    const from = process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+    const from = process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
 
     const { error } = await resend.emails.send({
       from,
@@ -223,7 +223,7 @@ export async function POST(request: Request) {
     if (adminEmails.length > 0 && process.env.RESEND_API_KEY) {
       try {
         const adminFrom =
-          process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+          process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
         await resend.emails.send({
           from: adminFrom,
           to: adminEmails,

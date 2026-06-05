@@ -77,11 +77,11 @@ export async function runCareersApplicationDigest(origin: string) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY);
       const adminFrom =
-        process.env.EMAIL_FROM ?? "Clinivo <onboarding@resend.dev>";
+        process.env.EMAIL_FROM ?? "BeelineCure <onboarding@resend.dev>";
       await resend.emails.send({
         from: adminFrom,
         to: adminEmails,
-        subject: `Clinivo: ${totalCount} new job application${totalCount === 1 ? "" : "s"}`,
+        subject: `BeelineCure: ${totalCount} new job application${totalCount === 1 ? "" : "s"}`,
         react: CareersDigestEmailTemplate({
           totalCount,
           breakdownLines: lines,

@@ -29,7 +29,7 @@ export function CareersInterviewCancelledCandidateEmailTemplate({
         <strong>{scheduledAtLabel}</strong> has been cancelled.
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
-        Thank you for your interest in Clinivo. If you have questions, please
+        Thank you for your interest in BeelineCure. If you have questions, please
         reply to this email.
       </p>
     </div>

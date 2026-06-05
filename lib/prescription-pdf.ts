@@ -36,7 +36,7 @@ async function createPrescriptionPdfDoc(input: PrescriptionPdfInput) {
     title: getPrescriptionPdfTitle(input),
     subject: "Patient prescription",
     author: input.doctorName,
-    creator: "Clinivo",
+    creator: "BeelineCure",
   });
 
   let y = 20;

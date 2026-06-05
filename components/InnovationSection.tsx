@@ -6,7 +6,7 @@ function JoinUsCtaFull() {
     <Button className="mt-auto flex w-full cursor-pointer items-center justify-center gap-1.5 rounded-full border border-black bg-[#2555F3] px-3 py-1.5 text-sm text-white hover:bg-[#1e44c7] md:gap-2 md:px-5 md:py-2 md:text-base">
       <Image
         src="/fi-sr-megaphone.svg"
-        alt="Join Clinivo"
+        alt="Join BeelineCure"
         width={32}
         height={32}
         className="size-3 shrink-0 object-contain md:size-4"

@@ -32,7 +32,7 @@ export function ChatUnreadMessageEmailTemplate({
       : "Unread patient message";
   const intro =
     recipientType === "patient"
-      ? `Hi ${recipientName}, your doctor sent you a message on Clinivo. Open the chat to read and reply.`
+      ? `Hi ${recipientName}, your doctor sent you a message on BeelineCure. Open the chat to read and reply.`
       : `Hi ${recipientName}, you have an unread message from ${senderName}.`;
 
   return (

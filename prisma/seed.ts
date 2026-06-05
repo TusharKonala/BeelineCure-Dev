@@ -114,9 +114,9 @@ async function main() {
   }
 
   const adminEmail =
-    process.env.ADMIN_SEED_EMAIL ?? "admin-local@clinivo.test";
+    process.env.ADMIN_SEED_EMAIL ?? "admin-local@beelinecure.test";
   const adminPasswordPlain =
-    process.env.ADMIN_SEED_PASSWORD ?? "ClinivoAdmin2026!";
+    process.env.ADMIN_SEED_PASSWORD ?? "BeelineCureAdmin2026!";
 
   await prisma.user.create({
     data: {

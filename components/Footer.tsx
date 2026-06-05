@@ -16,11 +16,11 @@ export function Footer({ extraTopPadding = false }: FooterProps) {
         {/* Logo */}
         <Link href="/" className="flex items-center justify-center">
           <Image
-            src="/Logo.svg"
-            alt="Clinivo logo"
+            src="/brand/BeelineCure-Logo.svg"
+            alt="BeelineCure logo"
             width={160}
             height={40}
-            className="h-5 w-auto md:h-6"
+            className="h-8 w-auto md:h-10"
           />
         </Link>
 

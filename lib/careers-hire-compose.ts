@@ -15,7 +15,7 @@ export function hasCompletedInterviewRound(
 }
 
 export function buildOfferEmailSubject(jobTitle: string): string {
-  return `Job offer — ${jobTitle} at Clinivo`;
+  return `Job offer — ${jobTitle} at BeelineCure`;
 }
 
 export function buildOfferEmailBody(params: {
@@ -24,7 +24,7 @@ export function buildOfferEmailBody(params: {
 }): string {
   return `Dear ${params.candidateName},
 
-We are pleased to offer you the position of ${params.jobTitle} at Clinivo.
+We are pleased to offer you the position of ${params.jobTitle} at BeelineCure.
 
 Please find the key details below:
 
@@ -38,7 +38,7 @@ We look forward to hearing from you.
 
 Best regards,
 [Your Name]
-Clinivo`;
+BeelineCure`;
 }
 
 export function buildGmailComposeUrl(params: {

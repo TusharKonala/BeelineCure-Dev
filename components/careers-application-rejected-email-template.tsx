@@ -21,7 +21,7 @@ export function CareersApplicationRejectedEmailTemplate({
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         Thank you for your interest in the <strong>{jobTitle}</strong> position
-        at Clinivo and for the time you invested in your application.
+        at BeelineCure and for the time you invested in your application.
       </p>
       <p style={{ color: "#333333", lineHeight: 1.6 }}>
         After careful consideration, we will not be moving forward with your

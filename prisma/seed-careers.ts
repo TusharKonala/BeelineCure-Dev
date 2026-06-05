@@ -9,7 +9,7 @@ import {
 } from "../generated/prisma/client.js";
 
 const SEED_TITLE_PREFIX = "[Seed] ";
-const SEED_EMAIL_DOMAIN = "@careers-seed.clinivo.test";
+const SEED_EMAIL_DOMAIN = "@careers-seed.beelinecure.test";
 
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL,
@@ -32,7 +32,7 @@ const POSTINGS = [
     isRemote: false,
     salaryRange: "$38,000 – $45,000",
     isActive: true,
-    description: `Clinivo Multi-Specialty Clinic is hiring a Front Desk Coordinator for our main outpatient center.
+    description: `BeelineCure Multi-Specialty Clinic is hiring a Front Desk Coordinator for our main outpatient center.
 
 You will greet patients, verify insurance details, schedule appointments across cardiology, orthopedics, and general medicine, and coordinate with nursing staff for same-day add-ons.
 
