@@ -83,8 +83,8 @@ export default function BeelineCureHomepage() {
             What is a marketplace?
           </h2>
           <p className="mt-3 font-montserrat text-[15px] leading-relaxed text-[#5E5E5E]">
-            A healthcare marketplace is an app or website — like an online
-            directory for doctors — where patients search, compare, and book
+            A healthcare marketplace is an app or website, like an online
+            directory for doctors, where patients search, compare, and book
             appointments across hundreds of clinics. While great for discovery,
             they own the patient relationship, not you.
           </p>
@@ -110,11 +110,11 @@ export default function BeelineCureHomepage() {
                 and booked.
               </p>
               <p>
-                But next time they need a doctor, they open the app again — and
+                But next time they need a doctor, they open the app again, and
                 see you and 200 others. The marketplace promotes whoever pays
                 them more. That patient you earned? They might book someone
                 else. You cannot build a loyal patient base on someone
-                else&apos;s platform. BeelineCure fixes this — after a
+                else&apos;s platform. BeelineCure fixes this. After a
                 patient&apos;s first marketplace visit, redirect them to your
                 own branded booking system. They come back to you directly,
                 every time.
@@ -124,7 +124,7 @@ export default function BeelineCureHomepage() {
           <div className="relative w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5">
             <Image
               src="/problem1.png"
-              alt="Marketplace patient re-booking journey — patients drift to competitors"
+              alt="Marketplace patient re-booking journey: patients drift to competitors"
               width={1536}
               height={1024}
               className="h-auto w-full object-contain"
@@ -159,15 +159,15 @@ export default function BeelineCureHomepage() {
             <div className="mt-6 space-y-4 font-montserrat text-base leading-relaxed text-[#5E5E5E] md:text-[17px]">
               <p>
                 A patient Googles your clinic. They land on your website. They
-                see a phone number. They call — no answer. They book somewhere
+                see a phone number. They call. No answer. They book somewhere
                 else.
               </p>
               <p>
-                This happens every day. A missed call is not just a missed call
-                — it is a patient who already wanted you, slipping away.
+                This happens every day. A missed call is not just a missed call.
+                It is a patient who already wanted you, slipping away.
                 BeelineCure gives your clinic a 24/7 online booking system.
-                Patient finds you anywhere — Google, Instagram, WhatsApp, a
-                referral — and books instantly. No call needed. No patients
+                Patient finds you anywhere: Google, Instagram, WhatsApp, a
+                referral, and books instantly. No call needed. No patients
                 lost.
               </p>
             </div>
@@ -233,7 +233,7 @@ export default function BeelineCureHomepage() {
             How It Works
           </h2>
           <p className="mx-auto mt-4 max-w-2xl text-center font-montserrat text-[#5E5E5E]">
-            From first discovery to lifelong patient — in four steps.
+            From first discovery to lifelong patient, in four steps.
           </p>
           <div className="mx-auto mt-12 max-w-3xl space-y-12 md:mt-16">
             {[
@@ -250,7 +250,7 @@ export default function BeelineCureHomepage() {
               {
                 n: 3,
                 title: "They book, pay, and get confirmed",
-                desc: "Pick a doctor, choose a time slot, pay online or at the clinic — done in minutes.",
+                desc: "Pick a doctor, choose a time slot, pay online or at the clinic. Done in minutes.",
               },
               {
                 n: 4,
@@ -371,7 +371,7 @@ export default function BeelineCureHomepage() {
           <h2
             className={`${sectionHeading} text-3xl text-white md:text-[44px]`}
           >
-            See It Live — No Signup Needed
+            See It Live: No Signup Needed
           </h2>
           <p className="mx-auto mt-6 max-w-2xl font-montserrat text-lg text-white/90">
             This website is our live demo. Everything is real and fully working.
@@ -572,7 +572,7 @@ function FeatureCardTaupe() {
         </h3>
         <ul className="mt-4 space-y-3 font-montserrat">
           {[
-            "Live dashboard — bookings, revenue, doctor activity",
+            "Live dashboard: bookings, revenue, doctor activity",
             "Approve doctors before they go live",
             "Manage and moderate patient reviews",
             "Post jobs and screen candidates with AI",
