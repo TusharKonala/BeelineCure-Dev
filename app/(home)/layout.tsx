@@ -1,4 +1,5 @@
 import { BeelineCureMarketingNav } from "@/components/beeline-cure/BeelineCureMarketingNav";
+import { Footer } from "@/components/Footer";
 
 export default function HomeLayout({
   children,
@@ -9,6 +10,7 @@ export default function HomeLayout({
     <div className="flex min-h-screen flex-col">
       <BeelineCureMarketingNav />
       <div className="flex flex-1 flex-col">{children}</div>
+      <Footer />
     </div>
   );
 }

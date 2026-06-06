@@ -1,85 +1,93 @@
-import Image from "next/image";
+"use client";
+
 import Link from "next/link";
+import { LogoMark } from "@/components/beeline-cure/LogoMark";
 
-type FooterProps = {
-  extraTopPadding?: boolean;
-};
-
-export function Footer({ extraTopPadding = false }: FooterProps) {
+export function Footer() {
   return (
-    <footer
-      className={`bg-white ${
-        extraTopPadding ? "pt-16 sm:pt-20 md:pt-28 lg:pt-32" : "pt-0"
-      }`}
-    >
-      <div className="mx-auto flex max-w-7xl flex-col items-center gap-6 px-6 pt-6 pb-4 text-center md:pt-8 md:pb-6">
-        {/* Logo */}
-        <Link href="/" className="flex items-center justify-center">
-          <Image
-            src="/brand/BeelineCure-Logo.svg"
-            alt="BeelineCure logo"
-            width={160}
-            height={40}
-            className="h-8 w-auto md:h-10"
-          />
-        </Link>
-
-        {/* Description */}
-        <p className="max-w-2xl text-sm leading-relaxed text-[#5E5E5E] md:text-base">
-          We are a network of motivated individuals. Some of us have a long
-          history of building health care organizations and some of us are
-          coming into this work with a fresh eye unburdened by the past. Our
-          founding effort is being supported by the Wiggins Foundation and
-          individual donors. We are borrowing from the examples of Mozilla and
-          many healthcare organizations who amplify their mission through
-          creative structuring to attract the participation of entire
-          industries.
-        </p>
-
-        {/* Icons + Divider Wrapper */}
-        <div className="flex flex-col items-center gap-4 w-fit">
-          {/* Gradient Divider */}
-          <div
-            className="h-[2px] w-full"
-            style={{
-              background:
-                "linear-gradient(90deg, #6366F1 0%, #A855F7 49%, #EC4899 100%)",
-            }}
-          />
-
-          {/* Social Icons */}
-          <div className="flex items-center justify-center gap-6">
-            {[
-              { src: "/pinterest.svg", alt: "Pinterest" },
-              { src: "/instagram.svg", alt: "Instagram" },
-              { src: "/linkedin.svg", alt: "LinkedIn" },
-              { src: "/twitter.svg", alt: "Twitter" },
-              { src: "/facebook.svg", alt: "Facebook" },
-            ].map((icon) => (
-              <a
-                key={icon.alt}
-                href="#"
-                aria-label={icon.alt}
-                className="cursor-pointer transition-opacity hover:opacity-75"
-              >
-                <img src={icon.src} alt={icon.alt} className="h-5 w-5" />
-              </a>
-            ))}
+    <footer className="border-t-2 border-[#2555F3] bg-[#171717] px-6 py-10">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
+          <div className="flex flex-col items-start">
+            <LogoMark height={76} naturalWidth />
+            <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50">
+              Your patients. Your practice. Your terms.
+            </p>
+            <a
+              href="mailto:hello@beelinecure.com"
+              className="mt-2 block font-montserrat text-sm text-white/50 transition-colors hover:text-white"
+            >
+              hello@beelinecure.com
+            </a>
+          </div>
+          <div className="grid grid-cols-2 gap-8 sm:gap-16">
+            <div>
+              <h4 className="mb-3 font-montserrat text-sm font-semibold text-white">
+                Product
+              </h4>
+              <ul className="space-y-2 font-montserrat text-sm text-white/60">
+                <li>
+                  <Link
+                    href="/#what-your-clinic-gets"
+                    className="font-montserrat transition-colors hover:text-white"
+                  >
+                    Features
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/#how-it-works"
+                    className="transition-colors hover:text-white"
+                  >
+                    How It Works
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/demo"
+                    className="transition-colors hover:text-white"
+                  >
+                    Demo
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="mb-3 font-montserrat text-sm font-semibold text-white">
+                Company
+              </h4>
+              <ul className="space-y-2 font-montserrat text-sm text-white/60">
+                <li>
+                  <Link
+                    href="/about"
+                    className="transition-colors hover:text-white"
+                  >
+                    About
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/careers"
+                    className="transition-colors hover:text-white"
+                  >
+                    Careers
+                  </Link>
+                </li>
+                <li>
+                  <a
+                    href="mailto:hello@beelinecure.com"
+                    className="transition-colors hover:text-white"
+                  >
+                    Contact
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
-
-        {/* Bottom Legal Row */}
-        <div className="mt-4 flex w-full flex-col items-center gap-2 border-t border-zinc-200 pt-4 text-sm text-[#5E5E5E] md:flex-row md:justify-between">
-          <button type="button" className="cursor-pointer hover:text-black">
-            Privacy Policy
-          </button>
-
-          <p className="text-center">© Dummy 2026. All Rights Reserved</p>
-
-          <button type="button" className="cursor-pointer hover:text-black">
-            Terms &amp; Conditions
-          </button>
-        </div>
+        <p className="mt-6 border-t border-white/10 pt-6 text-center font-montserrat text-sm text-white/40">
+          © 2026 BeelineCure. All rights reserved.
+        </p>
       </div>
     </footer>
   );
