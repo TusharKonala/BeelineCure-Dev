@@ -87,7 +87,7 @@ export default function AboutPage() {
       </section>
 
       {/* Why We Built This */}
-      <section className="border-t border-black/10 bg-white px-6 py-[112px]">
+      <section className="border-t border-black/10 bg-white px-6 py-10 md:py-14 lg:py-16">
         <div className="mx-auto max-w-3xl">
           <h2
             className={`${sectionHeading} text-3xl text-[#333333] md:text-[40px]`}
