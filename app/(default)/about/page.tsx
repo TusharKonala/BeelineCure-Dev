@@ -202,12 +202,12 @@ export default function AboutPage() {
             Ready to turn your marketplace patients into loyal recurring patients
             — and stop losing the ones who are already looking for you?
           </p>
-          <a
-            href="mailto:hello@beelinecure.com"
+          <Link
+            href="/demo"
             className={`mt-10 inline-block rounded-full bg-white px-8 py-4 font-montserrat font-medium text-[#8B5CF6] hover:bg-white/90 ${ctaButtonClass}`}
           >
-            hello@beelinecure.com
-          </a>
+            Book a Call
+          </Link>
         </div>
       </section>
     </div>
