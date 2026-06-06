@@ -31,11 +31,11 @@ const features = [
 const seeItLiveRoles = [
   {
     label: "As a patient",
-    text: "Book a real test appointment, explore your dashboard, try a payment — everything works.",
+    text: "Book a real test appointment, explore your dashboard, try a payment; everything works.",
   },
   {
     label: "As a doctor",
-    text: "Sign up using fake credentials and a dummy license number to explore the full doctor experience — schedule management, prescriptions, patient chat, and more.",
+    text: "Sign up using fake credentials and a dummy license number to explore the full doctor experience: schedule management, prescriptions, patient chat, and more.",
   },
   {
     label: "As a clinic owner",
@@ -46,8 +46,8 @@ const seeItLiveRoles = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen w-full min-w-0 font-montserrat text-[#333333]">
-      {/* Hero — Who We Are */}
-      <section className="border-t border-black/10 bg-[#1F2937] px-6 py-24">
+      {/* Hero: Who We Are */}
+      <section className="border-t border-black/10 bg-[#1F2937] px-4 py-12 sm:px-6 md:py-20 lg:py-24">
         <div className="mx-auto max-w-4xl text-center">
           <h1
             className={`${sectionHeading} text-3xl leading-[1.1] text-white sm:text-4xl md:text-5xl lg:text-[56px]`}
@@ -58,11 +58,11 @@ export default function AboutPage() {
             <p>
               BeelineCure is a clinic management and patient booking platform
               built for independent clinics and doctors who want to grow on their
-              own terms — not on a marketplace&apos;s terms.
+              own terms, not on a marketplace&apos;s terms.
             </p>
             <p>
               We believe the relationship between a doctor and their patient
-              should be direct, personal, and owned by the clinic — not rented
+              should be direct, personal, and owned by the clinic, not rented
               from a platform, not dependent on an algorithm.
             </p>
           </div>
@@ -79,7 +79,7 @@ export default function AboutPage() {
             <p className="mt-3 font-montserrat text-lg leading-relaxed text-[#5E5E5E]">
               A healthcare marketplace is an app or website where patients search
               and book across hundreds of clinics. They are great for getting
-              discovered — but every patient who books through one belongs to the
+              discovered, but every patient who books through one belongs to the
               marketplace, not to you.
             </p>
           </div>
@@ -97,7 +97,7 @@ export default function AboutPage() {
           <div className="mt-6 space-y-4 font-montserrat text-lg leading-relaxed text-[#5E5E5E]">
             <p>We kept seeing the same two problems over and over.</p>
             <p>
-              Clinics were building strong reputations on marketplaces —
+              Clinics were building strong reputations on marketplaces,
               collecting reviews, ranking well, getting bookings. But none of
               that effort was building a loyal patient base. Every returning
               patient had to be won again because the marketplace always put
@@ -106,12 +106,12 @@ export default function AboutPage() {
             </p>
             <p>
               The second problem was simpler but just as costly. Patients were
-              finding clinics through Google, WhatsApp, and referrals — already
-              decided, already wanting to book — and hitting a dead end. A static
+              finding clinics through Google, WhatsApp, and referrals, already
+              decided and already wanting to book, and hitting a dead end. A static
               website with a phone number. A missed call. A lost patient.
             </p>
             <p>
-              We built BeelineCure to solve both — turn marketplace patients
+              We built BeelineCure to solve both: turn marketplace patients
               into recurring direct patients, and capture every patient who
               finds you outside a marketplace before they slip away.
             </p>
@@ -200,7 +200,7 @@ export default function AboutPage() {
           </h2>
           <p className="mx-auto mt-6 max-w-2xl font-montserrat text-lg text-white/90">
             Ready to turn your marketplace patients into loyal recurring patients
-            — and stop losing the ones who are already looking for you?
+            and stop losing the ones who are already looking for you?
           </p>
           <Link
             href="/demo"

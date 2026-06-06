@@ -7,7 +7,7 @@ export function Footer() {
   return (
     <footer className="border-t-2 border-[#2555F3] bg-[#171717] px-6 py-10">
       <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col gap-10 lg:flex-row lg:justify-between">
+        <div className="flex flex-col gap-10 min-[650px]:flex-row min-[650px]:justify-between">
           <div className="flex flex-col items-start">
             <LogoMark height={76} naturalWidth />
             <p className="mt-3 max-w-xs font-montserrat text-sm text-white/50">
