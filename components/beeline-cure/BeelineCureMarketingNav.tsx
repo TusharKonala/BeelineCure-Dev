@@ -45,7 +45,7 @@ function AuthNavLinks({
     <>
       <button
         type="button"
-        className={`${linkClass} cursor-pointer`}
+        className={`${linkClass} cursor-pointer self-start text-left`}
         onClick={() => {
           onCloseMenu?.();
           handleSignOut();
