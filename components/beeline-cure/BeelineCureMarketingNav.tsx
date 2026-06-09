@@ -11,8 +11,10 @@ import {
 const navLinkClass =
   "font-montserrat text-sm font-semibold text-[#5E5E5E] transition-colors hover:text-[#2555F3]";
 const navLinkMutedClass = navLinkClass;
+const mobileNavLinkClass = `${navLinkClass} flex min-h-11 w-full items-center py-1`;
 const navCtaClass =
   "rounded-lg bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7]";
+const mobileNavCtaClass = `${navCtaClass} flex min-h-11 w-full items-center justify-center py-2.5`;
 
 function handleSignOut() {
   void signOut({ callbackUrl: "/" });
@@ -45,7 +47,7 @@ function AuthNavLinks({
     <>
       <button
         type="button"
-        className={`${linkClass} cursor-pointer self-start text-left`}
+        className={`${linkClass} cursor-pointer text-left`}
         onClick={() => {
           onCloseMenu?.();
           handleSignOut();
@@ -129,20 +131,24 @@ export function BeelineCureMarketingNav() {
 
         {mobileMenuOpen && (
           <div className="border-t border-black/10 bg-white px-6 py-3 lg:hidden">
-            <div className="flex flex-col gap-4">
-              <NavLink href="/" className={navLinkClass} onClick={closeMobileMenu}>
+            <div className="flex flex-col gap-2.5">
+              <NavLink
+                href="/"
+                className={mobileNavLinkClass}
+                onClick={closeMobileMenu}
+              >
                 Home
               </NavLink>
               <NavLink
                 href="/about"
-                className={navLinkClass}
+                className={mobileNavLinkClass}
                 onClick={closeMobileMenu}
               >
                 About
               </NavLink>
               <NavLink
                 href="/careers"
-                className={navLinkClass}
+                className={mobileNavLinkClass}
                 onClick={closeMobileMenu}
               >
                 Careers
@@ -150,12 +156,12 @@ export function BeelineCureMarketingNav() {
               <AuthNavLinks
                 isAuthenticated={isAuthenticated}
                 dashboardHref={dashboardHref}
-                linkClass={navLinkMutedClass}
+                linkClass={mobileNavLinkClass}
                 onCloseMenu={closeMobileMenu}
               />
               <NavLink
                 href="/book-appointment"
-                className={`${navCtaClass} text-center`}
+                className={mobileNavCtaClass}
                 onClick={closeMobileMenu}
               >
                 Book Appointment
