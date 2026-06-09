@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+const cardClassName =
+  "rounded-2xl border border-white/10 bg-white/5 px-6 py-8 md:px-10 md:py-10";
 
 const inputClassName =
   "w-full rounded-xl border border-white/20 bg-white/5 px-4 py-3 font-montserrat text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-[#2555F3] focus:ring-[3px] focus:ring-[#2555F3]/20 md:text-base";
@@ -29,6 +33,12 @@ export function BeelineCureDemoForm() {
     fullName.trim().length > 0 &&
     clinicName.trim().length > 0 &&
     isValidEmail(email);
+
+  useEffect(() => {
+    if (submitted) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [submitted]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -66,16 +76,28 @@ export function BeelineCureDemoForm() {
 
   if (submitted) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-10 text-center md:px-10 md:py-12">
+      <div
+        className={`${cardClassName} flex min-h-[280px] flex-col items-center justify-center text-center`}
+      >
         <p className="font-montserrat text-lg leading-relaxed text-white md:text-xl">
           Thanks! We&apos;ll reach out within 24 hours.
+        </p>
+        <p className="mt-3 font-montserrat text-sm leading-relaxed text-white/70 md:text-base">
+          You can close this page or{" "}
+          <Link
+            href="/"
+            className="text-[#2555F3] transition-colors hover:text-[#4d73ff]"
+          >
+            return to the homepage
+          </Link>
+          .
         </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-8 md:px-10 md:py-10">
+    <div className={cardClassName}>
       <h1 className="font-montaga text-2xl font-semibold text-white md:text-3xl">
         Request a guided demo
       </h1>
