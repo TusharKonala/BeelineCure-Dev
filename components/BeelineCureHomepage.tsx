@@ -393,12 +393,6 @@ export default function BeelineCureHomepage() {
             >
               Try the Demo
             </Link>
-            <a
-              href="#video-section"
-              className={`min-w-[200px] rounded-lg border-2 border-white bg-white/10 px-8 py-4 text-lg text-white hover:bg-white/20 ${ctaButtonClass}`}
-            >
-              Watch the Video
-            </a>
             <Link
               href="/demo"
               className={`min-w-[200px] rounded-lg border-2 border-white bg-white/10 px-8 py-4 text-lg text-white hover:bg-white/20 ${ctaButtonClass}`}

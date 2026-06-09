@@ -15,7 +15,7 @@ const demoRequestSchema = z.object({
   notes: z.string().trim().max(500, "Notes are too long").optional(),
 });
 
-const DEMO_INBOX = "hello@beelinecure.com";
+const DEMO_INBOX = "tusharkonala284@gmail.com";
 
 export async function POST(request: Request) {
   let body: unknown;
