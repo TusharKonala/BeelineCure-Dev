@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Users, Stethoscope, TrendingUp, X, Check, Play } from "lucide-react";
+import { Users, Stethoscope, TrendingUp, X, Check } from "lucide-react";
 
 const comparisonRows = [
   {
@@ -188,19 +188,28 @@ export default function BeelineCureHomepage() {
           <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
             {[
               {
-                title: "Patient Experience",
-                desc: "Watch how a patient finds, books, and returns to your clinic without ever touching a marketplace.",
+                title: "Doctor Dashboard",
+                desc: "Track appointments, patients, and pending prescriptions from a single overview.",
+                image: "/screenshots/doctor-dashboard.png",
+                alt: "BeelineCure doctor dashboard showing appointments, patients, and prescriptions",
               },
               {
-                title: "Clinic Dashboard",
-                desc: "See how clinic owners manage bookings, doctors, revenue, and patient relationships in one place.",
+                title: "Admin Dashboard",
+                desc: "Monitor platform metrics, bookings, revenue, and recent activity in one place.",
+                image: "/screenshots/admin-dashboard.png",
+                alt: "BeelineCure admin dashboard showing platform metrics and recent bookings",
               },
             ].map((card) => (
               <div key={card.title} className="flex flex-col">
-                <div className="relative flex aspect-video items-center justify-center rounded-xl bg-gradient-to-br from-[#3a3f4b] to-[#2d3340]">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 transition-all hover:scale-105">
-                    <Play className="ml-1 h-7 w-7 fill-[#1a2332] text-[#1a2332]" />
-                  </div>
+                <div className="overflow-hidden rounded-xl border border-white/10">
+                  <Image
+                    src={card.image}
+                    alt={card.alt}
+                    width={1024}
+                    height={466}
+                    className="h-auto w-full object-contain"
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                  />
                 </div>
                 <h3 className={`${sectionHeading} mt-4 text-xl text-white`}>
                   {card.title}
@@ -208,12 +217,12 @@ export default function BeelineCureHomepage() {
                 <p className="mt-2 font-montserrat text-sm leading-relaxed text-white/70">
                   {card.desc}
                 </p>
-                <a
-                  href="#video-section"
-                  className="mt-3 font-montserrat text-sm text-white/70 transition-colors hover:text-white"
+                <Link
+                  href="/auth/signin"
+                  className="mt-3 font-montserrat text-sm text-[#2555F3] transition-colors hover:text-[#4d73ff]"
                 >
-                  Watch full walkthrough →
-                </a>
+                  Try demo →
+                </Link>
               </div>
             ))}
           </div>

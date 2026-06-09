@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Container } from "@/components/layout/Container";
+import { DemoCredentialsBanner } from "@/components/auth/DemoCredentialsBanner";
 import { SignInForm } from "@/components/auth/SignInForm";
 
 function SignInFormFallback() {
@@ -14,9 +15,12 @@ export default function SignInPage() {
       <Container>
         <section className="mx-auto max-w-xl">
           <div className="rounded-xl border border-[#e5e5e5] bg-white p-6 shadow-sm md:p-8">
-            <Suspense fallback={<SignInFormFallback />}>
-              <SignInForm />
-            </Suspense>
+            <DemoCredentialsBanner />
+            <div className="mt-6">
+              <Suspense fallback={<SignInFormFallback />}>
+                <SignInForm />
+              </Suspense>
+            </div>
           </div>
         </section>
       </Container>
