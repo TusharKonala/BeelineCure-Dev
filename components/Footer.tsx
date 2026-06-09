@@ -74,12 +74,12 @@ export function Footer() {
                   </Link>
                 </li>
                 <li>
-                  <a
-                    href="mailto:hello@beelinecure.com"
+                  <Link
+                    href="/demo"
                     className="transition-colors hover:text-white"
                   >
                     Contact
-                  </a>
+                  </Link>
                 </li>
               </ul>
             </div>
