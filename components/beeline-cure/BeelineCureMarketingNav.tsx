@@ -14,7 +14,7 @@ const navLinkMutedClass = navLinkClass;
 const mobileNavLinkClass = `${navLinkClass} flex min-h-11 w-full items-center py-1`;
 const navCtaClass =
   "rounded-lg bg-[#2555F3] px-4 py-2 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-[#1E44C7]";
-const mobileNavCtaClass = `${navCtaClass} flex min-h-11 w-full items-center justify-center py-2.5`;
+const mobileNavCtaClass = `${navCtaClass} flex min-h-11 w-full items-center justify-center py-1`;
 
 function handleSignOut() {
   void signOut({ callbackUrl: "/" });
@@ -45,16 +45,6 @@ function AuthNavLinks({
 
   return (
     <>
-      <button
-        type="button"
-        className={`${linkClass} cursor-pointer text-left`}
-        onClick={() => {
-          onCloseMenu?.();
-          handleSignOut();
-        }}
-      >
-        Sign out
-      </button>
       <NavLink
         href={dashboardHref}
         className={linkClass}
@@ -62,6 +52,16 @@ function AuthNavLinks({
       >
         Dashboard
       </NavLink>
+      <button
+        type="button"
+        className={`${linkClass} m-0 cursor-pointer appearance-none border-0 bg-transparent text-left`}
+        onClick={() => {
+          onCloseMenu?.();
+          handleSignOut();
+        }}
+      >
+        Sign out
+      </button>
     </>
   );
 }
@@ -159,14 +159,14 @@ export function BeelineCureMarketingNav() {
                 linkClass={mobileNavLinkClass}
                 onCloseMenu={closeMobileMenu}
               />
-              <NavLink
-                href="/book-appointment"
-                className={mobileNavCtaClass}
-                onClick={closeMobileMenu}
-              >
-                Book Appointment
-              </NavLink>
             </div>
+            <NavLink
+              href="/book-appointment"
+              className={`${mobileNavCtaClass} mt-2.5`}
+              onClick={closeMobileMenu}
+            >
+              Book Appointment
+            </NavLink>
           </div>
         )}
       </header>
