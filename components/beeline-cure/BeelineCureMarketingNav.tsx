@@ -162,7 +162,7 @@ export function BeelineCureMarketingNav() {
             </div>
             <NavLink
               href="/book-appointment"
-              className={`${mobileNavCtaClass} mt-2.5`}
+              className={`${mobileNavCtaClass} mt-4`}
               onClick={closeMobileMenu}
             >
               Book Appointment
